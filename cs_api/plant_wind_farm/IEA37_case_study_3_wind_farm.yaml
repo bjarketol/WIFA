@@ -1,0 +1,11 @@
+name: IEA Wind Task 37 Case study 3, 25WT Wind Farm
+layouts:
+    initial_layout:
+        coordinates:
+            x: [
+                500, 0, 0, 0, 0, 0, -500
+            ]
+            y: [
+                0, -1000, -500, 0, 500, 1000, 0
+            ]
+turbines: !include ../plant_energy_turbine/IEA37_15MW_turbine.yaml
