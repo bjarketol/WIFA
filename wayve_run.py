@@ -332,4 +332,5 @@ for tt in range(len(dat['site']['energy_resource']['wind_resource']['timeseries'
    print('powers: ',  powers)
 
 # Print output
-print(f"Turbine power [W/(kg/m3)]: {power}")
+print('powers: ', np.array(powers))
+#print(f"Turbine power [W/(kg/m3)]: {power}")
