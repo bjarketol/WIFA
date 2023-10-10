@@ -232,6 +232,10 @@ def wf_setup(center_location):
     # Reposition to be at grid center
     X_grid = np.ravel(X) - (xs[-1]-xs[0]) / 2. + center_location[0]
     Y_grid = np.ravel(Y) - (ys[-1]-ys[0]+dy/2.) / 2. + center_location[1]
+
+    X = np.array(dat['wind_farm']['layouts']['initial_layout']['coordinates']['x'])
+    Y = np.array(dat['wind_farm']['layouts']['initial_layout']['coordinates']['x'])
+
     # Use Gaussian wake model of Niayifar (2015)
     wakemodel = wake_models.Niayifar()
     # Set up coupling object
@@ -244,7 +248,8 @@ def wf_setup(center_location):
     Ds = D*np.ones(X.size)
     zhs = zh*np.ones(X.size)
     # Generate wind farm object
-    wind_farm = WF(X_grid, Y_grid, Ds, Cts, zhs, Lfilter, coupling)
+    wind_farm = WF(X, Y, Ds, Cts, zhs, Lfilter, coupling)
+    #wind_farm = WF(X_grid, Y_grid, Ds, Cts, zhs, Lfilter, coupling)
     return wind_farm
 
 
@@ -329,8 +334,6 @@ if 'timeseries' not in dat['site']['energy_resource']['wind_resource']:
 powers = []
 for tt in range(len(dat['site']['energy_resource']['wind_resource']['timeseries'])):
    powers.append(wayve_run(dat['site']['energy_resource']['wind_resource']['timeseries'][tt], verbose=True))
-   print('powers: ',  powers)
 
 # Print output
 print('powers: ', np.array(powers))
-#print(f"Turbine power [W/(kg/m3)]: {power}")
