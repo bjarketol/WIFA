@@ -234,7 +234,10 @@ def wf_setup(center_location):
     Y_grid = np.ravel(Y) - (ys[-1]-ys[0]+dy/2.) / 2. + center_location[1]
 
     X = np.array(dat['wind_farm']['layouts']['initial_layout']['coordinates']['x'])
-    Y = np.array(dat['wind_farm']['layouts']['initial_layout']['coordinates']['x'])
+    Y = np.array(dat['wind_farm']['layouts']['initial_layout']['coordinates']['y'])
+    X += center_location[0] - np.mean(X)
+    Y += center_location[1] - np.mean(Y)
+ 
 
     # Use Gaussian wake model of Niayifar (2015)
     wakemodel = wake_models.Niayifar()
