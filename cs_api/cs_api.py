@@ -28,12 +28,14 @@ class Loader(yaml.SafeLoader):
 Loader.add_constructor('!include', Loader.include)
 
 class CS_study:    
-    def __init__(self, notebook_arg_names=None,notebook_arg_values=None, case_dir=None, result_dir=None, wind_energy_system_file=None, cs_path=None):
+    def __init__(self, notebook_arg_names=None,notebook_arg_values=None, case_dir=None, result_dir=None, wind_energy_system_file=None, cs_path=None, salome_path=None):
 
         #case
         self.case_dir = case_dir
         self.result_dir = result_dir
         self.cs_path = cs_path
+        self.salome_path = salome_path
+        
         #user input
         self.notebook_arg_names = notebook_arg_names
         self.notebook_arg_values = notebook_arg_values
@@ -50,42 +52,55 @@ class CS_study:
         TODO: replace with code_saturne python api
         """
       
-        bash_file_name="launch_code_saturne.sh"
+        bash_file_name="launch_cs_windfarm.sh"
         bash_file=open(bash_file_name,"w")
-        code_saturne_path = self.cs_path
-        #============WRITE BASH FILE FOR SLURM================
-        #TODO :  replace with header from user
-        bash_file.write("#!/bin/bash\n")
-        bash_file.write("#SBATCH --nodes=1\n")
-        bash_file.write("#SBATCH --cpus-per-task=1\n")
-        bash_file.write("#SBATCH --time=00:10:00\n")
-        bash_file.write("#SBATCH --partition=bm\n")
-        bash_file.write("#SBATCH --wckey=P11YD:CODE_SATURNE\n")
-        bash_file.write("#SBATCH --output="+"code_saturne.out.log\n")
-        bash_file.write("#SBATCH --error="+"code_saturne.err.log\n")
-        bash_file.write("#SBATCH --job-name="+"code_saturne"+"\n")
-        bash_file.write("#\n")
-        bash_file.write("# Change to submission directory\n")
-        bash_file.write('if test -n "$SLURM_SUBMIT_DIR" ; then cd $SLURM_SUBMIT_DIR ; fi\n')
-        bash_file.write("unset -v SLURM_SUBMIT_DIR\n")
-        bash_file.write("\n")
-        bash_file.write("# Ensure the correct command is found:\n")
-        bash_file.write("export PATH="+code_saturne_path+":$PATH\n")
-        bash_file.write("CASE_DIR="+self.case_dir+sep+"DATA/\n")
-        bash_file.write("# Get case directory and go inside\n")
-        bash_file.write("cd $CASE_DIR\n")
-        bash_file.write("# Run command for dynamic case with notebooks values:\n")
         #
-        cs_launch_command = "\code_saturne submit -p setup.xml --notebook-args"
+        cs_launch_command = self.cs_path +" submit -p setup.xml --case "+self.case_dir+" --notebook-args"
         for k in range(len(self.notebook_arg_names)):
             cs_launch_command = cs_launch_command + " "+self.notebook_arg_names[k]+"="+str(round(self.notebook_arg_values[k],2))
-        cs_launch_command = cs_launch_command + " --id "+ self.result_dir + " --nodes="+str(nodes)+" --partition=cn -J " +  self.result_dir +" --time="+str(wall_time_in_minutes) + " --ntasks-per-node="+str(ntasks_per_nodes) + " --wckey=P11YD:CODE_SATURNE --exclusive\n"                    
+        cs_launch_command = cs_launch_command + " --id "+ self.result_dir + " --nodes="+str(nodes)+" --partition=cn -J " +  self.result_dir +" --time="+str(wall_time_in_minutes) + " --ntasks-per-node="+str(ntasks_per_nodes) + " --wckey=P11YD:CODE_SATURNE --exclusive --dependency=afterok:$mesh_jobid\n" 
+        #============WRITE BASH FILE FOR SLURM================
+        #TODO :  replace with header from user
+        bash_file.write(fr"""#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:10:00
+#SBATCH --partition=bm
+#SBATCH --wckey=P11YD:CODE_SATURNE
+#SBATCH --output=cs_windfarm.out.log
+#SBATCH --error=cs_windfarm.err.log
+#SBATCH --job-name=cs_windfarm
+#
+# Run Mesh generation with salome and get its jobid
+mesh_sbatch_output=$(sbatch <<EOF
+#!/bin/bash
+#SBATCH --nodes=8
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:10:00
+#SBATCH --partition=bm
+#SBATCH --wckey=P11YD:CODE_SATURNE
+#SBATCH --output=cs_mesh.out.log
+#SBATCH --error=cs_mesh.err.log
+#SBATCH --job-name=cs_mesh
+""")
+        bash_file.write(self.salome_path + " -t python3 generate_salome_mesh.py")
+        bash_file.write("""
+EOF
+)
+
+# Extract the job ID from the output of sbatch
+mesh_jobid=${mesh_sbatch_output##* }
+
+echo "meshing job" $mesh_jobid
+#
+# Run code_saturne after meshing job is finished
+# with notebooks values:
+""")
         bash_file.write(cs_launch_command)
-        #
         bash_file.close()
         #===============================================
     
-        os.system("sbatch "+"launch_full_simulation.sh")
+        os.system("sbatch "+ bash_file_name)
     
     def set_case_dir(self,case_dir):
         """ 
@@ -110,7 +125,17 @@ class CS_study:
         change code_saturne notebook_arg_values
         """
         self.notebook_arg_values = notebook_arg_values
-        
+
+    def set_notebook_param_from_dictionary(self,cs_notebook_parameters):
+        """ 
+        change code_saturne notebook_arg_values and names from dict
+        """
+        self.notebook_arg_names = []
+        self.notebook_arg_values = []
+        for key, value in cs_notebook_parameters.items():
+            self.notebook_arg_names.append(key)
+            self.notebook_arg_values.append(value)
+            
     def set_windio(self,wind_energy_system_file):
         """ 
         change code_saturne notebook_arg_values
@@ -167,9 +192,10 @@ if __name__ == "__main__":
     #CS case directory
     work_dir = '.'
     os.chdir(work_dir)
-    
+
     windfarm_study = CS_study(case_dir=work_dir+sep+"Dynamique", \
-                        cs_path="/software/rd/saturne/code_saturne/8.0/arch/cronos_impi/bin")
+                              cs_path="/software/rd/saturne/code_saturne/8.0/arch/cronos_impi/bin/code_saturne", \
+                              salome_path="/software/rd/salome/logiciels/salome/V9_10_0/salome")
 
     windfarm_study.set_windio("wind_energy_system"+sep + \
                               "IEA37_case_study_3_wind_energy_system.yaml")    
@@ -178,17 +204,23 @@ if __name__ == "__main__":
     windfarm_study.windio_to_cs_files()
 
     #Simulation parameters. TODO: read from wind resource and user
-    Lmoinv=0.0
-    z0=0.7
-    zref=windfarm_study.hub_height
-    teta=270
-    ureff = 10.0
-    t0 = 287.59
-    notebook_arg_names = ["Lmoinv","z0","zref","teta","ureff","t0"]
-    notebook_arg_values = [Lmoinv, z0, zref, teta, ureff, t0]
-    windfarm_study.set_notebook_arg_names(notebook_arg_names)
-    windfarm_study.set_notebook_arg_values(notebook_arg_values)
+    cs_notebook_parameters = {
+        'Lmoinv': 0.0,
+        'z0': 0.7,
+        'zref': windfarm_study.hub_height,
+        'teta': 270.0,
+        'ureff' : 10.0,
+        't0' : 287.59,
+        'st_method' : 0,
+        'isol' : 0,
+        'Coriolis' : -1
+    }
+    windfarm_study.set_notebook_param_from_dictionary(cs_notebook_parameters)
 
     #Run case
     windfarm_study.set_result_dir("wind_farm_simulation")
     windfarm_study.run_case(nodes=2, ntasks_per_nodes=48, wall_time_in_minutes=40)
+
+    print("Waiting for job to finish")
+    print("after meshing is finished, the mesh will be stored as "+windfarm_study.case_dir+sep+"DATA"+sep+"mesh_for_cs_test.med")
+    print("after cs simulation is finished, power output will be stored in "+windfarm_study.case_dir+sep+"RESU"+sep+windfarm_study.result_dir+sep+"power.txt file")
