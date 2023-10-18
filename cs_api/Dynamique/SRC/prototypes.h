@@ -44,6 +44,11 @@ yawing(cs_real_t *coords,
        cs_real_t wind_dir,
        cs_real_t *mean_coords,
        cs_real_t *yawed_coords);
+void
+yawing2(cs_real_t *coords,
+       cs_real_t wind_dir,
+       cs_real_t *mean_coords,
+       cs_real_t *yawed_coords);
 /*----------------------------------------------------------------------------*/
 
 END_C_DECLS

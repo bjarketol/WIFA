@@ -1,10 +1,14 @@
-<?xml version="1.0" encoding="utf-8"?><Code_Saturne_GUI case="Dynamique" solver_version="6.0;7.0;8.0" study="cs_mesh_farm_inputMesh" version="2.0">
+<?xml version="1.0" encoding="utf-8"?><Code_Saturne_GUI case="Dynamique" solver_version="6.0;7.0;8.0" study="cas_cs_v8" version="2.0">
   <additional_scalars>
     <users>
       <property dimension="1" label="is_probe" name="is_probe" support="cells" type="user">
+        <listing_printing status="off"/>
+        <postprocessing_recording status="off"/>
         <probes_recording status="off"/>
       </property>
       <property dimension="1" label="actuator_disk" name="actuator_disk" support="cells" type="user">
+        <listing_printing status="off"/>
+        <postprocessing_recording status="off"/>
         <probes_recording status="off"/>
       </property>
       <property dimension="1" label="source_term_x" name="source_term_x" support="cells" type="user">
@@ -165,7 +169,7 @@
         <probe_z>50</probe_z>
       </probe>
       <probe_format choice="CSV"/>
-      <probe_recording_frequency>100</probe_recording_frequency>
+      <probe_recording_frequency>1</probe_recording_frequency>
       <probes_interpolation choice=""/>
       <probes_snap choice=""/>
       <writer id="-1" label="results">
@@ -181,8 +185,6 @@
     <time_averages/>
     <time_parameters>
       <iterations>20</iterations>
-      <max_courant_num>1</max_courant_num>
-      <max_fourier_num>10</max_fourier_num>
       <property label="CourantNb" name="courant_number">
         <probes_recording status="off"/>
       </property>
@@ -191,16 +193,9 @@
         <postprocessing_recording status="off"/>
         <probes_recording status="off"/>
       </property>
-      <property label="LocalTime" name="local_time_step">
-        <postprocessing_recording status="off"/>
-        <probes choice="0"/>
-      </property>
       <thermal_time_step status="off"/>
-      <time_passing>1</time_passing>
-      <time_step_max_factor>1000</time_step_max_factor>
-      <time_step_min_factor>0.1</time_step_min_factor>
+      <time_passing>0</time_passing>
       <time_step_ref>1</time_step_ref>
-      <time_step_var>0.1</time_step_var>
     </time_parameters>
   </analysis_control>
   <boundary_conditions>
@@ -232,7 +227,7 @@
         <dirichlet component="0" name="velocity">0</dirichlet>
         <dirichlet component="1" name="velocity">0</dirichlet>
         <dirichlet component="2" name="velocity">0</dirichlet>
-        <roughness>0.13</roughness>
+        <roughness>0.05</roughness>
       </velocity_pressure>
     </wall>
   </boundary_conditions>
@@ -296,7 +291,7 @@
         <postprocessing_recording status="off"/>
       </property>
       <reference_pressure>101325</reference_pressure>
-      <reference_temperature>284.15</reference_temperature>
+      <reference_temperature>287.59</reference_temperature>
     </fluid_properties>
     <gravity>
       <gravity_x>0</gravity_x>
@@ -304,14 +299,23 @@
       <gravity_z>-9.81</gravity_z>
     </gravity>
     <notebook>
-      <var description="Inverse Lmo" editable="No" id="0" name="Lmoinv" oturns="No" value="-0.0196"/>
-      <var description="Rugosity" editable="No" id="1" name="z0" oturns="No" value="0.13"/>
-      <var description="Reference altitude" editable="No" id="2" name="zref" oturns="No" value="100.0"/>
-      <var description="Wind direction" editable="No" id="3" name="teta" oturns="No" value="70.0"/>
-      <var description="Wind speed" editable="No" id="4" name="ureff" oturns="No" value="3.6"/>
-      <var description="Ground temperature" editable="No" id="5" name="t0" oturns="No" value="284.15"/>
-      <var description="X coordinate of the center of the domain in L93" editable="No" id="6" name="XL93" oturns="No" value="0.0"/>
-      <var description="Y coordinate of the center of the domain in L93" editable="No" id="7" name="YL93" oturns="No" value="0.0"/>
+      <var description="Wind turbine diameter" editable="No" id="0" name="WT_d" oturns="No" value="136.0"/>
+      <var description="0 for old source term and > 0 for other options" editable="No" id="1" name="st_method" oturns="No" value="0.0"/>
+      <var description="0 for full farm simulation and > 0 to run the designated turbine in isolation" editable="No" id="2" name="isol" oturns="No" value="0"/>
+      <var description="-1 to switch off coriolis, 1 to activate" editable="No" id="3" name="Coriolis" oturns="No" value="1.0"/>
+      <var description="Inverse Lmo" editable="No" id="4" name="Lmoinv" oturns="No" value="-0.0196"/>
+      <var description="Rugosity" editable="No" id="5" name="z0" oturns="No" value="0.13"/>
+      <var description="Reference altitude" editable="No" id="6" name="zref" oturns="No" value="100.0"/>
+      <var description="Wind direction" editable="No" id="7" name="teta" oturns="No" value="70.0"/>
+      <var description="Wind speed" editable="No" id="8" name="ureff" oturns="No" value="3.6"/>
+      <var description="Ground temperature" editable="No" id="9" name="t0" oturns="No" value="287.59"/>
+      <var description="X coordinate of the center of the domain in L93" editable="No" id="10" name="XL93" oturns="No" value="0.0"/>
+      <var description="Y coordinate of the center of the domain in L93" editable="No" id="11" name="YL93" oturns="No" value="0.0"/>
+      <var description="-1 to switch off Dyunkerke model, 1 to activate" editable="No" id="12" name="Dyunkerke" oturns="No" value="-1.0"/>
+      <var description="x component of geostrophic wind" editable="No" id="13" name="ugeo" oturns="No" value="10.0"/>
+      <var description="y component of geostrophic wind" editable="No" id="14" name="vgeo" oturns="No" value="0.0"/>
+      <var description="Latitude " editable="No" id="15" name="lat" oturns="No" value="55.0"/>
+      <var description="Longitude " editable="No" id="16" name="long" oturns="No" value="0.0"/>
     </notebook>
     <omega>
       <omega_x>0</omega_x>
@@ -350,10 +354,10 @@
       <longitude>4.39</longitude>
       <meteo_dlmo>0</meteo_dlmo>
       <meteo_psea>101325</meteo_psea>
-      <meteo_t0>284.15</meteo_t0>
+      <meteo_t0>287.59</meteo_t0>
       <meteo_uref>5</meteo_uref>
       <meteo_ustar>-1</meteo_ustar>
-      <meteo_z0>0.1</meteo_z0>
+      <meteo_z0>0.05</meteo_z0>
       <meteo_zref>10</meteo_zref>
       <read_meteo_data status="off"/>
       <start_day>94</start_day>
@@ -361,7 +365,7 @@
       <start_min>55</start_min>
       <start_sec>49</start_sec>
       <start_year>2022</start_year>
-      <wind_direction>45</wind_direction>
+      <wind_direction>270</wind_direction>
     </atmospheric_flows>
     <compressible_model model="off"/>
     <conjugate_heat_transfer>

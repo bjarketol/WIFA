@@ -95,7 +95,7 @@ cs_user_mesh_modify(cs_mesh_t  *mesh)
    * READ Wind Turbines from coordinates file
    *******************************************/
   
-  cs_real_t WT_d = 136.0; //TODO: read as notebook param
+  cs_real_t WT_d = cs_notebook_parameter_value_by_name("WT_d");
   cs_real_t WT_radius = WT_d/2.; 
   cs_real_t wind_dir=cs_glob_atmo_option->meteo_angle;
 
