@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 ###
-### This file is generated for SALOME v9.10.0 
+### This file is generated for SALOME v9.10.0
 ###
+
 
 import sys
 import salome
@@ -11,6 +12,7 @@ import os
 salome.salome_init()
 import salome_notebook
 notebook = salome_notebook.NoteBook()
+import argparse
 
 ###
 ### GEOM component
@@ -25,27 +27,37 @@ import numpy as np
 
 geompy = geomBuilder.New()
 
+parser = argparse.ArgumentParser(description='Script to generate a wind farm GMSH mesh using salome')
+parser.add_argument('--turbine_diameter',dest='turbine_diameter', type=float)
+parser.add_argument('--turbine_height',dest='turbine_height', type=float)
+parser.add_argument('--wind_origin',dest='wind_origin', type=float)
+parser.add_argument('--output_file',dest='output_file', type=str)
+parser.add_argument('--disk_mesh_size',dest='disk_mesh_size', type=float)
+parser.add_argument('--domain_size',dest='domain_size', type=float)
+parser.add_argument('--domain_height',dest='domain_height', type=float)
+args = parser.parse_args()
+
 #######################
 #lu dans des fichiers
 #######################
-xy_turbines=np.genfromtxt('Dynamique/DATA/placement_turbines.csv',delimiter=',').transpose()[:,:2]
+xy_turbines=np.genfromtxt('Dynamique/DATA/placement_turbines.csv',delimiter=',').transpose()[:2,:]
 nombre_turbines = xy_turbines.shape[1]
 
 #dimensions en x et y du domaine
-Lx = 8000
-Ly = 8000
+Lx = args.domain_size
+Ly = args.domain_size
 
 #caractéristiques turbines:
 #diametre du rotor
-diametre = 136 # 154
+diametre = args.turbine_diameter
 #hauteur moyeu
-hm = 104
+hm = args.turbine_height
 # angle de rotation (en degres)
-provenance_vent = 270.0
+provenance_vent = args.wind_origin
 angle = 270.0 - provenance_vent
 
 #nom du maillage généré
-medFile = 'Dynamique/DATA/mesh_for_cs_test.med'
+medFile = args.output_file
 
 #choix domaine rectangulaire ou circulaire
 dom = 0 # (0 pour circulaire et 1 pour rectangulaire)
@@ -54,12 +66,12 @@ dom = 0 # (0 pour circulaire et 1 pour rectangulaire)
 ###########################
 
 #hauteur du domaine
-Lz = 1000
+Lz = args.domain_height
 
 #taille maille bord domaine
-tc = 80
+tc = Lx/100.0
 #taille min
-tm = 5
+tm = args.disk_mesh_size
 traff2 = 1.8*tm
 traff3 = 2.5*tm
 traff4 = 3.5*tm
@@ -72,7 +84,7 @@ lb = 5*tc
 tv1 = 5
 tv2 = 100
 #########################
-#début du script 
+#début du script
 #########################
 origin = geompy.MakeVertex(0, 0, 0)
 OX = geompy.MakeVectorDXDYDZ(200, 0, 0)
@@ -87,9 +99,9 @@ geompy.addToStudy( Vz, 'Vz' )
 
 angle = np.radians(angle)
 
-if (dom == 0): 
+if (dom == 0):
  domaine =  geompy.MakeCylinderRH(max(Lx/2,Ly/2), Lz)
-if (dom == 1):  
+if (dom == 1):
  domaine = geompy.MakeBoxDXDYDZ(Lx, Ly, Lz)
  geompy.TranslateDXDYDZ(domaine, -Lx/2,-Ly/2 , 0)
 geompy.addToStudy( domaine, 'domaine')
@@ -115,29 +127,29 @@ for i in range(nombre_turbines):
   S = geompy.MakeRotation(S,Vz,angle)
   S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff1_eol.append(S)
-          
+
   zone_raff2_eolienne = geompy.MakeBoxDXDYDZ(8*tm+2*traff2,((1.1*diametre)//tm)*tm+4*tm+2*traff2, diametre+40)
   S = geompy.TranslateDXDYDZ(zone_raff2_eolienne, -(8*tm+2*traff2)/2 , -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/2,0)
   S = geompy.MakeRotation(S,Vz,angle)
   S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff2_eol.append(S)
-  
+
   zone_raff3_eolienne = geompy.MakeBoxDXDYDZ(12*tm+2*traff2+2*traff3, ((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3, diametre+40)
   S = geompy.TranslateDXDYDZ(zone_raff3_eolienne, -(12*tm+2*traff2+2*traff3)/2, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/2, 0)
   S = geompy.MakeRotation(S,Vz,angle)
   S = geompy.TranslateDXDYDZ(S,xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff3_eol.append(S)
-  
+
   zone_raff4_parc = geompy.MakeBoxDXDYDZ(8*diametre, 8*diametre, diametre+40)
   S = geompy.TranslateDXDYDZ(zone_raff4_parc, -8*diametre/2, -8*diametre/2,0)
   S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff4_pa.append(S)
-    
+
   zone_raff5_parc = geompy.MakeBoxDXDYDZ(10.5*diametre, 10.5*diametre, diametre+40)
   S = geompy.TranslateDXDYDZ(zone_raff5_parc, -10.5*diametre/2, -10.5*diametre/2,0)
   S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff5_pa.append(S)
-    
+
   zone_raff6_parc = geompy.MakeBoxDXDYDZ(15*diametre, 15*diametre, diametre+40)
   S = geompy.TranslateDXDYDZ(zone_raff6_parc, -15*diametre/2, -15*diametre/2,0)
   S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
@@ -147,32 +159,32 @@ for i in range(nombre_turbines):
   S = geompy.TranslateDXDYDZ(zone_raff7_parc, -20*diametre/2, -20*diametre/2,0)
   S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff7_pa.append(S)
-  
+
 raff1_list=[]
 for i in range(nombre_turbines):
  raff1_list.append(zone_raff1_eol[i])
 Union_raff1 = geompy.MakeFuseList(raff1_list, True, True)
-            
+
 raff2_list=[]
 for i in range(nombre_turbines):
  raff2_list.append(zone_raff2_eol[i])
 Union_raff2 = geompy.MakeFuseList(raff2_list, True, True)
-            
+
 raff3_list=[]
 for i in range(nombre_turbines):
  raff3_list.append(zone_raff3_eol[i])
 Union_raff3 = geompy.MakeFuseList(raff3_list, True, True)
-           
+
 raff4_list=[]
 for i in range(nombre_turbines):
  raff4_list.append(zone_raff4_pa[i])
 Union_raff4 = geompy.MakeFuseList(raff4_list, True, True)
-       
+
 Union_raff5 = geompy.MakeFuseList(zone_raff5_pa, True, True)
 Union_raff6 = geompy.MakeFuseList(zone_raff6_pa, True, True)
 Union_raff7 = geompy.MakeFuseList(zone_raff7_pa, True, True)
 
-if (dom == 0): 
+if (dom == 0):
  temp=[(i*max(Lx,Ly)/2.,0.) for i in [-1.,1.]]
  temp=geompy.MakeEdge(geompy.MakeVertex(temp[0][0],temp[0][1],0.),geompy.MakeVertex(temp[1][0],temp[1][1],0.))
  bande = geompy.MakeCut(domaine,part)
@@ -186,7 +198,7 @@ part_list.append(Union_raff4)
 part_list.append(Union_raff5)
 part_list.append(Union_raff6)
 part_list.append(Union_raff7)
-if (dom == 0): 
+if (dom == 0):
  part_list.append(part)
 
 Partition_2 = geompy.MakePartition([domaine], part_list)
@@ -198,7 +210,7 @@ geompy.addToStudy( Partition_2, 'Partition_2' )
 
 edges_x_raff1 = []
 edges_y_raff1 = []
-lListEdges = geompy.Propagate(Union_raff1) 
+lListEdges = geompy.Propagate(Union_raff1)
 for lEdges in lListEdges:
  edges = geompy.SubShapeAll(lEdges, geompy.ShapeType["EDGE"])
  vertex1 = geompy.MakeVertexOnCurve(edges[0], 0.25)
@@ -208,13 +220,13 @@ for lEdges in lListEdges:
  tgtEdges = geompy.GetInPlace(Partition_2, lEdges)
  edges = geompy.SubShapeAll(tgtEdges, geompy.ShapeType["EDGE"])
  alongx_raff1 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
- alongy_raff1 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])   
+ alongy_raff1 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
  if (abs(basicCoords2[0]-basicCoords1[0])) > 5:
   # Selon X
-  edges_x_raff1 = edges_x_raff1 + edges 
+  edges_x_raff1 = edges_x_raff1 + edges
  if (abs(basicCoords2[1]-basicCoords1[1])) > 5:
   # Selon Y
-  edges_y_raff1 = edges_y_raff1 + edges 
+  edges_y_raff1 = edges_y_raff1 + edges
 geompy.UnionList(alongx_raff1, edges_x_raff1)
 geompy.UnionList(alongy_raff1, edges_y_raff1)
 
@@ -232,14 +244,14 @@ for lEdges in lListEdges:
  edges = geompy.SubShapeAll(tgtEdges, geompy.ShapeType["EDGE"])
  alongx_raff2 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
  alongy_raff2 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
-       
+
  if (abs(basicCoords2[0]-basicCoords1[0])) > 5:
   # Selon X
-  edges_x_raff2 = edges_x_raff2 + edges 
+  edges_x_raff2 = edges_x_raff2 + edges
  if (abs(basicCoords2[1]-basicCoords1[1])) > 5:
   # Selon Y
   edges_y_raff2 = edges_y_raff2 + edges
-geompy.UnionList(alongx_raff2, edges_x_raff2)     
+geompy.UnionList(alongx_raff2, edges_x_raff2)
 geompy.UnionList(alongy_raff2, edges_y_raff2)
 
  # Récuperation des paquets dedges en vis à vis
@@ -256,28 +268,28 @@ for lEdges in lListEdges:
  edges = geompy.SubShapeAll(tgtEdges, geompy.ShapeType["EDGE"])
  alongx_raff3 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
  alongy_raff3 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
-       
+
  if (abs(basicCoords2[0]-basicCoords1[0])) > 5:
   # Selon X
-  edges_x_raff3 = edges_x_raff3 + edges 
+  edges_x_raff3 = edges_x_raff3 + edges
  if (abs(basicCoords2[1]-basicCoords1[1])) > 5:
   # Selon Y
-  edges_y_raff3 = edges_y_raff3 + edges 
+  edges_y_raff3 = edges_y_raff3 + edges
 geompy.UnionList(alongx_raff3, edges_x_raff3)
 geompy.UnionList(alongy_raff3, edges_y_raff3)
 
 # Récuperation des edges du domaine
 edge_dom = []
 list_edges_dom =   geompy.GetShapesOnShape(domaine, Partition_2, geompy.ShapeType["EDGE"], GEOM.ST_ONIN)
-for ledge in list_edges_dom:  
+for ledge in list_edges_dom:
   g_edge_dom = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
   edge_dom.append(ledge)
 geompy.UnionList(g_edge_dom, edge_dom)
 
-# Récuperation des zones de raffinement parc raff4 
+# Récuperation des zones de raffinement parc raff4
 edges_x_raff4 = []
 edges_y_raff4 = []
-lListEdges = geompy.Propagate(Union_raff4) 
+lListEdges = geompy.Propagate(Union_raff4)
 for lEdges in lListEdges:
  edges = geompy.SubShapeAll(lEdges, geompy.ShapeType["EDGE"])
  vertex1 = geompy.MakeVertexOnCurve(edges[0], 0.25)
@@ -288,13 +300,13 @@ for lEdges in lListEdges:
  edges = geompy.SubShapeAll(tgtEdges, geompy.ShapeType["EDGE"])
  alongx_raff4 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
  alongy_raff4 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
-        
+
  if (abs(basicCoords2[0]-basicCoords1[0])) > 5:
   # Selon X
-  edges_x_raff4 = edges_x_raff4 + edges 
+  edges_x_raff4 = edges_x_raff4 + edges
  if (abs(basicCoords2[1]-basicCoords1[1])) > 5:
   # Selon Y
-  edges_y_raff4 = edges_y_raff4 + edges 
+  edges_y_raff4 = edges_y_raff4 + edges
 geompy.UnionList(alongx_raff4, edges_x_raff4)
 geompy.UnionList(alongy_raff4, edges_y_raff4)
 
@@ -312,13 +324,13 @@ for lEdges in lListEdges:
   edges = geompy.SubShapeAll(tgtEdges, geompy.ShapeType["EDGE"])
   alongx_raff5 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
   alongy_raff5 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
-        
+
   if (abs(basicCoords2[0]-basicCoords1[0])) > 5:
    # Selon X
-   edges_x_raff5 = edges_x_raff5 + edges 
+   edges_x_raff5 = edges_x_raff5 + edges
   if (abs(basicCoords2[1]-basicCoords1[1])) > 5:
    # Selon Y
-   edges_y_raff5 = edges_y_raff5 + edges 
+   edges_y_raff5 = edges_y_raff5 + edges
 geompy.UnionList(alongx_raff5, edges_x_raff5)
 geompy.UnionList(alongy_raff5, edges_y_raff5)
 
@@ -336,13 +348,13 @@ for lEdges in lListEdges:
   edges = geompy.SubShapeAll(tgtEdges, geompy.ShapeType["EDGE"])
   alongx_raff6 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
   alongy_raff6 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
-        
+
   if (abs(basicCoords2[0]-basicCoords1[0])) > 5:
    # Selon X
-   edges_x_raff6 = edges_x_raff6 + edges 
+   edges_x_raff6 = edges_x_raff6 + edges
   if (abs(basicCoords2[1]-basicCoords1[1])) > 5:
    # Selon Y
-   edges_y_raff6 = edges_y_raff6 + edges 
+   edges_y_raff6 = edges_y_raff6 + edges
 geompy.UnionList(alongx_raff6, edges_x_raff6)
 geompy.UnionList(alongy_raff6, edges_y_raff6)
 
@@ -360,13 +372,13 @@ for lEdges in lListEdges:
   edges = geompy.SubShapeAll(tgtEdges, geompy.ShapeType["EDGE"])
   alongx_raff7 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
   alongy_raff7 = geompy.CreateGroup(Partition_2, geompy.ShapeType["EDGE"])
-        
+
   if (abs(basicCoords2[0]-basicCoords1[0])) > 5:
    # Selon X
-   edges_x_raff7 = edges_x_raff7 + edges 
+   edges_x_raff7 = edges_x_raff7 + edges
   if (abs(basicCoords2[1]-basicCoords1[1])) > 5:
    # Selon Y
-   edges_y_raff7 = edges_y_raff7 + edges 
+   edges_y_raff7 = edges_y_raff7 + edges
 geompy.UnionList(alongx_raff7, edges_x_raff7)
 geompy.UnionList(alongy_raff7, edges_y_raff7)
 
@@ -418,7 +430,7 @@ ppts=np.array(ppts)
 #    fic.write("%.2f"%x+os.linesep)
 #    fic.write("%.2f"%y+os.linesep)
 #    fic.write("%.2f"%hm+os.linesep)
-    
+
 ###
 ### SMESH component
 ###
@@ -509,7 +521,7 @@ if (dom == 0):
  Regular_1D_bande = Maillage_1.Segment(geom=edge_bande)
  Number_of_Segments_bande = Regular_1D_bande.NumberOfSegments(ceil(nb2))
  Regular_1D_cercleint = Maillage_1.Segment(geom=edge_cercle_int)
- Number_of_Segments_cercleint = Regular_1D_cercleint.NumberOfSegments(2*ceil(nb)) 
+ Number_of_Segments_cercleint = Regular_1D_cercleint.NumberOfSegments(2*ceil(nb))
  Regular_1D_cercleext = Maillage_1.Segment(geom=edge_cercle_ext)
  Number_of_Segments_cercleext = Regular_1D_cercleext.NumberOfSegments(ceil(nb))
  Quadrangle_2D_1 = Maillage_1.Quadrangle(algo=smeshBuilder.QUADRANGLE,geom=face_bande)
@@ -556,9 +568,9 @@ smesh.SetName(Maillage_1.GetMesh(), 'Maillage_1')
 
 listGroup = []
 for i in range(len(Group)):
- if (Group[i].GetType() ==  SMESH.FACE): 
+ if (Group[i].GetType() ==  SMESH.FACE):
    listGroup.append(Group[i])
-   
+
 Group[0].SetName('Bords')
 
 Sol = Maillage_1.GroupOnGeom(Partition_2,'Partition_2',SMESH.FACE)

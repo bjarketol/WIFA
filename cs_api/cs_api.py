@@ -10,6 +10,7 @@ import numpy as np
 from os import path, chdir, environ, getcwd
 import yaml
 from yaml.loader import SafeLoader
+from datetime import datetime
 
 class Loader(yaml.SafeLoader):
 
@@ -27,7 +28,7 @@ class Loader(yaml.SafeLoader):
             return yaml.load(f, self.__class__)
 Loader.add_constructor('!include', Loader.include)
 
-class CS_study:    
+class CS_study:
     def __init__(self, notebook_arg_names=None,notebook_arg_values=None, case_dir=None, result_dir=None, wind_energy_system_file=None, cs_path=None, salome_path=None):
 
         #case
@@ -35,30 +36,35 @@ class CS_study:
         self.result_dir = result_dir
         self.cs_path = cs_path
         self.salome_path = salome_path
-        
+
         #user input
         self.notebook_arg_names = notebook_arg_names
         self.notebook_arg_values = notebook_arg_values
-        
+
         #farm configuration
         self.wind_energy_system_file = wind_energy_system_file
-        self.hub_height = 140.0
-        self.rotor_diameter = 240.0 
+        self.hub_height = 100.0
+        self.rotor_diameter = 150.0
+        self.farm_size = 1000.0
+        self.wind_origin=270.0
 
-    def run_case(self, nodes=2, ntasks_per_nodes=48, wall_time_in_minutes=1800):
+    def run_case(self, mesh_nodes=7, mesh_ntasks_per_nodes=2, mesh_wall_time="1-00:00:00", cs_nodes=2, cs_ntasks_per_nodes=48, cs_wall_time_in_minutes=1800):
         """
         Function to run code_saturne
         For the moment based on writing a bash file and executing it
         TODO: replace with code_saturne python api
         """
-      
+
         bash_file_name="launch_cs_windfarm.sh"
         bash_file=open(bash_file_name,"w")
         #
         cs_launch_command = self.cs_path +" submit -p setup.xml --case "+self.case_dir+" --notebook-args"
         for k in range(len(self.notebook_arg_names)):
             cs_launch_command = cs_launch_command + " "+self.notebook_arg_names[k]+"="+str(round(self.notebook_arg_values[k],2))
-        cs_launch_command = cs_launch_command + " --id "+ self.result_dir + " --nodes="+str(nodes)+" --partition=cn -J " +  self.result_dir +" --time="+str(wall_time_in_minutes) + " --ntasks-per-node="+str(ntasks_per_nodes) + " --wckey=P11YD:CODE_SATURNE --exclusive --dependency=afterok:$mesh_jobid\n" 
+        cs_launch_command = cs_launch_command + " --id "+ self.result_dir + " --nodes="+str(cs_nodes)+" --partition=cn -J " +  self.result_dir +" --time="+str(cs_wall_time_in_minutes) + " --ntasks-per-node="+str(cs_ntasks_per_nodes) + " --wckey=P11YD:CODE_SATURNE --exclusive --dependency=afterok:$mesh_jobid\n"
+
+
+        salome_launch_command = self.salome_path + " -t python3 generate_salome_mesh.py args:--turbine_diameter="+str(self.rotor_diameter)+",--turbine_height="+str(self.hub_height)+",--wind_origin="+str(self.wind_origin)+",--disk_mesh_size="+str(int(self.rotor_diameter/27.0))+",--domain_size="+str(np.round(self.farm_size*3,0))+",--domain_height=1000,--output_file='MESH/mesh_for_cs_test.med'"
         #============WRITE BASH FILE FOR SLURM================
         #TODO :  replace with header from user
         bash_file.write(fr"""#!/bin/bash
@@ -74,16 +80,20 @@ class CS_study:
 # Run Mesh generation with salome and get its jobid
 mesh_sbatch_output=$(sbatch <<EOF
 #!/bin/bash
-#SBATCH --nodes=8
-#SBATCH --cpus-per-task=1
-#SBATCH --time=00:10:00
+""")
+        #
+        bash_file.write("#SBATCH --nodes="+str(int(mesh_nodes)))
+        bash_file.write("#SBATCH --cpus-per-task="+str(int(mesh_ntasks_per_nodes)))
+        bash_file.write("#SBATCH --time="+mesh_wall_time)
+        #
+        bash_file.write(fr"""#!/bin/bash
 #SBATCH --partition=bm
 #SBATCH --wckey=P11YD:CODE_SATURNE
 #SBATCH --output=cs_mesh.out.log
 #SBATCH --error=cs_mesh.err.log
 #SBATCH --job-name=cs_mesh
 """)
-        bash_file.write(self.salome_path + " -t python3 generate_salome_mesh.py")
+        bash_file.write(salome_launch_command)
         bash_file.write("""
 EOF
 )
@@ -99,35 +109,35 @@ echo "meshing job" $mesh_jobid
         bash_file.write(cs_launch_command)
         bash_file.close()
         #===============================================
-    
+
         os.system("sbatch "+ bash_file_name)
-    
+
     def set_case_dir(self,case_dir):
-        """ 
+        """
         change code_saturne case directory folder name
         """
         self.case_dir = case_dir
-        
+
     def set_result_dir(self,result_dir):
-        """ 
+        """
         change code_saturne result directory folder name
         """
         self.result_dir = result_dir
-        
+
     def set_notebook_arg_names(self,notebook_arg_names):
-        """ 
+        """
         change code_saturne notebook_arg_names
         """
         self.notebook_arg_names = notebook_arg_names
-        
+
     def set_notebook_arg_values(self,notebook_arg_values):
-        """ 
+        """
         change code_saturne notebook_arg_values
         """
         self.notebook_arg_values = notebook_arg_values
 
     def set_notebook_param_from_dictionary(self,cs_notebook_parameters):
-        """ 
+        """
         change code_saturne notebook_arg_values and names from dict
         """
         self.notebook_arg_names = []
@@ -135,9 +145,9 @@ echo "meshing job" $mesh_jobid
         for key, value in cs_notebook_parameters.items():
             self.notebook_arg_names.append(key)
             self.notebook_arg_values.append(value)
-            
+
     def set_windio(self,wind_energy_system_file):
-        """ 
+        """
         change code_saturne notebook_arg_values
         """
         self.wind_energy_system_file = wind_energy_system_file
@@ -152,7 +162,7 @@ echo "meshing job" $mesh_jobid
         #
         farm_layout_data = wind_system_data['wind_farm']
         turbines_data = farm_layout_data['turbines']
-        
+
         center_farm=True
         #
         #Turbines information
@@ -169,7 +179,7 @@ echo "meshing job" $mesh_jobid
             rotor_center_xy_coordinates[0,:]-=rotor_mean_x
             #
             rotor_mean_y=np.mean(rotor_center_xy_coordinates[1,:])
-            rotor_center_xy_coordinates[1,:]-=rotor_mean_y            
+            rotor_center_xy_coordinates[1,:]-=rotor_mean_y
 
         farm_xyz = np.zeros((turbine_number,3))
         farm_xyz[:,0] = rotor_center_xy_coordinates[0,:]
@@ -177,18 +187,20 @@ echo "meshing job" $mesh_jobid
         farm_xyz[:,2] = self.hub_height
         np.savetxt(self.case_dir + sep +'DATA'+sep+'placement_turbines.csv',farm_xyz,delimiter=',')
 
+        self.farm_size = np.sqrt((np.max(farm_xyz[:,0])-np.min(farm_xyz[:,0]))**2+(np.max(farm_xyz[:,1])-np.min(farm_xyz[:,1]))**2)
+
         #TODO: dev if multiple turbine modes / physical conditions
         cp_curve= np.column_stack((turbines_data['performance']['Cp_curve']['Cp_wind_speeds'],turbines_data['performance']['Cp_curve']['Cp_values']))
         np.savetxt(self.case_dir + sep +'DATA'+sep+'cp_table.csv',cp_curve,delimiter=',')
         #
         ct_curve= np.column_stack((turbines_data['performance']['Ct_curve']['Ct_wind_speeds'],turbines_data['performance']['Ct_curve']['Ct_values']))
         np.savetxt(self.case_dir + sep +'DATA'+sep+'ct_table.csv',ct_curve,delimiter=',')
-    
+
 if __name__ == "__main__":
     """
     Main function of script
     """
-    
+
     #CS case directory
     work_dir = '.'
     os.chdir(work_dir)
@@ -197,30 +209,41 @@ if __name__ == "__main__":
                               cs_path="/software/rd/saturne/code_saturne/8.0/arch/cronos_impi/bin/code_saturne", \
                               salome_path="/software/rd/salome/logiciels/salome/V9_10_0/salome")
 
-    windfarm_study.set_windio("wind_energy_system"+sep + \
-                              "IEA37_case_study_3_wind_energy_system.yaml")    
+    windfarm_study.set_windio("windio_inputs" + sep + "wind_energy_system"+sep + \
+                              "IEA37_case_study_3_wind_energy_system.yaml")
 
 
     windfarm_study.windio_to_cs_files()
 
+
+    #======================USER DEFINED=================
+    windfarm_study.wind_origin = 270.0
+    windfarm_study.domain_height = 1000.0
+
     #Simulation parameters. TODO: read from wind resource and user
     cs_notebook_parameters = {
-        'Lmoinv': 0.0,
+        'meteo_profile' : 2,  #1 for meteo_file in case_dir/DATA/meteo_example
+        'Lmoinv': 0.0, #(Lmoinv, z0, zref, teta, ureff, t0) arguments used for meteo_profile 2 only
         'z0': 0.7,
-        'zref': windfarm_study.hub_height,
-        'teta': 270.0,
+        'zref': 10,
+        'teta': windfarm_study.wind_origin,
         'ureff' : 10.0,
         't0' : 287.59,
-        'st_method' : 0,
-        'isol' : 0,
-        'Coriolis' : -1
+        'WT_d' : windfarm_study.rotor_diameter,
+        'st_method' : 0, #0 : homogeneous AD
+        'isol' : 0, #0 if full farm, i>0 if turbine i in isolation
+        'Coriolis' : 1, #1 if coriolis, 0 if not
+        'lat' : 55.0, #latitude for coriolis
+        'dry' : 1 #1 if dry atmosphere (solve energy equation), 0 if constant density
     }
     windfarm_study.set_notebook_param_from_dictionary(cs_notebook_parameters)
+    #=================================================
 
     #Run case
-    windfarm_study.set_result_dir("wind_farm_simulation")
-    windfarm_study.run_case(nodes=2, ntasks_per_nodes=48, wall_time_in_minutes=40)
+    windfarm_study.set_result_dir("wind_farm_simulation_"+datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    #
+    windfarm_study.run_case(mesh_nodes=8, mesh_wall_time="0-00:10:00", mesh_ntasks_per_nodes=1, cs_nodes=2, cs_ntasks_per_nodes=48, cs_wall_time_in_minutes=40)
 
-    print("Waiting for job to finish")
-    print("after meshing is finished, the mesh will be stored as "+windfarm_study.case_dir+sep+"DATA"+sep+"mesh_for_cs_test.med")
-    print("after cs simulation is finished, power output will be stored in "+windfarm_study.case_dir+sep+"RESU"+sep+windfarm_study.result_dir+sep+"power.txt file")
+    print('Wrote and launched "launch_cs_windfarm.sh". Waiting for job to finish')
+    print("After meshing is finished, the mesh will be stored as "+"MESH"+sep+"mesh_for_cs_test.med")
+    print("After cs simulation is finished, power output will be stored in "+windfarm_study.case_dir+sep+"RESU"+sep+windfarm_study.result_dir+sep+"power.txt file")
