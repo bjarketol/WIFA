@@ -18,7 +18,7 @@ Salome can be build over in two ways:
   * stand alone : direct download <https://www.salome-platform.org/?page_id=2430>
   * building the salome_cfd extension over existing code_saturne path : <https://github.com/code-saturne/salome_cfd_extensions>
 
-#" video tutorial 
+## video tutorial 
 
 There was a video tutorial for version 7.0 (may still be accurate for 8.0) : <https://feaforall.com/installing-salome-cfd-with-code-saturne-7-0-in-2022/>
 
