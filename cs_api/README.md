@@ -1,5 +1,5 @@
-
-# code_saturne
+# Installation guidelines for code_saturne and salome_cfd
+## code_saturne
 
 source_code and prerequisites for code_saturne latest production version 8.0 can be found here:
 
@@ -11,14 +11,14 @@ Namely the github for the sources:
 where you can find a semi-automatic py script for installation and some install instructions.
 
 
-# salome
+## salome
 
 Salome can be build over in two ways:
 
   * stand alone : direct download <https://www.salome-platform.org/?page_id=2430>
   * building the salome_cfd extension over existing code_saturne path : <https://github.com/code-saturne/salome_cfd_extensions>
 
-# video tutorial 
+## video tutorial 
 
 There was a video tutorial for version 7.0 (may still be accurate for 8.0) : <https://feaforall.com/installing-salome-cfd-with-code-saturne-7-0-in-2022/>
 
