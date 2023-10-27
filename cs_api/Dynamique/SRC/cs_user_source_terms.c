@@ -90,7 +90,10 @@ cs_user_source_terms(cs_domain_t  *domain,
   const cs_real_3_t *cell_cen
     = (const cs_real_3_t *)domain->mesh_quantities->cell_cen;
 
-  const cs_mesh_t *m = domain->mesh;
+  const cs_mesh_t *m = domain->mesh;  
+  const cs_mesh_quantities_t *mq = cs_glob_mesh_quantities;
+  const cs_lnum_t n_cells = m->n_cells;
+  const cs_lnum_t n_cells_ext = m->n_cells_with_ghosts;
   
   const cs_real_t *cpro_rom = CS_F_(rho)->val;
   const cs_real_3_t *vel = CS_F_(vel)->val;
@@ -289,6 +292,89 @@ cs_user_source_terms(cs_domain_t  *domain,
                  cs_field_get_label(CS_F_(vel)));
     }
     const cs_real_t dpi = atan(1.0)*4.0;
+    //
+    cs_real_3_t *_st_exp = (cs_real_3_t *)st_exp;
+    cs_real_33_t *_st_imp = (cs_real_33_t *)st_imp;
+    //
+    cs_real_t ugeo = 0.0;
+    cs_real_t vgeo = 0.0;
+    //get domain height
+    sprintf(name,"Sommet");
+    cs_zone_t *zs = cs_boundary_zone_by_name_try(name);
+    //z-coordinate of the center of gravity of the boundary zone
+    cs_real_t zsommet = zs->cog[2];
+    //
+    //
+    if(cs_glob_atmo_option->meteo_profile==1) {
+      int nbmett = cs_glob_atmo_option->nbmett; //nprofz
+      int nbmetm = cs_glob_atmo_option->nbmetm; //nproft, dim_u_met, dim_pot_t_met, ..
+      if(zsommet <= cs_glob_atmo_option->z_dyn_met[cs_glob_atmo_option->nbmett-1]) {
+	ugeo = cs_intprf(nbmett, //nprofz
+			 nbmetm, //nproft
+			 cs_glob_atmo_option->z_dyn_met, //profz
+			 cs_glob_atmo_option->time_met, //proft
+			 cs_glob_atmo_option->u_met, //profu
+			 zsommet, //xz
+			 cs_glob_time_step->t_cur); //t
+	vgeo = cs_intprf(nbmett, //nprofz
+			 nbmetm, //nproft
+			 cs_glob_atmo_option->z_dyn_met, //profz
+			 cs_glob_atmo_option->time_met, //proft
+			 cs_glob_atmo_option->v_met, //profv
+			 zsommet, //xz
+			 cs_glob_time_step->t_cur); //t
+      }      
+      else {
+	ugeo = cs_glob_atmo_option->u_met[nbmett-1];
+	vgeo = cs_glob_atmo_option->v_met[nbmett-1];	
+      }
+      bft_printf("Geostrophic wind interpolated from meteo_file at z= %.2f is (u,v)=(%.2f,%.2f)\n ",zsommet,ugeo,vgeo);
+      }
+    else {
+      const cs_real_3_t *cpro_met_vel
+	= (cs_real_3_t *)(cs_field_by_name("meteo_velocity")->val);
+      //geostrophic wind from prescribed meteo velocity
+      cs_real_t closest_x, closest_y, closest_z;      
+      cs_lnum_t closest_id;
+      int closest_id_rank;
+      cs_real_t xyz_ref[3] = {0.0, 0.0, zsommet};
+      cs_geom_closest_point(m->n_cells,
+			    (const cs_real_3_t *)(mq->cell_cen),
+			    xyz_ref,
+			    &closest_id,
+			    &closest_id_rank);
+
+      if (closest_id_rank == cs_glob_rank_id) {
+	ugeo = cpro_met_vel[closest_id][0];
+	vgeo = cpro_met_vel[closest_id][1];
+	closest_x = cell_cen[closest_id][0];
+	closest_y = cell_cen[closest_id][1];
+	closest_z = cell_cen[closest_id][2];
+      }
+      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &ugeo);
+      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &vgeo);
+      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_x);
+      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_y);
+      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_z);
+      bft_printf("Geostrophic wind interpolated from prescribed meteo velocity at point (x,y,z)=(%.2f,%.2f,%.2f) is (u,v)=(%.2f,%.2f).\n ",closest_x,closest_y,closest_z,ugeo,vgeo);
+    }
+    //
+    const cs_real_t  lat = cs_notebook_parameter_value_by_name("lat");  
+    const cs_real_t fcorio = 2.0*7.292115e-5*sin(lat*dpi/180.0);
+
+    /* Coriolis force */
+    if (cs_notebook_parameter_value_by_name("Coriolis") > 0) {
+      for (cs_lnum_t c_id = 0; c_id < n_cells; c_id++) {
+	/* Geostrophic wind */
+	_st_exp[c_id][0]    = -cell_vol[c_id]*cpro_rom[c_id]*vgeo*fcorio;
+	_st_imp[c_id][1][0] = -cell_vol[c_id]*cpro_rom[c_id]*fcorio;
+
+	_st_exp[c_id][1]    = cell_vol[c_id]*cpro_rom[c_id]*ugeo*fcorio;
+	_st_imp[c_id][0][1] = cell_vol[c_id]*cpro_rom[c_id]*fcorio;
+      }
+    }
+
+    //
     cs_real_t WT_surf = dpi*pow(WT_radius,2);
     //
     cs_real_t WT_volume[n_WT];
@@ -303,15 +389,11 @@ cs_user_source_terms(cs_domain_t  *domain,
     cs_real_t WT_cpstar[n_WT];
     //
     cs_real_t ra_wind_dir= (270.0-wind_dir)*dpi/180.0; //radian absolute wind_dir
-    //
-    cs_real_3_t *_st_exp = (cs_real_3_t *)st_exp;
-    cs_real_33_t *_st_imp = (cs_real_33_t *)st_imp;
     
-    cs_real_t rotor_rdr=1.0; //ratio for rotor radius relative to turbine radius
-    cs_real_t rotor_thickness_rdr=0.05; //ratio for rotor thickness relative to turbine diameter
-    cs_real_t AD_mesh_cell_size = 5.0;
+    cs_real_t AD_mesh_cell_size = cs_notebook_parameter_value_by_name("AD_mesh_cell_size");
+    cs_real_t AD_half_rotor_thickness = 1.2*AD_mesh_cell_size;
     cs_real_t cancel_dist = 0.5*AD_mesh_cell_size;
-    cs_real_t select_dist = AD_mesh_cell_size;
+    cs_real_t select_dist = 1.2*AD_mesh_cell_size;
     /******************LOOP ON TURBINES*************************/
     for (cs_lnum_t WT_count=0; WT_count < n_WT; WT_count ++){
       //get Actuator Disk zone by name
@@ -346,30 +428,35 @@ cs_user_source_terms(cs_domain_t  *domain,
 	//
 	
 	/* //calculate linear decay until 0 at cancel_dist
-	/* //1 = a*(rdr*WT) + b; */
-	/* //0 = a*(rdr*WT + cancel_dist) + b; */
+	/* //1 = a*WT_radius + b; */
+	/* //0 = a*(WT_radius + cancel_dist) + b; */
 	/* //1 = a*(-cancel_dist); */
 	/* //a = -1/cancel_dist; */
-	/* //b = (x_WT + rdr*WT + cancel_dist)/cancel_dist; */
+	/* //b = -a*(WT_radius + cancel_dist); */
 	//
 	cs_real_t a_radius = -1.0/cancel_dist;
-	cs_real_t b_radius = -a_radius*(WT_radius*rotor_rdr + cancel_dist);
+	cs_real_t b_radius = -a_radius*(WT_radius + cancel_dist);
 	cs_real_t a_xdist = -1.0/cancel_dist;
-	cs_real_t b_xdist = -a_xdist*(WT_radius*rotor_thickness_rdr + cancel_dist);
+	cs_real_t b_xdist = -a_xdist*(AD_half_rotor_thickness + cancel_dist);
 	st_coeff[c_id]=0.0;
 	if (cs_notebook_parameter_value_by_name("st_method")==0) {
-	  if (fabs(deyawed_x_dist)<=rotor_thickness_rdr*WT_radius + select_dist)  {
-	    st_coeff[c_id]=fmax(a_xdist*fabs(deyawed_x_dist) + b_xdist,0.0);
-	    if (cell_radius>rotor_rdr*WT_radius + select_dist) {
-	      st_coeff[c_id]= 0.0;
-	    }
-	    else if (cell_radius>rotor_rdr*WT_radius) {
-	      st_coeff[c_id]= fmax(a_radius*cell_radius + b_radius,0.0);
-	    }
-	  }
-	  if (cell_radius<=rotor_rdr*WT_radius && fabs(deyawed_x_dist)<=rotor_thickness_rdr*WT_radius) {
+	  if (cell_radius<=WT_radius &&
+	      fabs(deyawed_x_dist)<=AD_half_rotor_thickness) {
 	    st_coeff[c_id]=1.0;
 	  }
+	  else if (cell_radius>WT_radius+select_dist ||
+		   fabs(deyawed_x_dist)>AD_half_rotor_thickness+select_dist) {
+	    st_coeff[c_id]= 0.0;
+	  }
+	  else {
+	    st_coeff[c_id]= 0.2;
+	  }
+	  /* else if (fabs(deyawed_x_dist)<=AD_half_rotor_thickness + select_dist)  { */
+	  /*   st_coeff[c_id]=fmax(a_xdist*fabs(deyawed_x_dist) + b_xdist,0.0); */
+	  /* } */
+	  /* else if (cell_radius<=WT_radius + select_dist) { */
+	  /*   st_coeff[c_id]= fmax(a_radius*cell_radius + b_radius,0.0); */
+	  /* } */
 	}
 	//Ren et al 2019
 	else if (cs_notebook_parameter_value_by_name("st_method")==1) {
@@ -377,8 +464,7 @@ cs_user_source_terms(cs_domain_t  *domain,
 	  cs_real_t D1 = -2.0/9.0;
 	  cs_real_t b=cell_radius/WT_radius;
 	    
-	  if (cell_radius<=rotor_rdr*WT_radius &&
-	      fabs(deyawed_x_dist)<=rotor_thickness_rdr*WT_radius) {
+	  if (cell_radius<=WT_radius && fabs(deyawed_x_dist)<=AD_half_rotor_thickness) {
 	    st_coeff[c_id]= (D0+D1*pow(b,2)+pow(b,4))/(D0+0.5*D1+1./3.);
 	  }
 	  else {
@@ -494,21 +580,21 @@ cs_user_source_terms(cs_domain_t  *domain,
 	//WT_ctstar as u is taken at wind turbine position, not freestream
 	cs_real_t AD_coeff=0.5*cpro_rom[c_id]*WT_surf*WT_ctstar[WT_count];
 	// explicit source term
-	_st_exp[c_id][0]    = -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*WT_u[WT_count]*WT_ux[WT_count]/WT_volume[WT_count];      
-	_st_exp[c_id][1]    = -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*WT_u[WT_count]*WT_uy[WT_count]/WT_volume[WT_count];
+	_st_exp[c_id][0]    += -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*WT_u[WT_count]*WT_ux[WT_count]/WT_volume[WT_count];      
+	_st_exp[c_id][1]    += -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*WT_u[WT_count]*WT_uy[WT_count]/WT_volume[WT_count];
 	source_term_x[c_id] = _st_exp[c_id][0];
 	source_term_y[c_id] = _st_exp[c_id][1];
 	/* /\* // semi implicite source terms *\/ */
-	/* _st_exp[c_id][0]    = -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(-1*u_x*u_x*u_x/u_sonde - u_x*u_y*u_y/u_sonde)/WT_volume[WT_count]; */
-	/* _st_exp[c_id][1]    = -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(-1*u_y*u_y*u_y/u_sonde - u_y*u_x*u_x/u_sonde)/WT_volume[WT_count]; */
+	/* _st_exp[c_id][0]    += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(-1*u_x*u_x*u_x/u_sonde - u_x*u_y*u_y/u_sonde)/WT_volume[WT_count]; */
+	/* _st_exp[c_id][1]    += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(-1*u_y*u_y*u_y/u_sonde - u_y*u_x*u_x/u_sonde)/WT_volume[WT_count]; */
 	
-	/* _st_imp[c_id][0][0] = -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_sonde + u_x*u_x/u_sonde)/WT_volume[WT_count]; */
-	/* _st_imp[c_id][0][1] = -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_x*u_y/u_sonde)/WT_volume[WT_count]; */
+	/* _st_imp[c_id][0][0] += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_sonde + u_x*u_x/u_sonde)/WT_volume[WT_count]; */
+	/* _st_imp[c_id][0][1] += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_x*u_y/u_sonde)/WT_volume[WT_count]; */
 	
-	/* _st_imp[c_id][1][0] = -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_y*u_x/u_sonde)/WT_volume[WT_count]; */
-	/* _st_imp[c_id][1][1] = -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_sonde+u_y*u_y/u_sonde)/WT_volume[WT_count]; */
-	/* source_term_x[c_id] = -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*u_sonde*u_x/WT_volume[WT_count]; */
-	/* source_term_y[c_id] = -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*u_sonde*u_y/WT_volume[WT_count]; */
+	/* _st_imp[c_id][1][0] += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_y*u_x/u_sonde)/WT_volume[WT_count]; */
+	/* _st_imp[c_id][1][1] += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_sonde+u_y*u_y/u_sonde)/WT_volume[WT_count]; */
+	/* source_term_x[c_id] += -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*u_sonde*u_x/WT_volume[WT_count]; */
+	/* source_term_y[c_id] += -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*u_sonde*u_y/WT_volume[WT_count]; */
 	
       }      
     }
@@ -530,7 +616,85 @@ cs_user_source_terms(cs_domain_t  *domain,
     /************************************************************/
 
   }
-  
+    /* Dyunkerke model */
+  if (f_id == CS_F_(eps)->id &&
+      cs_notebook_parameter_value_by_name("Dyunkerke") > 0) {
+    const cs_mesh_t *m = domain->mesh;
+    cs_mesh_quantities_t *mq = domain->mesh_quantities;
+    cs_real_t *cell_f_vol = mq->cell_f_vol;
+    const cs_lnum_t n_b_faces = m->n_b_faces;
+    const cs_lnum_t n_i_faces = m->n_i_faces;
+    const cs_lnum_t *b_face_cells = m->b_face_cells;
+    const cs_real_t *distb = mq->b_dist;
+    cs_real_t *cromo = CS_F_(rho)->val;
+    cs_real_t *cpro_pcvto = CS_F_(mu_t)->val;
+    cs_real_t sigmak=1.0;
+    const cs_equation_param_t *eqp_k
+      = cs_field_get_equation_param_const(CS_F_(k));
+    cs_real_t hint;
+    cs_real_t *coefap = NULL, *coefbp = NULL, *cofafp = NULL, *cofbfp = NULL;
+    cs_real_t *vol_divmugradk = NULL;
+    BFT_MALLOC(vol_divmugradk, n_cells_ext, cs_real_t);
+    cs_real_t *w3 = NULL;
+    BFT_MALLOC(w3, n_cells_ext, cs_real_t);
+    cs_real_t *viscf, *viscb;
+    BFT_MALLOC(viscf, n_i_faces, cs_real_t);
+    BFT_MALLOC(viscb, n_b_faces, cs_real_t);
+    for (cs_lnum_t c_id = 0; c_id < n_cells; c_id++) {
+      w3[c_id] = cpro_pcvto[c_id] / cromo[c_id] / sigmak;
+    }
+
+    cs_face_viscosity(m,
+                      mq,
+                      eqp_k->imvisf,
+                      w3,
+                      viscf,
+                      viscb);
+
+    coefap = CS_F_(k)->bc_coeffs->a;
+    coefbp = CS_F_(k)->bc_coeffs->b;
+    cofafp = CS_F_(k)->bc_coeffs->af;
+    cofbfp = CS_F_(k)->bc_coeffs->bf;
+
+    /* Compute - div(mu_T/sigmak grad (k)) time the volume of the cell */
+    cs_diffusion_potential(CS_F_(k)->id,
+                           m,
+                           mq,
+                           1,     /* init */
+                           0,     /* inc */
+                           eqp_k->imrgra,
+                           eqp_k->nswrgr,
+                           eqp_k->imligr,
+                           0,     /* iphydp */
+                           eqp_k->iwgrec,
+                           eqp_k->verbosity,
+                           eqp_k->epsrgr,
+                           eqp_k->climgr,
+                           NULL,
+                           CS_F_(k)->val_pre,
+                           coefap,
+                           coefbp,
+                           cofafp,
+                           cofbfp,
+                           viscf,
+                           viscb,
+                           w3,
+                           vol_divmugradk);
+
+
+    cs_field_t *f_eps_transport = cs_field_by_name_try("eps_transport");
+    for (cs_lnum_t cell_id = 0; cell_id < n_cells; cell_id ++) {
+      /* Already contains cell volume */
+      st_exp[cell_id] = CS_F_(eps)->val_pre[cell_id] / CS_F_(k)->val_pre[cell_id] * cs_turb_ce1 * cromo[cell_id] * fmax( 0., -vol_divmugradk[cell_id] ) ;
+      if (f_eps_transport != NULL) {
+        f_eps_transport->val[cell_id] = st_exp[cell_id]/cell_f_vol[cell_id]/cromo[cell_id];
+      }
+    }
+
+    BFT_FREE(w3);
+    BFT_FREE(vol_divmugradk);
+
+  }
 }
 
 /*----------------------------------------------------------------------------*/

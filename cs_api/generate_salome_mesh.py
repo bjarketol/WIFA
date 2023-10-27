@@ -69,7 +69,7 @@ dom = 0 # (0 pour circulaire et 1 pour rectangulaire)
 Lz = args.domain_height
 
 #taille maille bord domaine
-tc = Lx/100.0
+tc = args.disk_mesh_size*10
 #taille min
 tm = args.disk_mesh_size
 traff2 = 1.8*tm
