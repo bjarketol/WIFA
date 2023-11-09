@@ -223,11 +223,12 @@ def run_pywake(yamlFile, output_dir='output'):
     # You can then map these to your variables
     if wake_model_data['name'] == 'Jensen':
        wakeModel = NOJ #(wake_model_data['k'])  # Assuming NOJ takes 'k' as an argument
+       deficit_param_mapping = {'k': 'k'}
     elif wake_model_data['name'] == 'Bastankhah':
        wakeModel = BastankhahGaussian #(wake_model_data['k'])
+       deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
     else:
        raise Exception('%s wake model not implemented in PyWake' % wake_model_data['name'])
-    deficit_param_mapping = {'k': 'k'}
     deficit_args = {}
     for key in wake_model_data.keys():
         if key == 'name': continue
