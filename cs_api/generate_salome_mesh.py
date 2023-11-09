@@ -28,8 +28,6 @@ import numpy as np
 geompy = geomBuilder.New()
 
 parser = argparse.ArgumentParser(description='Script to generate a wind farm GMSH mesh using salome')
-parser.add_argument('--turbine_diameter',dest='turbine_diameter', type=float)
-parser.add_argument('--turbine_height',dest='turbine_height', type=float)
 parser.add_argument('--wind_origin',dest='wind_origin', type=float)
 parser.add_argument('--output_file',dest='output_file', type=str)
 parser.add_argument('--disk_mesh_size',dest='disk_mesh_size', type=float)
@@ -40,7 +38,7 @@ args = parser.parse_args()
 #######################
 #lu dans des fichiers
 #######################
-xy_turbines=np.genfromtxt('Dynamique/DATA/placement_turbines.csv',delimiter=',').transpose()[:2,:]
+xy_turbines=np.genfromtxt('Dynamique/DATA/turbines_info.csv',delimiter=',').transpose()[:2,:]
 nombre_turbines = xy_turbines.shape[1]
 
 #dimensions en x et y du domaine
@@ -48,10 +46,14 @@ Lx = args.domain_size
 Ly = args.domain_size
 
 #caractéristiques turbines:
-#diametre du rotor
-diametre = args.turbine_diameter
 #hauteur moyeu
-hm = args.turbine_height
+hub_heights_array = np.genfromtxt('Dynamique/DATA/turbines_info.csv',delimiter=',')[:,2]
+#diametre du rotor
+diameters_array = np.genfromtxt('Dynamique/DATA/turbines_info.csv',delimiter=',')[:,3]
+
+#hm = np.max(hub_heights_array) #not used anymore, replaced by:
+extrusion_max_height = np.max(hub_heights_array+diameters_array)
+#
 # angle de rotation (en degres)
 provenance_vent = args.wind_origin
 angle = 270.0 - provenance_vent
@@ -119,9 +121,9 @@ zone_raff5_pa =[]
 zone_raff6_pa =[]
 zone_raff7_pa =[]
 
-
 #placement des différentes zones de raffinement et zones sonde
-for i in range(nombre_turbines):
+for i in range(nombre_turbines): 
+  diametre=diameters_array[i]
   zone_raff1_eolienne = geompy.MakeBoxDXDYDZ(4*tm, ((1.1*diametre)//tm)*tm, diametre+40)
   S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -4*tm/2 ,-(((1.1*diametre)//tm)*tm)/2, 0)
   S = geompy.MakeRotation(S,Vz,angle)
@@ -384,7 +386,7 @@ geompy.UnionList(alongy_raff7, edges_y_raff7)
 
 #pour extrusion du maillage
 marge = 10
-end_point = geompy.MakeVertex(0, 0, hm + (diametre/2) + marge)
+end_point = geompy.MakeVertex(0, 0, extrusion_max_height + marge)
 edge_wire = geompy.MakeEdge(origin, end_point)
 wire = geompy.MakeWire([edge_wire], 1e-07)
 
