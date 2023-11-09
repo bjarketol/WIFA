@@ -94,17 +94,16 @@ cs_user_mesh_modify(cs_mesh_t  *mesh)
   /******************************************
    * READ Wind Turbines from coordinates file
    *******************************************/
-  
-  cs_real_t WT_d = cs_notebook_parameter_value_by_name("WT_d");
-  cs_real_t WT_radius = WT_d/2.; 
   cs_real_t wind_dir=cs_glob_atmo_option->meteo_angle;
 
   //file name and tables
   char WT_file_name[1024];
-  sprintf(WT_file_name,"placement_turbines.csv");
-  cs_real_t  *WT_x_coords = NULL;
-  cs_real_t  *WT_y_coords = NULL;
-  cs_real_t  *WT_z_coords = NULL;
+  sprintf(WT_file_name,"turbines_info.csv");
+  cs_real_t *WT_x_coords = NULL;
+  cs_real_t *WT_y_coords = NULL;
+  cs_real_t *WT_z_coords = NULL;
+  cs_real_t *WT_diameters=NULL;
+  cs_lnum_t *WT_types=NULL;
   cs_real_t WT_min_x,WT_max_x,WT_min_y,WT_max_y,WT_min_z,WT_max_z;
   cs_real_t WF_length,WF_depth,WF_height,WF_size;
   cs_real_t WT_min_distance; //minimum distance between 2 turbines in the farm
@@ -115,13 +114,18 @@ cs_user_mesh_modify(cs_mesh_t  *mesh)
   char *tok0;
   const char sep0[4] = ";";
   size_t n_WT = 0;
+  size_t i=-1;
   //read header
   //fgets(line, 1024, stream);
   while (fgets(line, 1024, stream) != NULL){
-    // try to parse line
-    tok0 = strtok(line, sep0);
-    if (tok0 != NULL)
-      n_WT++;
+    i++;
+    if (i>0) {
+      // try to parse line
+      tok0 = strtok(line, sep0);
+      if (tok0 != NULL) {
+	n_WT++;
+      }
+    }
   }
   fclose(stream);
 
@@ -129,121 +133,90 @@ cs_user_mesh_modify(cs_mesh_t  *mesh)
   BFT_MALLOC(WT_x_coords, n_WT, cs_real_t);
   BFT_MALLOC(WT_y_coords, n_WT, cs_real_t);
   BFT_MALLOC(WT_z_coords, n_WT, cs_real_t);
+  BFT_MALLOC(WT_diameters, n_WT, cs_real_t);
+  BFT_MALLOC(WT_types, n_WT, cs_lnum_t);
 
    //read and parse this file
   stream = fopen(WT_file_name, "r");
   char *tok;
   const char sep[4] = ",";
   size_t line_count = -1;
-  size_t i=-1;
+  i=-1;
 
   while (fgets(line, 1024, stream) != NULL){
     i++;
-    if (++line_count >= n_WT)
+    if (++line_count >= n_WT+1)
       break;
 
-    // parse line
-    tok = strtok(line, sep);
-    if (tok == NULL)
-      continue;
-    WT_x_coords[i]=atof(tok);
+    //skip header 
+    if(i>0) {
+      // parse line
+      tok = strtok(line, sep);
+      if (tok == NULL)
+	continue;
+      WT_x_coords[i-1]=atof(tok);
     
-    tok = strtok(NULL, sep);
-    if (tok == NULL)
-      continue;
-    WT_y_coords[i]=atof(tok);
+      tok = strtok(NULL, sep);
+      if (tok == NULL)
+	continue;
+      WT_y_coords[i-1]=atof(tok);
 
-    tok = strtok(NULL, sep);
-    if (tok == NULL)
-      continue;
-    WT_z_coords[i]=atof(tok);
+      tok = strtok(NULL, sep);
+      if (tok == NULL)
+	continue;
+      WT_z_coords[i-1]=atof(tok);
 
-    if(i==0) {
-      WT_min_x=WT_x_coords[i];
-      WT_max_x=WT_x_coords[i];
-      WT_min_y=WT_y_coords[i];
-      WT_max_y=WT_y_coords[i];      
-      WT_min_z=WT_z_coords[i];
-      WT_max_z=WT_z_coords[i];      
-    }
-    else {
-      if(WT_x_coords[i]<WT_min_x) {
-	WT_min_x=WT_x_coords[i];
-      }
-      if(WT_x_coords[i]>WT_max_x) {
-	WT_max_x=WT_x_coords[i];
-      }
-      if(WT_y_coords[i]<WT_min_y) {
-	WT_min_y=WT_y_coords[i];
-      }
-      if(WT_y_coords[i]>WT_max_y) {
-	WT_max_y=WT_y_coords[i];
-      }	
-      if(WT_z_coords[i]<WT_min_z) {
-	WT_min_z=WT_z_coords[i];
-      }
-      if(WT_z_coords[i]>WT_max_z) {
-	WT_max_z=WT_z_coords[i];
-      }	
+      tok = strtok(NULL, sep);
+      if (tok == NULL)
+      	continue;
+      WT_diameters[i-1]=atof(tok);
+
+      tok = strtok(NULL, sep);
+      if (tok == NULL)
+      	continue;
+      WT_types[i-1]=atoi(tok);
     }
   }
   fclose(stream);
   //
-  WF_length=WT_max_x-WT_min_x + WT_d;
-  WF_depth=WT_max_y-WT_min_y + WT_d;
-  WF_size=sqrt(pow(WF_length,2.0)+pow(WF_depth,2.0));
-  
   /******************************************
    * MARK TURBINE LOCATIONS USING CYLINDERS
-   *******************************************/ 
-  cs_real_t mesh_coords[3];
-  cs_real_t yawed_mesh_coords[3];
+   *******************************************/
   cs_real_t mean_coords[3];
-  cs_lnum_t  vtx_id;
-  //mean=0 because rotation in global referential
-  mean_coords[0] = 0.0;
-  mean_coords[1] = 0.0;
-  mean_coords[2] = 0.0;
-  //
   char criteria[100];
-  //Refinement Distance Ratio
-  //relative to Wind Farm lenght, or Wind Turbine diameter
-  cs_real_t rdr;
   //
   cs_lnum_t   n_selected_cells = 0;
   cs_lnum_t  *selected_cells = NULL;
-  //
-  cs_real_t base_corner_coords[3];
-  cs_real_t xTranslate_base_corner_coords[3];
-  cs_real_t yTranslate_base_corner_coords[3];
-  cs_real_t zTranslate_base_corner_coords[3];
-  //
-  cs_real_t yawed_base_corner_coords[3];
-  cs_real_t twice_yawed_base_corner_coords[3];
-  cs_real_t yawed_xTranslate_base_corner_coords[3];
-  cs_real_t yawed_yTranslate_base_corner_coords[3];
-  cs_real_t yawed_zTranslate_base_corner_coords[3];
   //
   cs_real_t disk_1_coords[3];
   cs_real_t disk_2_coords[3];
   cs_real_t yawed_disk_1_coords[3];
   cs_real_t yawed_disk_2_coords[3];
   //
-  cs_real_t thickness_rdr; //ratio to WT diameter
-  
-  rdr=1.2; //ratio for disk radius relative to turbine radius
-  thickness_rdr=0.2; //ratio for disk thickness relative to turbine diameter 
-  
   char name[128];//for Actuator Disk (AD) zone name
-  
-  for (cs_lnum_t WT_count=0; WT_count < n_WT; WT_count ++){    
+  //
+  cs_real_t AD_mesh_cell_size = cs_notebook_parameter_value_by_name("AD_mesh_cell_size");
+  cs_real_t AD_half_rotor_thickness = 1.2*AD_mesh_cell_size;  
+  cs_lnum_t start_WT_count, end_WT_count;
+  if (cs_notebook_parameter_value_by_name("isol")>0) {
+    start_WT_count = cs_notebook_parameter_value_by_name("isol")-1;
+    end_WT_count = cs_notebook_parameter_value_by_name("isol");
+  }
+  else {
+    start_WT_count = 0;
+    end_WT_count = n_WT;      
+  }      
+  for (cs_lnum_t WT_count=start_WT_count; WT_count < end_WT_count; WT_count ++){
+    //
+    cs_real_t WT_d = WT_diameters[WT_count];
+    cs_real_t WT_radius = WT_d/2.;
     /***********************************************************/
     /* Cylinder corresponding to AD zone */
-    disk_1_coords[0] = WT_x_coords[WT_count] - 0.5 * thickness_rdr*WT_d;
+    disk_1_coords[0] = WT_x_coords[WT_count] - 2.0 * AD_half_rotor_thickness;
     disk_1_coords[1] = WT_y_coords[WT_count];
     disk_1_coords[2] = WT_z_coords[WT_count];
     //
-    disk_2_coords[0] = WT_x_coords[WT_count] + 0.5 * thickness_rdr*WT_d;
+    disk_2_coords[0] = WT_x_coords[WT_count] + 2.0 * AD_half_rotor_thickness;
     disk_2_coords[1] = WT_y_coords[WT_count];
     disk_2_coords[2] = WT_z_coords[WT_count];
     
@@ -258,9 +231,9 @@ cs_user_mesh_modify(cs_mesh_t  *mesh)
     sprintf(criteria, "cylinder[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", \
     	    yawed_disk_1_coords[0],yawed_disk_1_coords[1],yawed_disk_1_coords[2],
     	    yawed_disk_2_coords[0],yawed_disk_2_coords[1],yawed_disk_2_coords[2],
-    	    rdr*WT_radius);
+    	    1.5*WT_radius);
     
-    bft_printf("Turbine_%d criteria 3 : %s\n",WT_count+1,criteria);
+    bft_printf("Turbine_%d selection criteria : %s\n",WT_count+1,criteria);
     
     BFT_MALLOC(selected_cells, mesh->n_cells, cs_lnum_t);
 

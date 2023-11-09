@@ -294,22 +294,21 @@
       <gravity_z>-9.81</gravity_z>
     </gravity>
     <notebook>
-      <var description="Wind turbine diameter" editable="No" id="0" name="WT_d" oturns="No" value="136.0"/>
-      <var description="0 for old source term and &gt; 0 for other options" editable="No" id="1" name="st_method" oturns="No" value="0.0"/>
-      <var description="0 for full farm simulation and &gt; 0 to run the designated turbine in isolation" editable="No" id="2" name="isol" oturns="No" value="0"/>
-      <var description="-1 to switch off coriolis, 1 to activate" editable="No" id="3" name="Coriolis" oturns="No" value="1.0"/>
-      <var description="1 if meteo file, 2 if MO profile" editable="No" id="4" name="meteo_profile" oturns="No" value="1"/>
-      <var description="Inverse Lmo" editable="No" id="5" name="Lmoinv" oturns="No" value="-0.0196"/>
-      <var description="Rugosity" editable="No" id="6" name="z0" oturns="No" value="0.13"/>
-      <var description="Reference altitude" editable="No" id="7" name="zref" oturns="No" value="100.0"/>
-      <var description="Wind direction" editable="No" id="8" name="teta" oturns="No" value="70.0"/>
-      <var description="Wind speed" editable="No" id="9" name="ureff" oturns="No" value="3.6"/>
-      <var description="Ground temperature" editable="No" id="10" name="t0" oturns="No" value="287.59"/>
-      <var description="-1 to switch off Dyunkerke model, 1 to activate" editable="No" id="11" name="Dyunkerke" oturns="No" value="-1.0"/>
-      <var description="Latitude " editable="No" id="12" name="lat" oturns="No" value="55.0"/>
-      <var description="Longitude " editable="No" id="13" name="long" oturns="No" value="0.0"/>
-      <var description="1 to solve the energy equation, 0 if constant density" editable="No" id="14" name="energy" oturns="No" value="0.0"/>
-      <var description="Mesh cell size at disk" editable="No" id="15" name="AD_mesh_cell_size" oturns="No" value="5.0"/>
+      <var description="0 for old source term and &gt; 0 for other options" editable="No" id="0" name="st_method" oturns="No" value="0.0"/>
+      <var description="0 for full farm simulation and &gt; 0 to run the designated turbine in isolation" editable="No" id="1" name="isol" oturns="No" value="0"/>
+      <var description="-1 to switch off coriolis, 1 to activate" editable="No" id="2" name="Coriolis" oturns="No" value="1.0"/>
+      <var description="1 if meteo file, 2 if MO profile" editable="No" id="3" name="meteo_profile" oturns="No" value="1"/>
+      <var description="Inverse Lmo" editable="No" id="4" name="Lmoinv" oturns="No" value="-0.0196"/>
+      <var description="Rugosity" editable="No" id="5" name="z0" oturns="No" value="0.13"/>
+      <var description="Reference altitude" editable="No" id="6" name="zref" oturns="No" value="100.0"/>
+      <var description="Wind direction" editable="No" id="7" name="teta" oturns="No" value="70.0"/>
+      <var description="Wind speed" editable="No" id="8" name="ureff" oturns="No" value="3.6"/>
+      <var description="Ground temperature" editable="No" id="9" name="t0" oturns="No" value="287.59"/>
+      <var description="-1 to switch off Dyunkerke model, 1 to activate" editable="No" id="10" name="Dyunkerke" oturns="No" value="-1.0"/>
+      <var description="Latitude " editable="No" id="11" name="lat" oturns="No" value="55.0"/>
+      <var description="Longitude " editable="No" id="12" name="long" oturns="No" value="0.0"/>
+      <var description="1 to solve the energy equation, 0 if constant density" editable="No" id="13" name="energy" oturns="No" value="0.0"/>
+      <var description="Mesh cell size at disk" editable="No" id="14" name="AD_mesh_cell_size" oturns="No" value="5.0"/>
     </notebook>
     <omega>
       <omega_x>0</omega_x>
@@ -408,7 +407,6 @@
       <variable label="epsilon" name="epsilon">
         <blending_factor>0</blending_factor>
         <order_scheme choice="upwind"/>
-        <postprocessing_recording status="off"/>
         <probes_recording status="off"/>
         <rhs_reconstruction>1</rhs_reconstruction>
         <solver_choice choice="symmetric_gauss_seidel"/>
@@ -416,7 +414,6 @@
       <variable label="k" name="k">
         <blending_factor>0</blending_factor>
         <order_scheme choice="upwind"/>
-        <postprocessing_recording status="off"/>
         <probes_recording status="off"/>
         <rhs_reconstruction>1</rhs_reconstruction>
         <solver_choice choice="symmetric_gauss_seidel"/>

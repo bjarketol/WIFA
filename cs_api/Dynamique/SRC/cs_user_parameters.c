@@ -87,7 +87,7 @@ cs_user_model(void)
    *      pressure gradient
    *   2: same plus velocity profile imposed at ingoing faces
    */  
-  cs_glob_atmo_option->open_bcs_treatment = 1; //was 0
+  //cs_glob_atmo_option->open_bcs_treatment = 1; //was 0
 
   /* Read the meteo file (1) or LMO profile with following parameters (2) */  
   cs_glob_atmo_option->meteo_profile = cs_notebook_parameter_value_by_name("meteo_profile");
