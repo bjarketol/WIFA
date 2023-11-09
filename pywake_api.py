@@ -207,25 +207,14 @@ def run_pywake(yamlFile, output_dir='output'):
     turbine = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_height=hh, 
                           powerCtFunction=PowerCtTabular(speeds, 0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi, power_unit='W', ct=cts_int))
 
-    #deficit = system_dat['attributes']['analyses']['wake_model']
-    #deflection = system_dat['attributes']['analyses']['deflection_model']
-    #turbulence = system_dat['attributes']['analyses']['turbulence_model']
-    #superPosition = system_dat['attributes']['analyses']['superposition_model']
-    #averaging = system_dat['attributes']['analyses']['rotor_averaging']
-  
-    #if deficit == 'Jensen': wakeModel = NOJ
-    #elif deficit == 'Bastankhah': wakeModel = BastankhahGaussian
-    #else raise Exception('%s wake model not implemented in PyWake' % deficit)
-
 
     wake_model_data = get_with_default(system_dat['attributes']['analyses'], 'wake_model', DEFAULTS)
 
-    # You can then map these to your variables
     if wake_model_data['name'] == 'Jensen':
-       wakeModel = NOJ #(wake_model_data['k'])  # Assuming NOJ takes 'k' as an argument
+       wakeModel = NOJ 
        deficit_param_mapping = {'k': 'k'}
     elif wake_model_data['name'] == 'Bastankhah':
-       wakeModel = BastankhahGaussian #(wake_model_data['k'])
+       wakeModel = BastankhahGaussian 
        deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
     else:
        raise Exception('%s wake model not implemented in PyWake' % wake_model_data['name'])
@@ -269,8 +258,10 @@ def run_pywake(yamlFile, output_dir='output'):
     
     # Map the rotor averaging model
     rotorAveraging = None
-    if rotor_averaging_data['name'] == 'Center':
+    if rotor_averaging_data['name'].lower() == 'center':
         rotorAveraging = RotorCenter()
+    elif rotor_averaging_data['name'].lower() == 'avg_deficit':
+        rotorAveraging = GridRotorAvg()
     else:
         raise Exception('%s rotor averaging model not implemented' % rotor_averaging_data['name'])
     
