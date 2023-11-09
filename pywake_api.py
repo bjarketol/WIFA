@@ -270,9 +270,9 @@ def run_pywake(yamlFile, output_dir='output'):
     
     
 
-    windFarmModel = BastankhahGaussian(site, turbine,
-                                       turbulenceModel=turbulenceModel, rotorAvgModel=rotorAveraging,
-                                       superpositionModel=superpositionModel, **deficit_args)
+    windFarmModel = wakeModel(site, turbine,
+                                    turbulenceModel=turbulenceModel, rotorAvgModel=rotorAveraging,
+                                    superpositionModel=superpositionModel, **deficit_args)
     #noj = NOJ(site, turbine, turbulenceModel=None)
 #    sim_res = noj(x, y)
     sim_res = windFarmModel(x, y, time=timeseries, ws=ws, wd=wd, TI=TI)
