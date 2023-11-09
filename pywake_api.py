@@ -10,6 +10,48 @@ from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
 from py_wake.examples.data.hornsrev1 import Hornsrev1Site
 from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
+from py_wake.deflection_models import JimenezWakeDeflection
+from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel
+from py_wake import NOJ, BastankhahGaussian
+from py_wake.superposition_models import LinearSum, SquaredSum
+from py_wake.rotor_avg_models import RotorCenter, GridRotorAvg, EqGridRotorAvg, GQGridRotorAvg, CGIRotorAvg, PolarGridRotorAvg, PolarRotorAvg, polar_gauss_quadrature, GaussianOverlapAvgModel
+
+
+# Define default values for wake_model parameters
+DEFAULTS = {
+    'wake_model': {
+        'name': 'Jensen',
+        'k': 0.04,  # Default wake expansion coefficient for Jensen
+    },
+    'deflection_model': {
+        'name': 'Jimenez',
+        'beta': 0.1,  # Default Jimenez deflection coefficient
+    },
+    'turbulence_model': {
+        'name': 'STF2005',
+        'c1': 1.0,  # Default STF C1 value
+        'c2': 1.0,  # Default STF C2 value
+    },
+    'superposition_model': {
+        'name': 'Linear',
+    },
+    'rotor_averaging': {
+        'name': 'Center',
+    }
+}
+
+def get_with_default(data, key, defaults):
+    """
+    Retrieve a value from a dictionary, using a default if the key is not present.
+    If the value is a dictionary, apply the same process recursively.
+    """
+    if key not in data:
+        return defaults[key]
+    elif isinstance(data[key], dict):
+        # For nested dictionaries, ensure all subkeys are checked for defaults
+        return {sub_key: get_with_default(data[key], sub_key, defaults[key]) for sub_key in defaults[key]}
+    else:
+        return data[key]
 
 
 def weighted_quantile(values, quantiles, sample_weight=None, 
@@ -164,11 +206,84 @@ def run_pywake(yamlFile, output_dir='output'):
     cts_int = np.interp(speeds, ct_ws, ct)
     turbine = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_height=hh, 
                           powerCtFunction=PowerCtTabular(speeds, 0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi, power_unit='W', ct=cts_int))
-    from py_wake import NOJ, BastankhahGaussian
-    noj = BastankhahGaussian(site, turbine, turbulenceModel=None)
+
+    #deficit = system_dat['attributes']['analyses']['wake_model']
+    #deflection = system_dat['attributes']['analyses']['deflection_model']
+    #turbulence = system_dat['attributes']['analyses']['turbulence_model']
+    #superPosition = system_dat['attributes']['analyses']['superposition_model']
+    #averaging = system_dat['attributes']['analyses']['rotor_averaging']
+  
+    #if deficit == 'Jensen': wakeModel = NOJ
+    #elif deficit == 'Bastankhah': wakeModel = BastankhahGaussian
+    #else raise Exception('%s wake model not implemented in PyWake' % deficit)
+
+
+    wake_model_data = get_with_default(system_dat['attributes']['analyses'], 'wake_model', DEFAULTS)
+
+    # You can then map these to your variables
+    if wake_model_data['name'] == 'Jensen':
+       wakeModel = NOJ #(wake_model_data['k'])  # Assuming NOJ takes 'k' as an argument
+    elif wake_model_data['name'] == 'Bastankhah':
+       wakeModel = BastankhahGaussian #(wake_model_data['k'])
+    else:
+       raise Exception('%s wake model not implemented in PyWake' % wake_model_data['name'])
+    deficit_param_mapping = {'k': 'k'}
+    deficit_args = {}
+    for key in wake_model_data.keys():
+        if key == 'name': continue
+        if key in deficit_param_mapping.keys():
+            deficit_args[deficit_param_mapping[key]] = wake_model_data[key]
+
+    # Continuing from the previous example...
+    
+    deflection_model_data = get_with_default(system_dat['attributes']['analyses'], 'deflection_model', DEFAULTS)
+    turbulence_model_data = get_with_default(system_dat['attributes']['analyses'], 'turbulence_model', DEFAULTS)
+    superposition_model_data = get_with_default(system_dat['attributes']['analyses'], 'superposition_model', DEFAULTS)
+    rotor_averaging_data = get_with_default(system_dat['attributes']['analyses'], 'rotor_averaging', DEFAULTS)
+    
+    # Map the deflection model
+    if deflection_model_data['name'] == 'Jimenez':
+        deflectionModel = JimenezWakeDeflection(deflection_model_data['beta'])  # Assuming Jimenez takes 'beta' as an argument
+    else:
+        raise Exception('%s deflection model not implemented' % deflection_model_data['name'])
+    
+    # Map the turbulence model
+    if turbulence_model_data['name'] is None:
+        turbulenceModel = None
+    elif turbulence_model_data['name'] == 'STF2005':
+        turbulenceModel = STF2005TurbulenceModel(c=[turbulence_model_data['c1'], turbulence_model_data['c2']])
+    elif turbulence_model_data['name']  == 'STF2017':
+        turbulenceModel = STF2017TurbulenceModel(c=[turbulence_model_data['c1'], turbulence_model_data['c2']])
+        #turbulenceModel = STF(turbulence_model_data['c1'], turbulence_model_data['c2'])  # Assuming STF takes 'c1' and 'c2' as arguments
+    else:
+        raise Exception('%s turbulence model not implemented' % turbulence_model_data['name'])
+    
+    # Map the superposition model
+    if superposition_model_data['name'] == 'Linear':
+        superpositionModel = LinearSum()
+    elif superposition_model_data['name'] == 'Squared':
+        superpositionModel = SquaredSum()
+    else:
+        raise Exception('%s superposition model not implemented' % superposition_model_data['name'])
+    
+    # Map the rotor averaging model
+    rotorAveraging = None
+    if rotor_averaging_data['name'] == 'Center':
+        rotorAveraging = RotorCenter()
+    else:
+        raise Exception('%s rotor averaging model not implemented' % rotor_averaging_data['name'])
+    
+    # You would replace LinearSuperposition, SquaredSuperposition, CenterRotor, etc.
+    # with the actual classes or functions you have defined to instantiate these models.
+    
+    
+
+    windFarmModel = BastankhahGaussian(site, turbine,
+                                       turbulenceModel=turbulenceModel, rotorAvgModel=rotorAveraging,
+                                       superpositionModel=superpositionModel, **deficit_args)
     #noj = NOJ(site, turbine, turbulenceModel=None)
 #    sim_res = noj(x, y)
-    sim_res = noj(x, y, time=timeseries, ws=ws, wd=wd, TI=TI)
+    sim_res = windFarmModel(x, y, time=timeseries, ws=ws, wd=wd, TI=TI)
     aep = sim_res.aep(normalize_probabilities=not timeseries).sum()
     print('aep is ', aep, 'GWh')
     #print('aep is ', sim_res.aep().sum(), 'GWh')
