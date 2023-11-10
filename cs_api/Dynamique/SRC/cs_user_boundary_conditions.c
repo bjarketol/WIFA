@@ -117,11 +117,11 @@ cs_user_boundary_conditions(cs_domain_t  *domain,
     for (cs_lnum_t face_count=0; face_count < z->n_elts; face_count ++) {
       face_id=z->elt_ids[face_count];
       f_roughness->val[face_id]=cs_glob_atmo_option->meteo_z0;
-      /* How to treat thermal rugosity is still uncertain */
+      /* /\* How to treat thermal rugosity is still uncertain *\/ */
       f_thermal_roughness->val[face_id]=cs_glob_atmo_option->meteo_z0;
-      //null flux after discussion with KUL
-      CS_F_(t)->bc_coeffs->icodcl[face_id] = 3;
-      CS_F_(t)->bc_coeffs->rcodcl3[face_id] = 0.0;
+      /* //null flux after discussion with KUL */
+      /* CS_F_(t)->bc_coeffs->icodcl[face_id] = 3; */
+      /* CS_F_(t)->bc_coeffs->rcodcl3[face_id] = 0.0; */
     }
   }
 

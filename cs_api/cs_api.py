@@ -339,6 +339,7 @@ if __name__ == "__main__":
     # cs_notebook_parameters = {
     #     'meteo_profile' : 1,  #1 for meteo_file, set above
     #     'teta': windfarm_study.wind_origin, #computed from meteo profile in function above
+    #      'z0': 0.0001,
     #     'st_method' : 0, #0 : homogeneous AD
     #     'isol' : 0, #0 if full farm, i>0 if turbine i in isolation
     #     'Coriolis' : 1, #1 if coriolis, 0 if not

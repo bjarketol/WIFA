@@ -77,8 +77,8 @@ cs_user_model(void)
   wf->iwalfs = CS_WALL_F_S_MONIN_OBUKHOV;
   wf->iwallf = CS_WALL_F_2SCALES_SMOOTH_ROUGH;
   
-  if(cs_notebook_parameter_value_by_name("energy")==1) {
-    cs_glob_physical_model_flag[CS_ATMOSPHERIC] = CS_ATMO_DRY;
+  if(cs_notebook_parameter_value_by_name("energy")==0) {
+    cs_glob_physical_model_flag[CS_ATMOSPHERIC] = CS_ATMO_CONSTANT_DENSITY;
   }
 
   //TODO : check when it's needed. With constant density or dry atmo?
@@ -95,6 +95,7 @@ cs_user_model(void)
     cs_glob_atmo_option->meteo_file_name = "meteo_file";
     /* Velocity direction at hub height for actuator disk source terms */
     cs_glob_atmo_option->meteo_angle = cs_notebook_parameter_value_by_name("teta");
+    cs_glob_atmo_option->meteo_z0 = cs_notebook_parameter_value_by_name("z0");
   }
   else if (cs_glob_atmo_option->meteo_profile==2) {
     /* Inverse LMO length */

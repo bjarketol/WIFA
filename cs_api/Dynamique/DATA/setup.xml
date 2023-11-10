@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><Code_Saturne_GUI case="Dynamique" solver_version="6.0;7.0;8.0" study="windIO_chain" version="2.0">
+<?xml version="1.0" encoding="utf-8"?><Code_Saturne_GUI case="Dynamique" solver_version="6.0;7.0;8.0" study="cs_api" version="2.0">
   <additional_scalars>
     <users>
       <property dimension="1" label="source_term_x" name="source_term_x" support="cells" type="user">
@@ -23,141 +23,6 @@
         <location>all[]</location>
         <writer id="-1"/>
       </mesh>
-      <probe id="1" name="1" status="on">
-        <probe_x>0</probe_x>
-        <probe_y>0</probe_y>
-        <probe_z>10</probe_z>
-      </probe>
-      <probe id="2" name="2" status="on">
-        <probe_x>0</probe_x>
-        <probe_y>0</probe_y>
-        <probe_z>20</probe_z>
-      </probe>
-      <probe id="3" name="3" status="on">
-        <probe_x>0</probe_x>
-        <probe_y>0</probe_y>
-        <probe_z>50</probe_z>
-      </probe>
-      <probe id="4" name="4" status="on">
-        <probe_x>50</probe_x>
-        <probe_y>0</probe_y>
-        <probe_z>0</probe_z>
-      </probe>
-      <probe id="5" name="5" status="on">
-        <probe_x>50</probe_x>
-        <probe_y>0</probe_y>
-        <probe_z>20</probe_z>
-      </probe>
-      <probe id="6" name="6" status="on">
-        <probe_x>50</probe_x>
-        <probe_y>0</probe_y>
-        <probe_z>50</probe_z>
-      </probe>
-      <probe id="7" name="7" status="on">
-        <probe_x>50</probe_x>
-        <probe_y>50</probe_y>
-        <probe_z>0</probe_z>
-      </probe>
-      <probe id="8" name="8" status="on">
-        <probe_x>50</probe_x>
-        <probe_y>50</probe_y>
-        <probe_z>20</probe_z>
-      </probe>
-      <probe id="9" name="9" status="on">
-        <probe_x>50</probe_x>
-        <probe_y>50</probe_y>
-        <probe_z>50</probe_z>
-      </probe>
-      <probe id="10" name="10" status="on">
-        <probe_x>-50</probe_x>
-        <probe_y>0</probe_y>
-        <probe_z>0</probe_z>
-      </probe>
-      <probe id="11" name="11" status="on">
-        <probe_x>-50</probe_x>
-        <probe_y>0</probe_y>
-        <probe_z>20</probe_z>
-      </probe>
-      <probe id="12" name="12" status="on">
-        <probe_x>-50</probe_x>
-        <probe_y>0</probe_y>
-        <probe_z>50</probe_z>
-      </probe>
-      <probe id="13" name="13" status="on">
-        <probe_x>-50</probe_x>
-        <probe_y>-50</probe_y>
-        <probe_z>0</probe_z>
-      </probe>
-      <probe id="14" name="14" status="on">
-        <probe_x>-50</probe_x>
-        <probe_y>-50</probe_y>
-        <probe_z>20</probe_z>
-      </probe>
-      <probe id="15" name="15" status="on">
-        <probe_x>-50</probe_x>
-        <probe_y>-50</probe_y>
-        <probe_z>50</probe_z>
-      </probe>
-      <probe id="16" name="16" status="on">
-        <probe_x>100</probe_x>
-        <probe_y>100</probe_y>
-        <probe_z>0</probe_z>
-      </probe>
-      <probe id="17" name="17" status="on">
-        <probe_x>100</probe_x>
-        <probe_y>100</probe_y>
-        <probe_z>20</probe_z>
-      </probe>
-      <probe id="18" name="18" status="on">
-        <probe_x>100</probe_x>
-        <probe_y>100</probe_y>
-        <probe_z>50</probe_z>
-      </probe>
-      <probe id="19" name="19" status="on">
-        <probe_x>-100</probe_x>
-        <probe_y>-100</probe_y>
-        <probe_z>0</probe_z>
-      </probe>
-      <probe id="20" name="20" status="on">
-        <probe_x>-100</probe_x>
-        <probe_y>-100</probe_y>
-        <probe_z>20</probe_z>
-      </probe>
-      <probe id="21" name="21" status="on">
-        <probe_x>-100</probe_x>
-        <probe_y>-100</probe_y>
-        <probe_z>50</probe_z>
-      </probe>
-      <probe id="22" name="22" status="on">
-        <probe_x>150</probe_x>
-        <probe_y>150</probe_y>
-        <probe_z>0</probe_z>
-      </probe>
-      <probe id="23" name="23" status="on">
-        <probe_x>150</probe_x>
-        <probe_y>150</probe_y>
-        <probe_z>20</probe_z>
-      </probe>
-      <probe id="24" name="24" status="on">
-        <probe_x>150</probe_x>
-        <probe_y>150</probe_y>
-        <probe_z>50</probe_z>
-      </probe>
-      <probe id="25" name="25" status="on">
-        <probe_x>-150</probe_x>
-        <probe_y>-150</probe_y>
-        <probe_z>0</probe_z>
-      </probe>
-      <probe id="26" name="26" status="on">
-        <probe_x>-150</probe_x>
-        <probe_y>-150</probe_y>
-        <probe_z>20</probe_z>
-      </probe>
-      <probe id="27" name="27" status="on">
-        <probe_x>-150</probe_x>
-        <probe_y>-150</probe_y>
-        <probe_z>50</probe_z>
-      </probe>
       <probe_format choice="CSV"/>
       <probe_recording_frequency>1</probe_recording_frequency>
       <probes_interpolation choice=""/>
@@ -199,6 +64,9 @@
     <boundary label="Sommet" name="2" nature="inlet">Sommet</boundary>
     <boundary label="Sol" name="3" nature="wall">Sol</boundary>
     <inlet field_id="none" label="Bords">
+      <scalar choice="dirichlet" name="temperature" type="thermal">
+        <dirichlet>0</dirichlet>
+      </scalar>
       <turbulence choice="hydraulic_diameter">
         <hydraulic_diameter>1</hydraulic_diameter>
       </turbulence>
@@ -209,6 +77,9 @@
       </velocity_pressure>
     </inlet>
     <inlet field_id="none" label="Sommet">
+      <scalar choice="dirichlet" name="temperature" type="thermal">
+        <dirichlet>0</dirichlet>
+      </scalar>
       <turbulence choice="hydraulic_diameter">
         <hydraulic_diameter>1</hydraulic_diameter>
       </turbulence>
@@ -218,7 +89,18 @@
         <norm>1</norm>
       </velocity_pressure>
     </inlet>
+    <inlet field_id="none" label="None">
+      <turbulence choice="hydraulic_diameter">
+        <hydraulic_diameter>1</hydraulic_diameter>
+      </turbulence>
+      <velocity_pressure choice="norm" direction="normal">
+        <norm>1</norm>
+      </velocity_pressure>
+    </inlet>
     <wall field_id="none" label="Sol">
+      <scalar choice="neumann" name="temperature" type="thermal">
+        <neumann>0</neumann>
+      </scalar>
       <velocity_pressure choice="off">
         <dirichlet component="0" name="velocity">0</dirichlet>
         <dirichlet component="1" name="velocity">0</dirichlet>
@@ -339,12 +221,13 @@
   </solution_domain>
   <thermophysical_models>
     <ale_method/>
-    <atmospheric_flows model="constant">
+    <atmospheric_flows model="dry">
       <activate_chemistry status="off"/>
       <domain_orientation>0</domain_orientation>
-      <large_scale_meteo status="on"/>
+      <large_scale_meteo status="off"/>
       <latitude>45.44</latitude>
       <longitude>4.39</longitude>
+      <meteo_data>meteo_file</meteo_data>
       <meteo_dlmo>0</meteo_dlmo>
       <meteo_psea>101325</meteo_psea>
       <meteo_t0>287.59</meteo_t0>
@@ -352,7 +235,8 @@
       <meteo_ustar>-1</meteo_ustar>
       <meteo_z0>0.05</meteo_z0>
       <meteo_zref>10</meteo_zref>
-      <read_meteo_data status="off"/>
+      <property label="RealTemp" name="real_temperature"/>
+      <read_meteo_data status="on"/>
       <start_day>94</start_day>
       <start_hour>13</start_hour>
       <start_min>55</start_min>
@@ -392,7 +276,23 @@
     </reference_values>
     <solid_fuels model="off"/>
     <source_terms/>
-    <thermal_scalar model="off"/>
+    <thermal_scalar model="potential_temperature">
+      <property label="Dimensionless Thermal flux" name="boundary_layer_nusselt" support="boundary">
+        <postprocessing_recording status="off"/>
+      </property>
+      <property label="Boundary temperature" name="boundary_temperature" support="boundary"/>
+      <property label="Thermal flux" name="thermal_flux" support="boundary"/>
+      <property label="Tplus" name="tplus" support="boundary">
+        <postprocessing_recording status="off"/>
+      </property>
+      <variable label="PotTemp" name="temperature" type="thermal">
+        <blending_factor>1</blending_factor>
+        <max_value>1e+12</max_value>
+        <min_value>0</min_value>
+        <rhs_reconstruction>1</rhs_reconstruction>
+        <turbulent_flux_model>SGDH</turbulent_flux_model>
+      </variable>
+    </thermal_scalar>
     <turbomachinery model="off">
       <joining/>
     </turbomachinery>
@@ -400,10 +300,9 @@
       <gravity_terms status="on"/>
       <initialization choice="reference_value" zone_id="1"/>
       <property label="TurbVisc" name="turbulent_viscosity">
-        <postprocessing_recording status="off"/>
         <probes_recording status="off"/>
       </property>
-      <reference_velocity>5</reference_velocity>
+      <reference_velocity>1</reference_velocity>
       <variable label="epsilon" name="epsilon">
         <blending_factor>0</blending_factor>
         <order_scheme choice="upwind"/>
