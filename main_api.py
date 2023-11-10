@@ -5,8 +5,9 @@ import yaml
 import sys
 
 import sys
-sys.path.append('WindIO/.')
-from utils.yml_utils import validate_yaml, Loader
+import windIO
+from windIO.utils.yml_utils import validate_yaml, Loader
+sys.path.append(windIO.__path__[0])
 
 
 yaml.SafeLoader = Loader
@@ -18,7 +19,7 @@ if len(sys.argv) != 2:
 yaml_input = sys.argv[1]
 
 # validate input
-validate_yaml(yaml_input, 'windIO/windIO/plant/wind_energy_system.yaml')
+validate_yaml(yaml_input, windIO.__path__[0] + '/plant/wind_energy_system.yaml')
 
 
 # get number of turbines
