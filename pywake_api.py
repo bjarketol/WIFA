@@ -198,6 +198,14 @@ def run_pywake(yamlFile, output_dir='output'):
        site = XRSite(ds=xr.Dataset(data_vars={'P': (['wd', 'ws'], P)}, coords = {'ws': ws, 'wd': wd, 'TI': resource_dat['wind_resource']['turbulence_intensity']['data']}))
        TI = resource_dat['wind_resource']['turbulence_intensity']['data']
 
+    if 'name' in system_dat['attributes']['analyses']['outputs']:
+       output_dir = system_dat['attributes']['analyses']['outputs']['name']
+       if not os.path.exists(output_dir):
+          os.makedirs(output_dir)
+
+
+
+
     # get x and y positions
     x = farm_dat['layouts']['initial_layout']['coordinates']['x']
     y = farm_dat['layouts']['initial_layout']['coordinates']['y']
@@ -383,6 +391,7 @@ def run_pywake(yamlFile, output_dir='output'):
     print(sim_res)
 
     # flow field handling
+    flow_map = None
     if 'flow_field' in system_dat['attributes']['analyses']['outputs'] and not timeseries:
 
        # compute flow map for specified directions (wd) and speeds (ws)
@@ -403,6 +412,19 @@ def run_pywake(yamlFile, output_dir='output'):
        if 'velocity_u' not in system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables']:
           flow_map = flow_map.drop_vars(['WS_eff'], inplace=True)
 
+    elif 'flow_field' in system_dat['attributes']['analyses']['outputs'] and timeseries:
+       time_to_plot = system_dat['attributes']['analyses']['outputs']['flow_field']['time'][0]
+       print('TIMES ', time_to_plot)
+       flow_map = sim_res.flow_map(grid=None,
+                            wd=wind_resource_timeseries[time_to_plot]['direction'],
+                            ws=wind_resource_timeseries[time_to_plot]['speed'])
+     # power table    
+    if 'power_table' in system_dat['attributes']['analyses']['outputs']:
+       # todo: more in depth stuff here, include loads
+       sim_res.Power.to_netcdf(output_dir + os.sep + 'PowerTable.nc')
+       data['FLOW_simulation_outputs']['power_output_variables'] = tuple(system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables'])
+
+    if flow_map:
        # save data
        flow_map.to_netcdf(output_dir + os.sep + 'FarmFlow.nc')
 
@@ -410,20 +432,11 @@ def run_pywake(yamlFile, output_dir='output'):
        data['FLOW_simulation_outputs']['wind_output_file'] = 'FarmFlow.nc'
        data['FLOW_simulation_outputs']['wind_output_variables'] = system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables']
 
-    elif 'flow_field' in system_dat['attributes']['analyses']['outputs'] and timeseries:
-       warnings.warn('Flow field is not yet supported with time series.')
-    # power table    
-    if 'power_table' in system_dat['attributes']['analyses']['outputs']:
-       # todo: more in depth stuff here, include loads
-       sim_res.Power.to_netcdf(output_dir + os.sep + 'PowerTable.nc')
-       data['FLOW_simulation_outputs']['power_output_variables'] = tuple(system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables'])
-
     # Write out the YAML data
     output_yaml_nam = output_dir + os.sep + 'output.yaml'
     with open(output_yaml_nam, 'w') as file:
         yaml.dump(data, file, default_flow_style=False, allow_unicode=True)
 
-    # Now we replace the placeholder with our include directive
     with open(output_yaml_nam, 'r') as f:
        yaml_content = f.read()
 
