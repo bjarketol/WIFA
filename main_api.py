@@ -36,6 +36,11 @@ if not os.path.exists(output_dir_name):
     os.makedirs(output_dir_name)
 
 # Specify input metadata file name
+if 'name' in yaml_dat['attributes']['analyses']['outputs']:
+   output_dir_name = yaml_dat['attributes']['analyses']['outputs']['name']
+   if not os.path.exists(output_dir_name):
+      os.makedirs(output_dir_name)
+
 output_file = output_dir_name + os.sep + 'recorded_inputs.yaml'
 
 # Write yaml_dat to a YAML file

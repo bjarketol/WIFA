@@ -198,10 +198,10 @@ def run_pywake(yamlFile, output_dir='output'):
        site = XRSite(ds=xr.Dataset(data_vars={'P': (['wd', 'ws'], P)}, coords = {'ws': ws, 'wd': wd, 'TI': resource_dat['wind_resource']['turbulence_intensity']['data']}))
        TI = resource_dat['wind_resource']['turbulence_intensity']['data']
 
-    if 'name' in system_dat['attributes']['analyses']['outputs']:
-       output_dir = system_dat['attributes']['analyses']['outputs']['name']
-       if not os.path.exists(output_dir):
-          os.makedirs(output_dir)
+    #if 'name' in system_dat['attributes']['analyses']['outputs']:
+    #   output_dir = system_dat['attributes']['analyses']['outputs']['name']
+    #   if not os.path.exists(output_dir):
+    #      os.makedirs(output_dir)
 
 
 
