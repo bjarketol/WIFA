@@ -18,7 +18,7 @@ from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceM
 from py_wake import NOJ, BastankhahGaussian
 from py_wake.deficit_models import SelfSimilarityDeficit2020
 from py_wake.superposition_models import LinearSum, SquaredSum
-from py_wake.rotor_avg_models import RotorCenter, GridRotorAvg, EqGridRotorAvg, GQGridRotorAvg, CGIRotorAvg, PolarGridRotorAvg, PolarRotorAvg, polar_gauss_quadrature, GaussianOverlapAvgModel
+from py_wake.rotor_avg_models import RotorCenter, GridRotorAvg, EqGridRotorAvg, GQGridRotorAvg, CGIRotorAvg, PolarGridRotorAvg, polar_gauss_quadrature, GaussianOverlapAvgModel
 
 
 # Define default values for wake_model parameters
@@ -213,15 +213,26 @@ def run_pywake(yamlFile, output_dir='output'):
     # define turbine
     hh = farm_dat['turbines']['hub_height']
     rd = farm_dat['turbines']['rotor_diameter']
-    cp = farm_dat['turbines']['performance']['Cp_curve']['Cp_values']
-    cp_ws = farm_dat['turbines']['performance']['Cp_curve']['Cp_wind_speeds']
+    if 'Cp_curve' in farm_dat['turbines']['performance']:
+       cp = farm_dat['turbines']['performance']['Cp_curve']['Cp_values']
+       cp_ws = farm_dat['turbines']['performance']['Cp_curve']['Cp_wind_speeds']
+       power_curve_type = 'cp'
+    elif 'power_curve' in farm_dat['turbines']['performance']:
+       cp_ws = farm_dat['turbines']['performance']['power_curve']['power_wind_speeds']
+       pows = farm_dat['turbines']['performance']['power_curve']['power_values']
+       power_curve_type = 'power'
+    else: raise Exception('Bad Power Curve')
     ct = farm_dat['turbines']['performance']['Ct_curve']['Ct_values']
     ct_ws = farm_dat['turbines']['performance']['Ct_curve']['Ct_wind_speeds']
     speeds = np.linspace(np.min([cp_ws, ct_ws]), np.max([cp_ws, ct_ws]), 10000)
-    cps_int = np.interp(speeds, cp_ws, cp)
     cts_int = np.interp(speeds, ct_ws, ct)
+    if power_curve_type == 'power':
+       powers = np.interp(speeds, cp_ws, pows)
+    else:
+       cps_int = np.interp(speeds, cp_ws, cp)
+       powers =  0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi
     turbine = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_height=hh, 
-                          powerCtFunction=PowerCtTabular(speeds, 0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi, power_unit='W', ct=cts_int))
+                          powerCtFunction=PowerCtTabular(speeds, powers, power_unit='W', ct=cts_int))
 
 
     wake_model_data = get_with_default(system_dat['attributes']['analyses'], 'wake_model', DEFAULTS)
