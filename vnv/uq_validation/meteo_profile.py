@@ -44,7 +44,7 @@ def tke_nieuwstadt(fonctionh, fonctionm, z, zi, dlmo, alpha):
     zeta = dlmo*z
     rich = fonctionh(z, dlmo)/pow(fonctionm(z, dlmo), 2)*zeta
     a1 = 0.5 + 1.5*pow(rich, 2) - pow(rich, 3)
-    tke = 0.5*np.sqrt(d*(fonctionm(z, dlmo) - zeta)/(fonctionh(z, dlmo)*(w0+w1*fonctionm(z, dlmo)/(fonctionm(z, dlmo)-zeta)-(1-a1)*zeta/(ctheta*(fonctionm(z, dlmo)-zeta)))))*pow(1-z/zi, alpha/2+1)
+    tke = 0.5*np.sqrt(np.abs(d*(fonctionm(z, dlmo) - zeta)/(fonctionh(z, dlmo)*(w0+w1*fonctionm(z, dlmo)/(fonctionm(z, dlmo)-zeta)-(1-a1)*zeta/(ctheta*(fonctionm(z, dlmo)-zeta))))))*pow(1-z/zi, alpha/2+1)
     tke = np.nan_to_num(tke)
     return tke
 
