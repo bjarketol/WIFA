@@ -7,8 +7,8 @@ attributes:
       name: py_wake
     wake_model:
       name: Bastankhah
-      k: 0.1
-      ceps: 0.23
+      k: 0.04
+      ceps: 0.2
     deflection_model:
       name: Jimenez
     turbulence_model:
