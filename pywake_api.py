@@ -292,10 +292,11 @@ def run_pywake(yamlFile, output_dir='output'):
     else:
         raise Exception('%s rotor averaging model not implemented' % rotor_averaging_data['name'])
     
-    if blockage_data['name'] == None:
+    if blockage_data['name'] == 'None':
        blockage = None
     elif blockage_data['name'] == 'SelfSimilarityDeficit2020':
        blockage = SelfSimilarityDeficit2020(ss_alpha=blockage_data['ss_alpha'])
+    else: raise Exception('Bad Blockage Specified')
 
 
     solver_args = {}
