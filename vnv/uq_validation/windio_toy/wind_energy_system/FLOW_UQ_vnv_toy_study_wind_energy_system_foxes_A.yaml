@@ -8,23 +8,28 @@ attributes:
     site_parameters:
       fixed_vars:
         RHO: 1.225
+        H: 119
+      ignore_vars: 
+        - ustar
     algorithm: 
-      class: Iterative
-      max_it: 100
+      class: Downwind
+      #class: Iterative
+      #max_it: 100
     turbine_models:
-      - model: kTI_amb_04
+      #- model: kTI_amb_04
       - model: turbine_type
     wake_models:
-      - model: RHB
+      #- model: RHB
       - model: Bastankhah
         class: BastankhahWake
+        k: 0.04
         sbeta_factor: 0.2
         superposition: quadratic
       - model: IECTI2019_quadratic
     wake_frame:
       model: rotor_wd
     rotor_model:
-      model: grid25
+      model: centre
     outputs:
       AEP: True
       AEP_per_turbine: True
