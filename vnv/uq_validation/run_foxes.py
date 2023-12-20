@@ -5,6 +5,9 @@ import foxes
 import foxes.variables as FV
 import foxes.constants as FC
 
+# Please run this script on foxes branch eu_flow from github:
+# https://github.com/FraunhoferIWES/foxes/tree/eu_flow
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
