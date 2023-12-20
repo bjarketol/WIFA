@@ -1,12 +1,16 @@
+# Author: Jonas Schulte, Fraunhofer IWES
+# Email: jonas.schulte@iwes.fraunhofer.de
+# Date: 2023-12-20
+#
+# Please run this script on foxes branch eu_flow from github:
+# https://github.com/FraunhoferIWES/foxes/tree/eu_flow
+
 from pathlib import Path
 import argparse
 import pandas as pd
 import foxes
 import foxes.variables as FV
 import foxes.constants as FC
-
-# Please run this script on foxes branch eu_flow from github:
-# https://github.com/FraunhoferIWES/foxes/tree/eu_flow
 
 if __name__ == "__main__":
 
