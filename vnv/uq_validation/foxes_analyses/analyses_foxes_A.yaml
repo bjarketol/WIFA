@@ -1,0 +1,25 @@
+flow_model:
+  name: foxes
+site_parameters:
+  fixed_vars:
+    RHO: 1.225
+    H: 119
+  ignore_vars: 
+    - ustar
+algorithm: 
+  class: Downwind
+turbine_models:
+  - model: turbine_type
+wake_models:
+  - model: Bastankhah
+    class: BastankhahWake
+    k: 0.04
+    sbeta_factor: 0.2
+    superposition: quadratic
+  - model: IECTI2019_quadratic
+wake_frame:
+  model: rotor_wd
+rotor_model:
+  model: centre
+partial_wakes:
+  model: auto
