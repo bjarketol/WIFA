@@ -25,7 +25,9 @@ attributes:
     wake_frame:
       model: rotor_wd
     rotor_model:
-      model: centre
+      model: grid81
+    partial_wakes:
+      model: rotor_points
     outputs:
       AEP: True
       AEP_per_turbine: True
