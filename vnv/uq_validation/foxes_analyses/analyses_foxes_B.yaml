@@ -17,9 +17,9 @@ wake_models:
     sbeta_factor: 0.25
     superposition: linear_lim
   - model: IECTI2019_quadratic
+wake_frame:
+  model: rotor_wd
 rotor_model:
   model: centre
 partial_wakes:
-  model: auto
-partial_wakes:
-  model: rotor_points      
+  model: auto    
