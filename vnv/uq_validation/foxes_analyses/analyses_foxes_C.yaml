@@ -9,17 +9,17 @@ site_parameters:
 algorithm: 
   class: Downwind
 turbine_models:
-  - model: kTI_amb_04
   - model: turbine_type
 wake_models:
   - model: Bastankhah
     class: BastankhahWake
-    sbeta_factor: 0.25
-    superposition: linear_lim
+    k: 0.04
+    sbeta_factor: 0.2
+    superposition: linear
   - model: IECTI2019_quadratic
 wake_frame:
   model: rotor_wd
 rotor_model:
   model: grid81
 partial_wakes:
-  model: rotor_points      
+  model: rotor_points
