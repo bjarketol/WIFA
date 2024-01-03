@@ -6,8 +6,10 @@ site_parameters:
     H: 119
   ignore_vars: 
     - ustar
+    - z0
 algorithm: 
   class: Downwind
+  verbosity: 0
 turbine_models:
   - model: turbine_type
 wake_models:
@@ -23,3 +25,5 @@ rotor_model:
   model: centre
 partial_wakes:
   model: auto
+outputs: !include outputs_foxes.yaml
+    
