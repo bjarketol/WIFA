@@ -1,0 +1,21 @@
+- name: power
+  class: ResultsWriter
+  class_pars:
+    farm_results: True
+  function: write_csv
+  file_path: power.csv
+  variables: [P]
+  state_turbine_table: True
+  verbosity: 0
+#- name: foxes_flow2d
+#  class: FlowPlots2D
+#  class_pars: 
+#    algo: True
+#    farm_results: True
+#  function: get_mean_fig_xy
+#  var: WS
+#  resolution: 20
+#  write_data_nc: foxes_flow2d.nc
+#  out_data_vars: [WS]
+#  verbosity: 0
+    
