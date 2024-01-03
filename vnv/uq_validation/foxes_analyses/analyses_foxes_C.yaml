@@ -21,7 +21,7 @@ wake_models:
 wake_frame:
   model: rotor_wd
 rotor_model:
-  model: grid16
+  model: level10
 partial_wakes:
   model: rotor_points
 outputs: !include outputs_foxes.yaml
