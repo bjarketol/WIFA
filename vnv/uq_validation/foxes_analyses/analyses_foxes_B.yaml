@@ -6,7 +6,6 @@ site_parameters:
     H: 119
   ignore_vars: 
     - ustar
-    - z0
 algorithm: 
   class: Downwind
   verbosity: 0
