@@ -7,15 +7,20 @@
   variables: [P]
   state_turbine_table: True
   verbosity: 0
-#- name: foxes_flow2d
-#  class: FlowPlots2D
+#- name: centreline
+#  class: PointCalculator
+#  class_pars:
+#    algo: True
+#    farm_results: True
+#- name: slice_hh_states
+#  class: SliceData
 #  class_pars: 
 #    algo: True
 #    farm_results: True
-#  function: get_mean_fig_xy
-#  var: WS
-#  resolution: 20
-#  write_data_nc: foxes_flow2d.nc
-#  out_data_vars: [WS]
+#    runner: True
+#  function: get_states_data_xy
+#  variables: [WD, WS, TI]
+#  resolution: 10
+#  to_file: foxes_slice_hh_states.nc
 #  verbosity: 0
     
