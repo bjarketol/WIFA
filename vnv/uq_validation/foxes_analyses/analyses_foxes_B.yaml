@@ -1,7 +1,7 @@
 flow_model:
   name: foxes
 site_parameters:
-  states_sel: "% range(100)"
+  states_sel: "%s%s=range(100)"
   fixed_vars:
     RHO: 1.225
     H: 119
