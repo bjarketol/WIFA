@@ -17,15 +17,15 @@
   points: "%p%N=5000;p=np.zeros((N,3));p[:,0]=np.linspace(0,7000,N);p[:,1]=50;p[:,2]=119"
   write_vars: ["WD", "WS", "TI"]
   to_file: foxes_centreline.nc
-- name: slice_hh_states
+- name: slice_hh_mean
   class: SliceData
   class_pars: 
     algo: True
     farm_results: True
     runner: True
-  function: get_states_data_xy
+  function: get_mean_data_xy
   variables: [WD, WS, TI]
   resolution: 10
-  to_file: foxes_slice_hh_states.nc
+  to_file: foxes_slice_hh_mean.nc
   verbosity: 0
     

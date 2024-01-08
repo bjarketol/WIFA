@@ -13,7 +13,7 @@ import foxes.variables as FV
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--cases", help="The windio input folders", default=["windio_toy", "windio_toy_profiles"], nargs="+")
+    parser.add_argument("-c", "--cases", help="The windio input folders", default=["windio_toy"], nargs="+")
     parser.add_argument("-r", "--runs", help="The foxes parameter sets", default=["A", "B", "C"], nargs="+")
     args = parser.parse_args()
 
@@ -30,15 +30,15 @@ if __name__ == "__main__":
                 mbook, farm, states, algo, outs = foxes.input.windio.read_case(yfile, runner=runner)
 
                 farm_results = algo.calc_farm()
-                sres = farm_results
-                fres = sres.to_dataframe()[[FV.AMB_REWS, FV.REWS, FV.AMB_TI, FV.TI, FV.AMB_P, FV.P]]
+                fres = farm_results.to_dataframe()[[FV.AMB_REWS, FV.REWS, FV.AMB_TI, FV.TI, FV.AMB_P, FV.P]]
                 print(fres)
                 print(fres.describe())
                 print()
-
+                print(farm_results.to_dataframe()[[FV.WD, FV.YAW, FV.AMB_REWS, FV.REWS, FV.CT, FV.P]])
+                
                 for o in outs:
                     o.name = f"{o.name}_{case}_foxes_{run}"
                     print("Running output", o.name)
-                    o.create(farm_results=sres, out_dir=odir, 
+                    o.create(farm_results=farm_results, out_dir=odir, 
                             auto_fnames=lambda fname: f"{o.name}{fname.suffix}")
         
