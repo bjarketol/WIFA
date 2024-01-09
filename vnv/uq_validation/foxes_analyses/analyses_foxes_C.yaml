@@ -18,11 +18,11 @@ wake_models:
     k: 0.04
     sbeta_factor: 0.2
     superposition: linear
-  #- model: IECTI2019_quadratic
+ #- model: IECTI2019_quadratic
 wake_frame:
   model: rotor_wd
 rotor_model:
-  model: level10
+  model: grid81
 partial_wakes:
   model: rotor_points
 outputs: !include outputs_foxes.yaml

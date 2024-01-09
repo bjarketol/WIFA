@@ -1,5 +1,6 @@
 .vscode/
 __pycache__/
 *.pyc
-*foxes*.nc
+*foxes*states*.nc
+*states*foxes*.nc
 
