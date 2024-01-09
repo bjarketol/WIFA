@@ -40,5 +40,5 @@ if __name__ == "__main__":
                     o.name = f"{o.name}_{case}_foxes_{run}"
                     print("Running output", o.name)
                     o.create(farm_results=farm_results, out_dir=odir, 
-                            auto_fnames=lambda fname: f"{o.name}{fname.suffix}")
+                            auto_fnames=lambda fname: f"{o.name}.{'.'.join(str(fname).split('.')[1:])}")
         

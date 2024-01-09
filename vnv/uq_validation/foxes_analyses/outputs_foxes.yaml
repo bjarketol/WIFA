@@ -7,6 +7,15 @@
   variables: [P]
   state_turbine_table: True
   verbosity: 0
+- name: turbine_data
+  class: ResultsWriter
+  class_pars:
+    farm_results: True
+  function: write_csv
+  file_path: turbine_data.csv.gz
+  variables: [WD, AMB_REWS, REWS, CT, P]
+  state_turbine_table: False
+  verbosity: 0
 - name: centreline
   class: PointCalculator
   class_pars:

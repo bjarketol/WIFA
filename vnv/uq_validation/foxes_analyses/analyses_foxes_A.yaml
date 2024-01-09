@@ -7,7 +7,7 @@ site_parameters:
     H: 119
   ignore_vars: 
     - ustar
-    - z0
+    #- z0
 algorithm: 
   class: Downwind
   verbosity: 0
@@ -18,7 +18,7 @@ wake_models:
     class: BastankhahWake
     k: 0.04
     sbeta_factor: 0.2
-    superposition: quadratic
+    superposition: linear
   #- model: IECTI2019_quadratic
 wake_frame:
   model: rotor_wd
