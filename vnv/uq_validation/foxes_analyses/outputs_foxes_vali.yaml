@@ -3,19 +3,18 @@
   class_pars:
     farm_results: True
   function: write_csv
-  file_path: power.csv.gz
+  file_path: power.csv
   variables: [P]
   state_turbine_table: True
-  verbosity: 0
+  verbosity: 1
 - name: turbine_data
   class: ResultsWriter
   class_pars:
     farm_results: True
-  function: write_csv
-  file_path: turbine_data.csv.gz
+  function: write_nc
+  file_path: turbine_data.nc
   variables: [WD, AMB_REWS, REWS, CT, P]
-  state_turbine_table: False
-  verbosity: 0
+  verbosity: 1
 #- name: slice_hh_states
 #  class: SliceData
 #  class_pars: 
@@ -23,9 +22,9 @@
 #    farm_results: True
 #    runner: True
 #  function: get_states_data_xy
-#  variables: [WD, WS, TI]
-#  resolution: 100
-#  states_isel: [0, 1]
+#  variables: [WD, AMB_WS, WS, TI]
+#  resolution: 50
+#  #states_isel: [0, 1]
 #  to_file: foxes_slice_hh_states.nc
 #  verbosity: 1
     

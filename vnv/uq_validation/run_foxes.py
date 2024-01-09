@@ -15,9 +15,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--cases", help="The windio input folders", default=["windio_toy"], nargs="+")
     parser.add_argument("-r", "--runs", help="The foxes parameter sets", default=["A", "B", "C"], nargs="+")
+    parser.add_argument("-sc", "--scheduler", help="The scheduler choice", default=None)
+    parser.add_argument("-n", "--n_workers", help="The number of workers for distributed run", type=int, default=None)
+    parser.add_argument("-tw", "--threads_per_worker", help="The number of threads per worker for distributed run", type=int,default=None)
     args = parser.parse_args()
 
-    with foxes.utils.runners.DaskRunner() as runner:
+    with foxes.utils.runners.DaskRunner(
+        scheduler=args.scheduler,
+        n_workers=args.n_workers,
+        threads_per_worker=args.threads_per_worker
+    ) as runner:
         for case in args.cases:
             for run in args.runs:
 
