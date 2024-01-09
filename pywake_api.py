@@ -132,13 +132,38 @@ def run_pywake(yamlFile, output_dir='output'):
        except yaml.YAMLError as exc:
            print(exc)
 
+    # define turbine
+    farm_dat = system_dat['wind_farm']
+    hh = farm_dat['turbines']['hub_height']
+    rd = farm_dat['turbines']['rotor_diameter']
+    if 'Cp_curve' in farm_dat['turbines']['performance']:
+       cp = farm_dat['turbines']['performance']['Cp_curve']['Cp_values']
+       cp_ws = farm_dat['turbines']['performance']['Cp_curve']['Cp_wind_speeds']
+       power_curve_type = 'cp'
+    elif 'power_curve' in farm_dat['turbines']['performance']:
+       cp_ws = farm_dat['turbines']['performance']['power_curve']['power_wind_speeds']
+       pows = farm_dat['turbines']['performance']['power_curve']['power_values']
+       power_curve_type = 'power'
+    else: raise Exception('Bad Power Curve')
+    ct = farm_dat['turbines']['performance']['Ct_curve']['Ct_values']
+    ct_ws = farm_dat['turbines']['performance']['Ct_curve']['Ct_wind_speeds']
+    speeds = np.linspace(np.min([cp_ws, ct_ws]), np.max([cp_ws, ct_ws]), 10000)
+    cts_int = np.interp(speeds, ct_ws, ct)
+    if power_curve_type == 'power':
+       powers = np.interp(speeds, cp_ws, pows)
+    else:
+       cps_int = np.interp(speeds, cp_ws, cp)
+       powers =  0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi
+    turbine = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_height=hh, 
+                          powerCtFunction=PowerCtTabular(speeds, powers, power_unit='W', ct=cts_int))
+
+
    #farm = 'examples/plant/plant_wind_farm/IEA37_case_study_3_wind_farm.yaml'
    #with open(farm, "r") as stream:
    #    try:
    #        farm_dat = yaml.safe_load(stream)
    #    except yaml.YAMLError as exc:
    #        print(exc)
-    farm_dat = system_dat['wind_farm']
 
    #resource = 'examples/plant/plant_energy_resource/IEA37_case_study_4_energy_resource.yaml'
    #with open(resource, "r") as stream:
@@ -155,8 +180,12 @@ def run_pywake(yamlFile, output_dir='output'):
        timeseries = True
        wind_resource_timeseries = resource_dat['wind_resource']['timeseries']
        times = [d['time'] for d in wind_resource_timeseries]
-       ws = [d['speed'] for d in wind_resource_timeseries]
-       wd = [d['direction'] for d in wind_resource_timeseries]
+       if 'z' in wind_resource_timeseries[0]:
+          ws = [np.interp(hh, d['z'], d['speed']) for d in wind_resource_timeseries]
+          wd = [np.interp(hh, d['z'], d['direction']) for d in wind_resource_timeseries]
+       else:
+          ws = [d['speed'] for d in wind_resource_timeseries]
+          wd = [d['direction'] for d in wind_resource_timeseries]
        assert(len(times) == len(ws))
        assert(len(wd) == len(ws))
        site = Hornsrev1Site()
@@ -210,30 +239,6 @@ def run_pywake(yamlFile, output_dir='output'):
     x = farm_dat['layouts']['initial_layout']['coordinates']['x']
     y = farm_dat['layouts']['initial_layout']['coordinates']['y']
     
-    # define turbine
-    hh = farm_dat['turbines']['hub_height']
-    rd = farm_dat['turbines']['rotor_diameter']
-    if 'Cp_curve' in farm_dat['turbines']['performance']:
-       cp = farm_dat['turbines']['performance']['Cp_curve']['Cp_values']
-       cp_ws = farm_dat['turbines']['performance']['Cp_curve']['Cp_wind_speeds']
-       power_curve_type = 'cp'
-    elif 'power_curve' in farm_dat['turbines']['performance']:
-       cp_ws = farm_dat['turbines']['performance']['power_curve']['power_wind_speeds']
-       pows = farm_dat['turbines']['performance']['power_curve']['power_values']
-       power_curve_type = 'power'
-    else: raise Exception('Bad Power Curve')
-    ct = farm_dat['turbines']['performance']['Ct_curve']['Ct_values']
-    ct_ws = farm_dat['turbines']['performance']['Ct_curve']['Ct_wind_speeds']
-    speeds = np.linspace(np.min([cp_ws, ct_ws]), np.max([cp_ws, ct_ws]), 10000)
-    cts_int = np.interp(speeds, ct_ws, ct)
-    if power_curve_type == 'power':
-       powers = np.interp(speeds, cp_ws, pows)
-    else:
-       cps_int = np.interp(speeds, cp_ws, cp)
-       powers =  0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi
-    turbine = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_height=hh, 
-                          powerCtFunction=PowerCtTabular(speeds, powers, power_unit='W', ct=cts_int))
-
 
     wake_model_data = get_with_default(system_dat['attributes']['analyses'], 'wake_model', DEFAULTS)
 
@@ -266,7 +271,7 @@ def run_pywake(yamlFile, output_dir='output'):
         raise Exception('%s deflection model not implemented' % deflection_model_data['name'])
     
     # Map the turbulence model
-    if turbulence_model_data['name'] is None:
+    if turbulence_model_data['name'].lower() == 'none':
         turbulenceModel = None
     elif turbulence_model_data['name'].upper() == 'STF2005':
         turbulenceModel = STF2005TurbulenceModel(c=[turbulence_model_data['c1'], turbulence_model_data['c2']])
@@ -378,7 +383,8 @@ def run_pywake(yamlFile, output_dir='output'):
     if system_dat['attributes']['analyses']['outputs']['AEP']:
        data['FLOW_simulation_outputs']['AEP'] = float(aep)
     
-    if system_dat['attributes']['analyses']['outputs']['power_percentiles']['report']:
+    if 'power_percentiles' in system_dat['attributes']['analyses']['outputs']:
+     if system_dat['attributes']['analyses']['outputs']['power_percentiles']['report']:
        # compute power percentiles
        percentiles = np.array(system_dat['attributes']['analyses']['outputs']['power_percentiles']['percentiles']) / 100
        if not timeseries:
@@ -434,7 +440,7 @@ def run_pywake(yamlFile, output_dir='output'):
     if 'power_table' in system_dat['attributes']['analyses']['outputs']:
        # todo: more in depth stuff here, include loads
        sim_res.Power.to_netcdf(output_dir + os.sep + 'PowerTable.nc')
-       data['FLOW_simulation_outputs']['power_output_variables'] = tuple(system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables'])
+       #data['FLOW_simulation_outputs']['power_output_variables'] = tuple(system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables'])
 
     if flow_map:
        # save data
