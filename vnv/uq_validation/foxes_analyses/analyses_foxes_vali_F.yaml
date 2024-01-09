@@ -6,24 +6,21 @@ site_parameters:
   var_map:
     TIs: TI
 algorithm: 
-  class: Iterative
-  max_it: 500
-  verbosity: 1
+  class: Downwind
+  verbosity: 0
   chunks:
     state: 100
     point: 1000
 turbine_models:
   - model: turbine_type
 wake_models:
-  - model: RHB
-  - model: Bastankhah
-    class: BastankhahWake
+  - model: PorteAgel
+    class: PorteAgelWake
     k: 0.04
-    sbeta_factor: 0.2
     superposition: linear
   - model: IECTI2019_quartic
 wake_frame:
-  model: rotor_wd
+  model: yawed
 rotor_model:
   model: level10
 partial_wakes:
