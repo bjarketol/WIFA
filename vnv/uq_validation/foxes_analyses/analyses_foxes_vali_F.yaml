@@ -20,7 +20,7 @@ wake_models:
     superposition: linear
   - model: IECTI2019_quartic
 wake_frame:
-  model: yawed
+  model: rotor_wd
 rotor_model:
   model: level10
 partial_wakes:
