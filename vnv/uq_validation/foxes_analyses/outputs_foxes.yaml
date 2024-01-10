@@ -22,7 +22,7 @@
     algo: True
     farm_results: True
   function: calculate
-  states_mean: True
+  states_mean: False
   points: "%p%N=5000;p=np.zeros((N,3));p[:,0]=np.linspace(0,7000,N);p[:,1]=50;p[:,2]=119"
   write_vars: ["WD", "WS", "TI"]
   to_file: foxes_centreline.nc
