@@ -3,4 +3,4 @@ __pycache__/
 *.pyc
 *foxes*states*.nc
 *states*foxes*.nc
-
+centreline*foxes*.nc
