@@ -6,6 +6,7 @@
 # https://github.com/FraunhoferIWES/foxes/tree/eu_flow
 
 from pathlib import Path
+from string import Template
 import argparse
 import foxes
 import foxes.variables as FV
@@ -15,8 +16,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--cases", help="The windio input folders", default=["windio_toy"], nargs="+")
     parser.add_argument("-r", "--runs", help="The foxes parameter sets", 
-                        default=["A", "B", "C", "D", "E", "F", "G", "A1", "B1", "C1", "D1", "E1", "F1", "G1"], 
-                        nargs="+")
+                        default=["A", "B", "C", "D", "E", "F", "G"], nargs="+")
+    parser.add_argument("-single", help="Switch on single turbine farm", action="store_true")
     parser.add_argument("-sc", "--scheduler", help="The scheduler choice", default=None)
     parser.add_argument("-n", "--n_workers", help="The number of workers for distributed run", type=int, default=None)
     parser.add_argument("-tw", "--threads_per_worker", help="The number of threads per worker for distributed run", type=int,default=None)
@@ -30,13 +31,24 @@ if __name__ == "__main__":
         for case in args.cases:
             for run in args.runs:
 
-                ydir = Path(f"{case}/wind_energy_system/foxes")
-                yfile = ydir/f"FLOW_UQ_vnv_toy_study_wind_energy_system_foxes_{run}.yaml"
+                ydir = Path(f"{case}/wind_energy_system")
+
+                with open(ydir/"FLOW_UQ_vnv_toy_study_wind_energy_system_foxes.yaml", "r") as f:
+                    tmpl = Template(f.read())
+                yfile = ydir/f"_temp.yaml"
+                with open(yfile, "w") as f:
+                    f.write(tmpl.substitute({
+                        "FARM": "oneTurbine.yaml" if args.single else "FLOW_UQ_vnv_toy_study_wind_farm.yaml",
+                        "CASE": case,
+                        "RUN": run
+                    }))
+                
                 odir = Path(f"foxes_results/{case}")
                 ofile1 = odir/f"power_{case}_foxes_{run}.csv"
                 odir.mkdir(parents=True, exist_ok=True)
 
                 mbook, farm, states, algo, outs = foxes.input.windio.read_case(yfile, runner=runner)
+                yfile.unlink()
 
                 farm_results = algo.calc_farm()
                 fres = farm_results.to_dataframe()[[FV.AMB_REWS, FV.REWS, FV.AMB_TI, FV.TI, FV.AMB_P, FV.P]]
