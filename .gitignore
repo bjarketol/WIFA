@@ -1,6 +1,8 @@
 .vscode/
 __pycache__/
 *.pyc
+_*.yaml
 *foxes*states*.nc
 *states*foxes*.nc
 centreline*foxes*.nc
+
