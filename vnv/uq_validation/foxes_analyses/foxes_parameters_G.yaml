@@ -1,0 +1,19 @@
+name: foxes
+algorithm: 
+  class: Downwind
+  verbosity: 0
+turbine_models:
+  - model: turbine_type
+  - model: kTI_02
+wake_models:
+  - model: Bastankhah
+    class: BastankhahWake
+    sbeta_factor: 0.25
+    superposition: linear_lim
+  - model: IECTI2019_quartic
+wake_frame:
+  model: rotor_wd
+rotor_model:
+  model: grid81
+partial_wakes:
+  model: rotor_points
