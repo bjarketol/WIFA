@@ -1,4 +1,5 @@
 import numpy as np
+from py_wake import HorizontalGrid
 from collections import OrderedDict
 import warnings
 import pandas as pd
@@ -172,6 +173,10 @@ def run_pywake(yamlFile, output_dir='output'):
     #    except yaml.YAMLError as exc:
     #        print(exc)
     resource_dat = system_dat['site']['energy_resource']
+    WFXLB = np.min(system_dat['site']['boundaries']['polygons'][0]['x'])
+    WFXUB = np.max(system_dat['site']['boundaries']['polygons'][0]['x'])
+    WFYLB = np.min(system_dat['site']['boundaries']['polygons'][1]['y'])
+    WFYUB = np.max(system_dat['site']['boundaries']['polygons'][1]['y'])
     
     ##################
     # construct site
@@ -413,7 +418,9 @@ def run_pywake(yamlFile, output_dir='output'):
     if 'flow_field' in system_dat['attributes']['analyses']['outputs'] and not timeseries:
 
        # compute flow map for specified directions (wd) and speeds (ws)
-       flow_map = sim_res.flow_map(grid=None, # defaults to HorizontalGrid(resolution=500, extend=0.2), see below
+       flow_map = sim_res.flow_map(
+                            x = np.linspace(WFXLB, WFXUB, 100),
+                            y = np.linspace(WFYLB, WFYUB, 100),
                             wd=system_dat['attributes']['analyses']['outputs']['flow_field']['directions'],
                             ws=system_dat['attributes']['analyses']['outputs']['flow_field']['speeds'],)
 
@@ -433,7 +440,8 @@ def run_pywake(yamlFile, output_dir='output'):
     elif 'flow_field' in system_dat['attributes']['analyses']['outputs'] and timeseries:
        time_to_plot = system_dat['attributes']['analyses']['outputs']['flow_field']['time'][0]
        print('TIMES ', time_to_plot)
-       flow_map = sim_res.flow_map(grid=None,
+       flow_map = sim_res.flow_map(HorizontalGrid(x = np.linspace(WFXLB, WFXUB, 100),
+y = np.linspace(WFYLB, WFYUB, 100)),
                             wd=wind_resource_timeseries[time_to_plot]['direction'],
                             ws=wind_resource_timeseries[time_to_plot]['speed'])
      # power table    
