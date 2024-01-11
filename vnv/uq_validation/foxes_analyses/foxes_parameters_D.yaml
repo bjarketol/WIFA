@@ -1,0 +1,24 @@
+name: foxes
+algorithm: 
+  class: Iterative
+  max_it: 500
+  verbosity: 1
+  chunks:
+    state: 100
+    point: 1000
+turbine_models:
+  - model: turbine_type
+wake_models:
+  - model: RHB
+  - model: Bastankhah
+    class: BastankhahWake
+    k: 0.04
+    sbeta_factor: 0.2
+    superposition: linear_lim
+  - model: IECTI2019_quartic
+wake_frame:
+  model: rotor_wd
+rotor_model:
+  model: level10
+partial_wakes:
+  model: auto

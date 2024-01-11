@@ -14,7 +14,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--cases", help="The windio input folders", default=["windio_toy"], nargs="+")
-    parser.add_argument("-r", "--runs", help="The foxes parameter sets", default=["A", "B", "C"], nargs="+")
+    parser.add_argument("-r", "--runs", help="The foxes parameter sets", 
+                        default=["A", "B", "C", "D", "E", "F", "G", "A1", "B1", "C1", "D1", "E1", "F1", "G1"], 
+                        nargs="+")
     parser.add_argument("-sc", "--scheduler", help="The scheduler choice", default=None)
     parser.add_argument("-n", "--n_workers", help="The number of workers for distributed run", type=int, default=None)
     parser.add_argument("-tw", "--threads_per_worker", help="The number of threads per worker for distributed run", type=int,default=None)
@@ -28,7 +30,7 @@ if __name__ == "__main__":
         for case in args.cases:
             for run in args.runs:
 
-                ydir = Path(f"{case}/wind_energy_system")
+                ydir = Path(f"{case}/wind_energy_system/foxes")
                 yfile = ydir/f"FLOW_UQ_vnv_toy_study_wind_energy_system_foxes_{run}.yaml"
                 odir = Path(f"foxes_results/{case}")
                 ofile1 = odir/f"power_{case}_foxes_{run}.csv"
@@ -41,7 +43,7 @@ if __name__ == "__main__":
                 print(fres)
                 print(fres.describe())
                 print()
-                print(farm_results.to_dataframe()[[FV.WD, FV.YAW, FV.AMB_REWS, FV.REWS, FV.CT, FV.P]])
+                print(farm_results.to_dataframe()[[FV.WD, FV.YAW, FV.AMB_REWS, FV.REWS, FV.CT, FV.AMB_TI, FV.TI, FV.P]])
                 
                 for o in outs:
                     o.name = f"{o.name}_{case}_foxes_{run}"

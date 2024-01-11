@@ -1,0 +1,8 @@
+name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
+site: !include ../../plant_energy_site/FLOW_UQ_vnv_toy_study_energy_site.yaml
+wind_farm: !include ../../plant_wind_farm/oneTurbine.yaml
+attributes:
+  analyses:
+    flow_model: !include ../../../foxes_analyses/foxes_parameters_E.yaml
+    site_parameters: !include ../../../foxes_analyses/foxes_site_windio_toy.yaml
+    outputs: !include ../../../foxes_analyses/outputs_foxes_windio_toy.yaml 
