@@ -1,6 +1,4 @@
 fixed_vars:
   RHO: 1.225
-var_map:
-  TIs: TI
-fillna: True
+fillna: False
   
