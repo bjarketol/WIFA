@@ -173,10 +173,10 @@ def run_pywake(yamlFile, output_dir='output'):
     #    except yaml.YAMLError as exc:
     #        print(exc)
     resource_dat = system_dat['site']['energy_resource']
-    WFXLB = system_dat['site']['boundaries']['polygons'][0]['x'][0]
-    WFXUB = system_dat['site']['boundaries']['polygons'][0]['x'][1]
-    WFYLB = system_dat['site']['boundaries']['polygons'][1]['y'][0]
-    WFYUB = system_dat['site']['boundaries']['polygons'][1]['y'][1]
+    WFXLB = np.min(system_dat['site']['boundaries']['polygons'][0]['x'])
+    WFXUB = np.max(system_dat['site']['boundaries']['polygons'][0]['x'])
+    WFYLB = np.min(system_dat['site']['boundaries']['polygons'][1]['y'])
+    WFYUB = np.max(system_dat['site']['boundaries']['polygons'][1]['y'])
     
     ##################
     # construct site
