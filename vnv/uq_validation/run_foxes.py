@@ -59,6 +59,8 @@ if __name__ == "__main__":
                 
                 for o in outs:
                     o.name = f"{o.name}_{case}_foxes_{run}"
+                    if args.single:
+                        o.name += "1"
                     print("Running output", o.name)
                     o.create(farm_results=farm_results, out_dir=odir, 
                             auto_fnames=lambda fname: f"{o.name}.{'.'.join(str(fname).split('.')[1:])}")
