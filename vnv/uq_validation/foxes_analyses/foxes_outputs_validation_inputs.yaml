@@ -13,7 +13,7 @@
     farm_results: True
   function: write_nc
   file_path: turbine_data.nc
-  variables: [WD, AMB_REWS, REWS, CT, AMB_TI, TI, AMB_P, P]
+  variables: [X, Y, D, H, WD, AMB_REWS, REWS, CT, AMB_TI, TI, AMB_P, P]
   verbosity: 1
 #- name: slice_hh_states
 #  class: SliceData
