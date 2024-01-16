@@ -5,4 +5,4 @@ attributes:
   analyses:
     flow_model: !include ../../foxes_analyses/foxes_parameters_$RUN.yaml
     site_parameters: !include ../../foxes_analyses/foxes_site_$CASE.yaml
-    outputs: !include ../../foxes_analyses/outputs_foxes_$CASE.yaml
+    outputs: !include ../../foxes_analyses/foxes_outputs_$CASE.yaml
