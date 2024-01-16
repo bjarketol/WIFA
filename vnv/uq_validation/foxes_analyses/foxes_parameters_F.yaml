@@ -11,7 +11,7 @@ wake_models:
   - model: PorteAgel
     class: PorteAgelWake
     k: 0.04
-    superposition: linear_lim
+    superposition: ws_linear_lim
   - model: IECTI2019_quartic
 wake_frame:
   model: rotor_wd

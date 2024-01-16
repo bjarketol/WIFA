@@ -9,7 +9,7 @@ wake_models:
   - model: Bastankhah
     class: BastankhahWake
     sbeta_factor: 0.25
-    superposition: linear_lim
+    superposition: ws_linear_lim
   - model: IECTI2019_quartic
 wake_frame:
   model: rotor_wd
