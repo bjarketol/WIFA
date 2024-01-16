@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import os
 import yaml
+from py_wake.deficit_models.fuga import FugaDeficit
 from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
 from py_wake.wind_farm_models import PropagateDownwind, All2AllIterative
@@ -247,15 +248,34 @@ def run_pywake(yamlFile, output_dir='output'):
 
     wake_model_data = get_with_default(system_dat['attributes']['analyses'], 'wake_model', DEFAULTS)
 
+    deficit_args = {}
+    deficit_param_mapping = {}
     if wake_model_data['name'] == 'Jensen':
        wakeModel = NOJDeficit
        deficit_param_mapping = {'k': 'k'}
     elif wake_model_data['name'] == 'Bastankhah':
        wakeModel = BastankhahGaussianDeficit
        deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
+    elif wake_model_data['name'].upper() == 'FUGA':
+       wakeModel = FugaDeficit
+       from pyfuga import get_luts
+       lut = get_luts(folder = 'luts', # Path where all files (intermediate and final) are stored
+                                           zeta0=0, # Stability parameter
+                                           nkz0=8, 
+                                           nbeta=32, 
+                                           diameter=rd, 
+                                           zhub=hh, 
+                                           z0=0.00001, 
+                                           zi=500, 
+                                           zlow=70, 
+                                           zhigh=70, 
+                                           lut_vars=['UL'], 
+                                           nx=2048, 
+                                           ny=512, n_cpu=1) 
+       deficit_args['LUT_path'] = r'luts/LUTs_Zeta0=0.00e+00_8_32_D%.1f_zhub%.1f_zi500_z0=0.00001000_z69.2-72.8_UL_nx2048_ny512_dx44.575_dy11.14375.nc' % (rd, hh)
+       #deficit_args['LUT_path'] = 'luts/LUTs_Zeta0=0.00e+00_8_32_D%i_zhub%i_zi500_z0=0.00001000_z70.0_UL_nx2048_ny512_dx20.0_dy5.0.nc' % (rd, hh)
     else:
        raise Exception('%s wake model not implemented in PyWake' % wake_model_data['name'])
-    deficit_args = {}
     for key in wake_model_data.keys():
         if key == 'name': continue
         if key in deficit_param_mapping.keys():
@@ -306,6 +326,8 @@ def run_pywake(yamlFile, output_dir='output'):
        blockage = None
     elif blockage_data['name'] == 'SelfSimilarityDeficit2020':
        blockage = SelfSimilarityDeficit2020(ss_alpha=blockage_data['ss_alpha'])
+    elif blockage_data['name'].upper() == 'FUGA':
+       blockage =  FugaDeficit(deficit_args['LUT_path'])
     else: raise Exception('Bad Blockage Specified')
 
 
