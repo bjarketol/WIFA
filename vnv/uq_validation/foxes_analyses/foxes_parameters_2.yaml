@@ -15,4 +15,4 @@ wake_frame:
 rotor_model:
   model: centre
 partial_wakes:
-  model: grid100
+  model: rotor_points
