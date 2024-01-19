@@ -5,11 +5,7 @@ algorithm:
 turbine_models:
   - model: turbine_type
 wake_models:
-  - model: PorteAgel
-    class: PorteAgelWake
-    k: 0.04
-    superposition: ws_linear
-  - model: IECTI2019_max
+  - model: TurbOPark_quadratic_A004
 wake_frame:
   model: rotor_wd
 rotor_model:
