@@ -6,10 +6,7 @@ turbine_models:
   - model: turbine_type
   - model: kTI_02
 wake_models:
-  - model: Bastankhah
-    class: BastankhahWake
-    sbeta_factor: 0.25
-    superposition: ws_linear_lim
+  - model: Bastankhah025_linear_lim
   - model: IECTI2019_quartic
 wake_frame:
   model: rotor_wd

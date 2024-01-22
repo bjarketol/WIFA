@@ -5,14 +5,10 @@ algorithm:
 turbine_models:
   - model: turbine_type
 wake_models:
-  - model: Bastankhah
-    class: BastankhahWake
-    k: 0.04
-    sbeta_factor: 0.2
-    superposition: ws_linear
+  - model: Bastankhah2014_linear_k004
 wake_frame:
   model: rotor_wd
 rotor_model:
   model: centre
 partial_wakes:
-  model: rotor_points
+  model: auto
