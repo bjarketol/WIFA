@@ -5,10 +5,10 @@ algorithm:
 turbine_models:
   - model: turbine_type
 wake_models:
-  - model: Bastankhah2014_linear_k004
+  - model: Bastankhah2014_linear_lim_k004
 wake_frame:
   model: rotor_wd
 rotor_model:
-  model: grid100
+  model: level20
 partial_wakes:
-  model: rotor_points
+  model: auto
