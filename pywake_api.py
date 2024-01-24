@@ -294,6 +294,7 @@ def run_pywake(yamlFile, output_dir='output'):
         deflectionModel = JimenezWakeDeflection(beta=deflection_model_data['beta'])  # Assuming Jimenez takes 'beta' as an argument
     else:
         raise Exception('%s deflection model not implemented' % deflection_model_data['name'])
+    deficit_args['use_effective_ws'] = True
     
     # Map the turbulence model
     if turbulence_model_data['name'].lower() == 'none':
