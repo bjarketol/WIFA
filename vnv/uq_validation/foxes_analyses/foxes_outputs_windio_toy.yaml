@@ -1,21 +1,21 @@
-- name: power
-  class: ResultsWriter
-  class_pars:
-    farm_results: True
-  function: write_csv
-  file_path: power.csv
-  variables: [P]
-  state_turbine_table: True
-  verbosity: 0
-- name: turbine_data
-  class: ResultsWriter
-  class_pars:
-    farm_results: True
-  function: write_csv
-  file_path: turbine_data.csv.gz
-  variables: [WD, AMB_REWS, REWS, CT, P]
-  state_turbine_table: False
-  verbosity: 0
+#- name: power
+#  class: ResultsWriter
+#  class_pars:
+#    farm_results: True
+#  function: write_csv
+#  file_path: power.csv
+#  variables: [P]
+#  state_turbine_table: True
+#  verbosity: 0
+#- name: turbine_data
+#  class: ResultsWriter
+#  class_pars:
+#    farm_results: True
+#  function: write_csv
+#  file_path: turbine_data.csv.gz
+#  variables: [WD, AMB_REWS, REWS, CT, P]
+#  state_turbine_table: False
+#  verbosity: 0
 - name: centreline
   class: PointCalculator
   class_pars:
@@ -23,20 +23,20 @@
     farm_results: True
   function: calculate
   states_mean: False
-  points: "%p%N=8000;p=np.zeros((N,3));p[:,0]=np.linspace(-1000,7000,N);p[:,1]=0;p[:,2]=119"
+  points: "%p%N=30000;p=np.zeros((N,3));p[:,0]=np.linspace(-1000,7000,N);p[:,1]=0;p[:,2]=119"
   write_vars: ["WD", "WS", "TI"]
   to_file: foxes_centreline.nc
-- name: slice_hh_states
-  class: SliceData
-  class_pars: 
-    algo: True
-    farm_results: True
-    runner: True
-  function: get_states_data_xy
-  variables: [WD, WS, TI]
-  resolution: 10
-  xmin: -500
-  xmax: 7000
-  to_file: foxes_slice_hh_states.nc
-  verbosity: 0
+#- name: slice_hh_states
+#  class: SliceData
+#  class_pars: 
+#    algo: True
+#    farm_results: True
+#    runner: True
+#  function: get_states_data_xy
+#  variables: [WD, WS, TI]
+#  resolution: 10
+#  xmin: -500
+#  xmax: 7000
+#  to_file: foxes_slice_hh_states.nc
+#  verbosity: 0
     

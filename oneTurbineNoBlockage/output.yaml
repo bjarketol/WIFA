@@ -1,0 +1,25 @@
+name: FLOW tool output
+FLOW_simulation_config:
+  tool: PyWake
+  wake_model: Bastankhah’s Gaussian wake model
+  wind_energy_system: !include recorded_inputs.yaml
+FLOW_simulation_outputs:
+  AEP: 60.3637712425554
+  AEP_per_turbine:
+  - 60363.771242555405
+  computed_percentiles:
+  - 5
+  - 10
+  - 50
+  - 90
+  - 95
+  power_percentiles:
+  - 5306700.535260772
+  - 5658257.43598671
+  - 6821835.185137749
+  - 8267868.374694824
+  - 8743941.56567192
+  statistical_description: PDF
+  wind_output_file: FarmFlow.nc
+  wind_output_variables:
+  - velocity_u

@@ -256,6 +256,8 @@ def run_pywake(yamlFile, output_dir='output'):
     elif wake_model_data['name'] == 'Bastankhah':
        wakeModel = BastankhahGaussianDeficit
        deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
+       #from py_wake.deficit_models.utils import ct2a_mom1d
+       #deficit_args['ct2a'] = ct2a_mom1d
     elif wake_model_data['name'].upper() == 'FUGA':
        wakeModel = FugaDeficit
        from pyfuga import get_luts
