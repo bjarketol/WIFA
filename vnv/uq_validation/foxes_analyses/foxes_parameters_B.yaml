@@ -9,8 +9,8 @@ wake_models:
     class: Bastankhah2014
     sbeta_factor: 0.2
     k: 0.04
-    superposition: ws_linear
-    regularize: 0.05
+    superposition: ws_linear_lim
+    induction: Madsen
 wake_frame:
   model: rotor_wd
 rotor_model:
