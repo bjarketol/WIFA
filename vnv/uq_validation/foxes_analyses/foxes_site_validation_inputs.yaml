@@ -1,9 +1,0 @@
-fixed_vars:
-  RHO: 1.225
-var_map:
-  TIs: TI
-ignore_vars:
-  - z0
-  - ustar
-fillna: False
-  

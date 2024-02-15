@@ -1,9 +1,0 @@
-states_sel: "%s%s=range(100)"
-fixed_vars:
-  RHO: 1.225
-  H: 119
-rescale:
-  TI: 0.01
-ignore_vars: 
-  - ustar
-  
