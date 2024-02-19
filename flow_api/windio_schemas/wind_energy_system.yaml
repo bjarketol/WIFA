@@ -1,0 +1,355 @@
+input_format_version: 0
+title: IEA Wind Task 37 Wind Energy System Ontology version 0.1
+description: A file used as input of a wind farm model
+required:
+  - name
+  - site
+  - wind_farm # Or something referring to the built or "designable" wind energy conversion system
+
+
+# PROPERTIES
+properties:
+  #~
+  name:
+    title: Name
+    description: Name of the wind energy system
+    type: string
+  #~
+  site:
+    $ref: "site.yaml"
+  # #~
+  wind_farm:
+    $ref: "wind_farm.yaml"
+  #~
+  attributes:
+    title: Attributes
+    description: Specific attributes of the entire wind energy system
+    type: object
+    properties:
+      #~~
+      flow_model:
+        title: Flow model
+        description: Flow model used in wind farm design
+        type: object
+        additionalProperties: true
+        properties:
+          name:
+            title: Flow model name
+            type: string
+            enum: ["foxes", "pywake", "code_saturne", "wayve"]
+      analyses:
+        wake_model:
+          title: Deficit model
+          description: Wake deficit model used in AEP calculations
+          type: object
+          additionalProperties: true
+          properties:
+            name:
+              title: Wake model name
+              type: string
+              enum: ["Jensen", "Bastankhah"]
+            k:
+              title: wake expansion coefficient
+              type: float
+            ceps:
+              title: Bastankhah c_epsilon factor
+              type: float
+            
+        deflection_model:
+          title: Deflection model
+          description: Deflection model used in AEP calculations
+          type: object
+          additionalProperties: true
+          properties:
+            name:
+              title: Deflection model name
+              type: string
+              enum: ["Jimenez"]
+            beta:
+              title: Jimenez deflection coefficient
+              type: float
+            
+        turbulence_model:
+          title: Turbulence model
+          description: Turbulence model used in AEP calculations
+          type: object
+          additionalProperties: true
+          properties:
+            name:
+              title: Turbulence model name
+              type: string
+              enum: ["STF2005", "STF2017"]
+            c1:
+              title: STF C1
+              type: float
+            c2:
+              title: STF C2
+              type: float
+            
+        superposition_model:
+          title: Superposition model
+          description: Superposition model used in AEP calculations
+          type: object
+          additionalProperties: true
+          properties:
+            name:
+              title: Superposition model name
+              type: string
+              enum: ["Linear", "Sqared"]
+        rotor_averaging:
+          title: Rotor model
+          description: Rotor averaging model used in AEP calculations
+          type: object
+          additionalProperties: true
+          properties:
+            name:
+              title: Rotor model name
+              type: string
+              enum: ["center", 'avg_deficit', 'avg_velocity', 'cubic_avg_velocity']
+        blockage:
+          title: Blockage model
+          description: Blockage averaging model used in AEP calculations
+          type: object
+          additionalProperties: true
+          properties:
+            name:
+              title: Blockage model name
+              type: string
+              enum: ['None', 'SelfSimilarityDeficit2020']
+            ss_alpha:
+              title: ss_alpha factor for SelfSimilarityDeficit2020
+              type: float
+
+        thermal_stratification:
+          title: structure of the atmospheric boundary layer
+          description: Information about the stability and its parameters
+          type: object
+          additionalProperties: true
+          properties:
+            stability:
+              title: type of the stability
+              type: string
+              enum: ["neutral", "stable", "unstable"]
+            LMO:
+              title: value of the Monin Obukhov Length in case of stable/unstable ABL
+              type: float
+            capping_inversion:
+              title: temperature inversion above boundary layer
+              type: object
+              additionalProperties: true
+              properties:
+                active:
+                  title: is it active
+                  type: boolean
+                ABL_height:
+                  title: Atmospheric Boundary Layer height
+                  type: float 
+                dH:
+                  title: inversion layer thickness (m) for capping inversion
+                  type: float 
+                dtheta:
+                  title: inversion layer temperature difference (K) for capping inversion
+                  type: float 
+                lapse_rate:
+                  title: temperature lapse rate (K/m) above inversion layer
+                  type: float
+
+            coriolis_force:
+              title: impose if Coriolis force is active or not. Else, automated decision.
+              type: bool
+
+            cases_run:
+              title: Handling of the timeseries runs
+              type: object
+              additionalProperties: true
+              properties:
+                all_occurences:
+                  title: active to run all the occurences from the time series
+                  type: boolean
+                binned:
+                  title: active to split timeseries to representative classes 
+                  type: boolean
+                occurences_list:
+                  title: list of times to run
+                  type: array
+                  
+            mesh:
+              title: meshing the wind farm domain for code_saturne calculation
+              type: object
+              properties:
+                remesh:
+                  title: provide new mesh for the domain with farm characteristics
+                  type: boolean
+                mesh_file_name:
+                  title: mesh file path/name, existing if remesh is False
+                  type: string
+ 
+            run_type:
+              title: type of run with the flow api
+              type: string
+              enum: ['simulate','postprocess']
+
+            layers_description:
+              title: description of the layers needed for the APM model
+              type: object
+              additionalProperties: true
+              properties:
+                farm_layer_height:
+                  title: height of the layer containing the farm
+                  type: float
+                number_of_layers:
+                  title: number of layers in the free atmosphere
+                  type: integer
+
+            wake_tool:
+              title: choice of wake tool for coupling to wayve
+              type: string
+              enum: ['pywake', 'foxes']
+
+            APM_additional_terms:
+              title: list of terms added to the APM model
+              type: array
+              enum: ['term_name_1', 'term_name_2']
+
+      outputs:  
+        title: Outputs
+        description: Output parameters and configurations for the wind energy system
+        type: object
+        additionalProperties: true
+        properties:
+          output_folder:
+            title: output folder name
+            description: name of the folder where the output files are written
+            type: string
+          statistics:
+            title: configuration of the statistical outputs
+            description: statistical output variables and files
+            type: object 
+            additionalProperties: true
+            properties:
+              stats_filename:
+                title: Name of the file that will contain the output statistics
+                description: this is an ASCII file containing the required outputs
+                type: string
+              AEP:
+                title: Annual Energy Production
+                description: Flag to include Annual Energy Production in the output
+                type: boolean
+              AEP_per_turbine:
+                title: AEP per Turbine
+                description: Flag to include Annual Energy Production per turbine in the output
+                type: boolean
+              power_percentiles:
+                title: Power Percentiles
+                description: Configuration for reporting power percentiles
+                type: object
+                properties:
+                  report:
+                    title: Report
+                    description: Flag to include power percentiles in the output
+                    type: boolean
+                  percentiles:
+                    title: Percentiles
+                    description: List of percentiles to report
+                    type: array
+                    items:
+                      type: integer
+
+          turbine_outputs:
+            title: outputs related to each turbine
+            description: outputs for each turbine as the individual turbine power, velocity..
+            type: object
+            additionalProperties: true
+            properties:
+              turbine_nc_filename:
+                title: Name of the file that will contain the turbine outputs
+                description: this is an netcdf file containing the required outputs
+                type: string
+              output_variables:
+                title: Output Variables
+                description: List of turbine variables to output
+                type: array
+                items:
+                  type: string
+
+          flow_field:
+            title: configuration of the flow field outputs
+            description:  flow field output variables and files
+            type: object
+            additionalProperties: true
+            properties:
+              report:
+                title: Report
+                description: Flag to output flow fields
+                type: boolean
+              flow_nc_filename:
+                title: Name of the file that will contain the flow field
+                description: this is an netcdf file containing the required outputs
+                type: string
+              output_variables:
+                title: Output Variables
+                description: List of flow field variables to output
+                type: array
+                items:
+                  type: string
+              times:
+                title: Output times
+                description: Specific times for flow field output
+                type: object
+                additionalProperties: true
+                properties:
+                  all_times:
+                    title: active to output all the occurences from the time series
+                    type: boolean
+                  time_list:
+                    title: list of times to output
+                    type: array
+                    items:
+                      type: integer
+              z_planes:
+                title: planes at which the flow field variables will be stored
+                description: description of vertical planes
+                type: object
+                additionalProperties: true
+                properties:
+                  z_sampling:
+                    title: type of vertical discretization
+                    type: string
+                    enum: ['default', 'grid', 'plane_list']
+                  z_list:
+                    title: z plane values for sample type 'grid'
+                    type: array
+                    items:
+                      type: float
+                  z_bounds:
+                    title: z bounds for sample type 'grid'
+                    type: array
+                    items:
+                      type: float
+                  z_max:
+                    title: maximum z value for sample type 'grid'
+                    type: float
+                  z_number:
+                    title: number of z planes for sample type 'grid'
+                    type: integer
+                  xy_sampling:
+                    title: type of horizontal discretization
+                    type: string
+                    enum: ['default', 'grid']
+                  x_bounds:
+                    title: x bounds for sample type 'grid'
+                    type: array
+                    items:
+                      type: float
+                  y_bounds:
+                    title: y bounds for sample type 'grid'
+                    type: array
+                    items:
+                      type: float
+                  dx:
+                    title: x grid spacing for sample type 'grid'
+                    type: float
+                  dy:
+                    title: y grid spacing for sample type 'grid'
+                    type: float
+
