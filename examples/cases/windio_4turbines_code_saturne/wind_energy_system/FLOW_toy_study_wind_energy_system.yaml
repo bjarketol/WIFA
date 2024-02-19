@@ -1,0 +1,46 @@
+name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
+site: !include ../plant_energy_site/FLOW_toy_study_energy_site.yaml
+wind_farm: !include ../plant_wind_farm/FLOW_toy_study_wind_farm.yaml
+attributes:
+  flow_model:
+    name: code_saturne
+  analysis:
+    thermal_stratification:
+      stability: "neutral"
+      capping_inversion: 
+        active: False
+    #
+    run_type: "simulate" #"postprocess"
+    #
+    cases_run:
+      all_occurences: True
+    #
+    mesh:
+      remesh: True
+      mesh_file_name: MESH/toy_mesh.med
+    #
+    coriolis_force: False
+
+  outputs:
+    output_folder: "code_saturne_results"
+    turbine_outputs:
+        turbine_nc_filename: 'turbine_data.nc' # dimension = states, turbine
+        output_variables: ['power', 'disk_velocity'] #'frequency'
+    #
+    flow_field:
+      report: True
+      flow_nc_filename: flow_field.nc
+      times: 
+        all_times: True
+      output_variables: ['speed', 'direction']
+      z_planes:
+        z_sampling: "default"
+        xy_samping: "default"
+    #
+    statistics:
+      stats_filename: None
+      AEP: False
+      AEP_per_turbine: False
+      power_percentiles:
+        report: False
+        percentiles: None

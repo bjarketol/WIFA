@@ -1,0 +1,51 @@
+name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
+site: !include ../plant_energy_site/FLOW_toy_study_energy_site.yaml
+wind_farm: !include ../plant_wind_farm/FLOW_toy_study_wind_farm.yaml
+attributes:
+  flow_model:
+    name: wayve
+  #
+  analysis:
+    layers_description:
+      farm_layer_height: 150
+      number_of_layers: 10
+    APM_additional_terms:
+      term_list: None
+
+    wake_tool: "foxes"
+    wake_model:
+      name: Bastankhah
+      k: 0.04
+      ceps: 0.2
+    deflection_model:
+      name: Jimenez
+    superposition_model:
+      name: Linear
+    rotor_averaging:
+      name: center
+    blockage:
+      name: None
+  #
+  outputs:
+    output_folder: "wayve_results"
+    turbine_outputs:
+        turbine_nc_filename: 'turbine_data.nc' # dimension = states, turbine
+        output_variables: ['power', 'disk_velocity'] #'frequency'
+    #
+    flow_field:
+      report: True
+      flow_nc_filename: flow_field.nc
+      times: 
+        all_times: True
+      output_variables: ['speed', 'direction']
+      z_planes:
+        z_sampling: "default"
+        xy_samping: "default"
+    #
+    statistics:
+      stats_filename: None
+      AEP: False
+      AEP_per_turbine: False
+      power_percentiles:
+        report: False
+        percentiles: None
