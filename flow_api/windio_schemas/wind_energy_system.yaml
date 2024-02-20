@@ -153,6 +153,9 @@ properties:
                 lapse_rate:
                   title: temperature lapse rate (K/m) above inversion layer
                   type: float
+                geostrophic_wind_velocity:
+                  title: Value of the geostrophic wind velocity
+                  type: float
 
             coriolis_force:
               title: impose if Coriolis force is active or not. Else, automated decision.
@@ -292,16 +295,15 @@ properties:
                 type: array
                 items:
                   type: string
-              times:
-                title: Output times
-                description: Specific times for flow field output
+              cases_run:
+                title: Handling of the timeseries runs
                 type: object
                 additionalProperties: true
                 properties:
-                  all_times:
+                  all_occurences:
                     title: active to output all the occurences from the time series
                     type: boolean
-                  time_list:
+                  occurences_list:
                     title: list of times to output
                     type: array
                     items:
