@@ -35,8 +35,8 @@ attributes:
     flow_field:
       report: True
       flow_nc_filename: flow_field.nc
-      times: 
-        all_times: True
+      cases_run: 
+        all_occurences: True
       output_variables: ['speed', 'direction']
       z_planes:
         z_sampling: "default"
