@@ -7,7 +7,7 @@ attributes:
   analysis:
     thermal_stratification:
       stability: "neutral"
-      capping_inversion: 
+      capping_inversion:
         active: False
     #
     run_type: "simulate" #"postprocess"
@@ -30,12 +30,12 @@ attributes:
     flow_field:
       report: True
       flow_nc_filename: flow_field.nc
-      cases_run: 
+      cases_run:
         all_occurences: True
       output_variables: ['speed', 'direction']
       z_planes:
         z_sampling: "default"
-        xy_samping: "default"
+        xy_sampling: "default"
     #
     statistics:
       stats_filename: None
