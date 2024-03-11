@@ -1,25 +1,30 @@
 name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
-site: !include ../plant_energy_site/FLOW_toy_study_energy_site.yaml
+site: !include ../plant_energy_site/FLOW_toy_study_energy_site_thermal_stratification.yaml
 wind_farm: !include ../plant_wind_farm/FLOW_toy_study_wind_farm.yaml
 attributes:
   flow_model:
     name: code_saturne
   analysis:
-    thermal_stratification:
-      stability: "neutral"
-      capping_inversion:
-        active: False
     #
     run_type: "simulate" #"postprocess"
     #
     cases_run:
       all_occurences: True
     #
+    HPC_config:
+      run_node_number: 5
+      run_ntasks_per_node: 48
+      run_wall_time: 6
+      run_partition: "p1"
+      #
+      mesh_node_number: 2
+      mesh_ntasks_per_node: 48
+      mesh_wall_time: 1
+      run_partition: "p2"
+
     mesh:
       remesh: True
       mesh_file_name: MESH/toy_mesh.med
-    #
-    coriolis_force: False
 
   outputs:
     output_folder: "code_saturne_results"
