@@ -120,99 +120,95 @@ properties:
               title: ss_alpha factor for SelfSimilarityDeficit2020
               type: float
 
-        thermal_stratification:
-          title: structure of the atmospheric boundary layer
-          description: Information about the stability and its parameters
+        coriolis_force:
+          title: impose if Coriolis force is active or not. Else, automated decision.
+          type: bool
+
+        cases_run:
+          title: Handling of the timeseries runs
           type: object
           additionalProperties: true
           properties:
-            stability:
-              title: type of the stability
-              type: string
-              enum: ["neutral", "stable", "unstable"]
-            LMO:
-              title: value of the Monin Obukhov Length in case of stable/unstable ABL
-              type: float
-            capping_inversion:
-              title: temperature inversion above boundary layer
-              type: object
-              additionalProperties: true
-              properties:
-                active:
-                  title: is it active
-                  type: boolean
-                ABL_height:
-                  title: Atmospheric Boundary Layer height
-                  type: float 
-                dH:
-                  title: inversion layer thickness (m) for capping inversion
-                  type: float 
-                dtheta:
-                  title: inversion layer temperature difference (K) for capping inversion
-                  type: float 
-                lapse_rate:
-                  title: temperature lapse rate (K/m) above inversion layer
-                  type: float
-                geostrophic_wind_velocity:
-                  title: Value of the geostrophic wind velocity
-                  type: float
-
-            coriolis_force:
-              title: impose if Coriolis force is active or not. Else, automated decision.
-              type: bool
-
-            cases_run:
-              title: Handling of the timeseries runs
-              type: object
-              additionalProperties: true
-              properties:
-                all_occurences:
-                  title: active to run all the occurences from the time series
-                  type: boolean
-                binned:
-                  title: active to split timeseries to representative classes 
-                  type: boolean
-                occurences_list:
-                  title: list of times to run
-                  type: array
-                  
-            mesh:
-              title: meshing the wind farm domain for code_saturne calculation
-              type: object
-              properties:
-                remesh:
-                  title: provide new mesh for the domain with farm characteristics
-                  type: boolean
-                mesh_file_name:
-                  title: mesh file path/name, existing if remesh is False
-                  type: string
- 
-            run_type:
-              title: type of run with the flow api
-              type: string
-              enum: ['simulate','postprocess']
-
-            layers_description:
-              title: description of the layers needed for the APM model
-              type: object
-              additionalProperties: true
-              properties:
-                farm_layer_height:
-                  title: height of the layer containing the farm
-                  type: float
-                number_of_layers:
-                  title: number of layers in the free atmosphere
-                  type: integer
-
-            wake_tool:
-              title: choice of wake tool for coupling to wayve
-              type: string
-              enum: ['pywake', 'foxes']
-
-            APM_additional_terms:
-              title: list of terms added to the APM model
+            all_occurences:
+              title: active to run all the occurences from the time series
+              type: boolean
+            binned:
+              title: active to split timeseries to representative classes 
+              type: boolean
+            occurences_list:
+              title: list of times to run
               type: array
-              enum: ['term_name_1', 'term_name_2']
+
+        HPC_config:
+          title: Information to handle parallel runs on HPC clusters
+          type: object
+          additionalProperties: true
+          properties:
+            run_node_number:
+              title: number of nodes used to run the wind farm flow case
+              type: integer
+            run_ntasks_per_node:
+              title: number of tasks per node
+              type: integer
+            run_wall_time_hours:
+              title: wall time for each run
+              type: integer
+            run_partition:
+              title: run partition name
+              type: string
+            slurm_wckey:
+              title: wckey name if any
+              type: string
+            #
+            mesh_node_number:
+              title: number of nodes used to run the wind farm flow case
+              type: integer
+            mesh_ntasks_per_node:
+              title: number of tasks per node
+              type: integer
+            mesh_wall_time_hours:
+              title: wall time for each run
+              type: integer #specify hours ?
+            mesh_partition:
+              title: run partition name
+              type: string
+                  
+        mesh:
+          title: meshing the wind farm domain for code_saturne calculation
+          type: object
+          properties:
+            remesh:
+              title: provide new mesh for the domain with farm characteristics
+              type: boolean
+            mesh_file_name:
+              title: mesh file path/name, existing if remesh is False
+              type: string
+        run_type:
+          title: type of run with the flow api
+          type: string
+          enum: ['simulate','postprocess']
+
+        layers_description:
+          title: description of the layers needed for the APM model
+          type: object
+          additionalProperties: true
+          properties:
+            farm_layer_height:
+              title: height of the layer containing the farm
+              type: float
+            number_of_layers:
+              title: number of layers in the free atmosphere
+              type: integer
+
+        wake_tool:
+          title: choice of wake tool for coupling to wayve
+          type: string
+          enum: ['pywake', 'foxes']
+
+        APM_additional_terms:
+          title: list of terms added to the APM model
+          type: array
+          enum: ['term_name_1', 'term_name_2']
 
       outputs:  
         title: Outputs

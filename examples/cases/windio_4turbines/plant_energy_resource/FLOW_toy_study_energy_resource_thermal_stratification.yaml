@@ -1,3 +1,7 @@
 name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
 wind_resource:
     timeseries: !includeTimeseriesNetCDF "Stochastic_atHubHeight.nc"
+    thermal_stratification:
+      stability: "neutral"
+      capping_inversion:
+        active: False
