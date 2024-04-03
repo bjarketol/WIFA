@@ -1,0 +1,12 @@
+wake_model:
+  name: Bastankhah
+  k: 0.04
+  ceps: 0.2
+deflection_model:
+  name: Jimenez
+superposition_model:
+  name: Linear
+rotor_averaging:
+  name: center
+blockage:
+  name: None

@@ -1,0 +1,19 @@
+layers_description:
+  farm_layer_height: 150
+  number_of_layers: 10
+APM_additional_terms:
+  term_list: None
+
+wake_tool: "foxes"
+wake_model:
+  name: Bastankhah
+  k: 0.04
+  ceps: 0.2
+deflection_model:
+  name: Jimenez
+superposition_model:
+  name: Linear
+rotor_averaging:
+  name: center
+blockage:
+  name: None
