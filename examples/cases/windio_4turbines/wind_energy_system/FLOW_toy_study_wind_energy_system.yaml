@@ -4,7 +4,8 @@ wind_farm: !include ../plant_wind_farm/FLOW_toy_study_wind_farm.yaml
 attributes:
   flow_model:
     name: wayve
-  analysis: !include settings
+  analyses:
+    properties: !include settings
 
   outputs:
     output_folder: results"
