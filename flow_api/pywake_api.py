@@ -164,7 +164,7 @@ def run_pywake(yamlFile, output_dir='output'):
        if 'turbulence_intensity' not in resource_dat['wind_resource']:
           TI = 0.02
        else:
-          TI =  resource_dat['wind_resource']['turbulence_intensity']
+          TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
        #ite = XRSite(xr.Dataset(
        # data_vars={'P': (('time'), np.ones(len(ws)) / len(speeds)), },
        # coords={'time': range(len(times)),
@@ -376,37 +376,38 @@ def run_pywake(yamlFile, output_dir='output'):
       ]))
       ])
 
-    if system_dat['attributes']['analyses']['outputs']['AEP']:
+    if 'AEP' in system_dat['attributes']['outputs']:
        data['FLOW_simulation_outputs']['AEP'] = float(aep)
     
-    if 'power_percentiles' in system_dat['attributes']['analyses']['outputs']:
-     if system_dat['attributes']['analyses']['outputs']['power_percentiles']['report']:
-       # compute power percentiles
-       percentiles = np.array(system_dat['attributes']['analyses']['outputs']['power_percentiles']['percentiles']) / 100
-       if not timeseries:
+    #if 'power_percentiles' in system_dat['attributes']['analyses']['outputs']:
+    # if system_dat['attributes']['analyses']['outputs']['power_percentiles']['report']:
+    #   # compute power percentiles
+    #   percentiles = np.array(system_dat['attributes']['analyses']['outputs']['power_percentiles']['percentiles']) / 100
+    #   if not timeseries:
 
-          # Flatten the power and P arrays
-          power_values = sim_res.Power.sum('wt').values.flatten()
-          probabilities = sim_res.P.values.flatten()
+    #      # Flatten the power and P arrays
+    #      power_values = sim_res.Power.sum('wt').values.flatten()
+    #      probabilities = sim_res.P.values.flatten()
 
-          # Compute the weighted percentiles
-          power_percentiles = weighted_quantile(power_values, percentiles, sample_weight=probabilities)
+    #      # Compute the weighted percentiles
+    #      power_percentiles = weighted_quantile(power_values, percentiles, sample_weight=probabilities)
 
-       else:
-           total_power = sim_res.Power.sum(dim='wt')
-           power_percentiles = total_power.quantile(percentiles, dim=['time']).to_numpy()
-       data['FLOW_simulation_outputs']['computed_percentiles'] = system_dat['attributes']['analyses']['outputs']['power_percentiles']['percentiles']
-       data['FLOW_simulation_outputs']['power_percentiles'] = power_percentiles
+    #   else:
+    #       total_power = sim_res.Power.sum(dim='wt')
+    #       power_percentiles = total_power.quantile(percentiles, dim=['time']).to_numpy()
+    #   data['FLOW_simulation_outputs']['computed_percentiles'] = system_dat['attributes']['analyses']['outputs']['power_percentiles']['percentiles']
+    #   data['FLOW_simulation_outputs']['power_percentiles'] = power_percentiles
     
-    if system_dat['attributes']['analyses']['outputs']['AEP_per_turbine']:
+    if 'turbine_outputs' in system_dat['attributes']['outputs']:
        #print('aep per turbine', list(aep_per_turbine)); hey
-       data['FLOW_simulation_outputs']['AEP_per_turbine'] = [float(value) for value in aep_per_turbine]
+       #data['FLOW_simulation_outputs']['AEP_per_turbine'] = [float(value) for value in aep_per_turbine]
+       sim_res[['Power', 'WS_eff']].to_netcdf(output_dir + os.sep + 'PowerTable.nc')
 
     print(sim_res)
 
     # flow field handling
     flow_map = None
-    if 'flow_field' in system_dat['attributes']['analyses']['outputs'] and not timeseries:
+    if 'flow_field' in system_dat['attributes']['outputs'] and not timeseries:
 
        # compute flow map for specified directions (wd) and speeds (ws)
        flow_map = sim_res.flow_map(
@@ -428,26 +429,25 @@ def run_pywake(yamlFile, output_dir='output'):
        if 'velocity_u' not in system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables']:
           flow_map = flow_map.drop_vars(['WS_eff'], inplace=True)
 
-    elif 'flow_field' in system_dat['attributes']['analyses']['outputs'] and timeseries:
-       time_to_plot = system_dat['attributes']['analyses']['outputs']['flow_field']['time'][0]
-       print('TIMES ', time_to_plot)
+    elif 'flow_field' in system_dat['attributes']['outputs'] and timeseries:
+       #time_to_plot = system_dat['attributes']['outputs']['flow_field']['time'][0]
+       #print('TIMES ', time_to_plot)
        flow_map = sim_res.flow_map(HorizontalGrid(x = np.linspace(WFXLB, WFXUB, 100),
 y = np.linspace(WFYLB, WFYUB, 100)),
-                            wd=wind_resource_timeseries[time_to_plot]['direction'],
-                            ws=wind_resource_timeseries[time_to_plot]['speed'])
+                            wd=wd,
+                            ws=ws)
      # power table    
-    if 'power_table' in system_dat['attributes']['analyses']['outputs']:
-       # todo: more in depth stuff here, include loads
-       sim_res.Power.to_netcdf(output_dir + os.sep + 'PowerTable.nc')
-       #data['FLOW_simulation_outputs']['power_output_variables'] = tuple(system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables'])
-
+    #if 'power_table' in system_dat['attributes']['analyses']['outputs']:
+    #   # todo: more in depth stuff here, include loads
+    #   #data['FLOW_simulation_outputs']['power_output_variables'] = tuple(system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables'])
+#
     if flow_map:
        # save data
        flow_map.to_netcdf(output_dir + os.sep + 'FarmFlow.nc')
 
        # record data
        data['FLOW_simulation_outputs']['wind_output_file'] = 'FarmFlow.nc'
-       data['FLOW_simulation_outputs']['wind_output_variables'] = system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables']
+       data['FLOW_simulation_outputs']['wind_output_variables'] = system_dat['attributes']['outputs']['flow_field']['output_variables']
 
     # Write out the YAML data
     output_yaml_nam = output_dir + os.sep + 'output.yaml'
