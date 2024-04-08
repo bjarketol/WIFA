@@ -1,3 +1,3 @@
 name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
 wind_resource:
-    timeseries: !includeTimeseriesNetCDF "Stochastic_atHubHeight.nc"
+    !include "Stochastic_atHubHeight.nc"
