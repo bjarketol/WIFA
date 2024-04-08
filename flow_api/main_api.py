@@ -6,11 +6,10 @@ import sys
 
 import sys
 import windIO
-from windIO.utils.yml_utils import validate_yaml, Loader
+from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 sys.path.append(windIO.__path__[0])
 
 
-yaml.SafeLoader = Loader
 
 # parse input from command line
 if len(sys.argv) != 2:
@@ -23,11 +22,7 @@ validate_yaml(yaml_input, windIO.__path__[0] + '/plant/wind_energy_system.yaml')
 
 
 # get number of turbines
-with open(yaml_input, "r") as stream:
-    try:
-        yaml_dat = yaml.safe_load(stream)
-    except yaml.YAMLError as exc:
-        print(exc)
+yaml_dat = load_yaml(yaml_input)
 x = yaml_dat['wind_farm']['layouts']['initial_layout']['coordinates']['x']
 
 yaml_input_no_ext = os.path.splitext(yaml_input)[0]  # Remove the file extension
@@ -36,7 +31,7 @@ if not os.path.exists(output_dir_name):
     os.makedirs(output_dir_name)
 
 # Specify input metadata file name
-if 'name' in yaml_dat['attributes']['analyses']['outputs']:
+if 'name' in yaml_dat['attributes']['outputs']:
    output_dir_name = yaml_dat['attributes']['analyses']['outputs']['name']
    if not os.path.exists(output_dir_name):
       os.makedirs(output_dir_name)

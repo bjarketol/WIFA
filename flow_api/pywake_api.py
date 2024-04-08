@@ -21,6 +21,7 @@ from py_wake import NOJ, BastankhahGaussian
 from py_wake.deficit_models import SelfSimilarityDeficit2020
 from py_wake.superposition_models import LinearSum, SquaredSum
 from py_wake.rotor_avg_models import RotorCenter, GridRotorAvg, EqGridRotorAvg, GQGridRotorAvg, CGIRotorAvg, PolarGridRotorAvg, polar_gauss_quadrature, GaussianOverlapAvgModel
+from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 
 
 # Define default values for wake_model parameters
@@ -99,40 +100,9 @@ def weighted_quantile(values, quantiles, sample_weight=None,
         weighted_quantiles /= np.sum(sample_weight)
     return np.interp(quantiles, weighted_quantiles, values)
 
-# constructor for YAML !include command
-def include_constructor(loader, node):
-    filepath = loader.construct_scalar(node)
-    base_dir = os.path.dirname(loader.stream.name)
-    abs_filepath = os.path.join(base_dir, filepath)
-    
-    with open(abs_filepath, 'r') as f:
-        return yaml.safe_load(f)
-
-# functions for pretty YAML printing
-def tuple_representer(dumper, data):
-    return dumper.represent_sequence('tag:yaml.org,2002:seq', data)
-def ndarray_representer(dumper, data):
-    return dumper.represent_list(data.tolist())
-def dataarray_representer(dumper, data):
-    return dumper.represent_dict({dim: data[dim].values.tolist() for dim in data.dims})
-def ordered_dict_representer(dumper, data):
-    return dumper.represent_dict(data.items())
-
-
 def run_pywake(yamlFile, output_dir='output'):
 
-    yaml.SafeLoader.add_constructor('!include', include_constructor)
-    yaml.add_representer(tuple, tuple_representer)
-    yaml.add_representer(np.ndarray, ndarray_representer)
-    yaml.add_representer(xr.DataArray, dataarray_representer)
-    yaml.add_representer(OrderedDict, ordered_dict_representer)
-
-
-    with open(yamlFile, "r") as stream:
-       try:
-           system_dat = yaml.safe_load(stream)
-       except yaml.YAMLError as exc:
-           print(exc)
+    system_dat = load_yaml(yamlFile)
 
     # define turbine
     farm_dat = system_dat['wind_farm']
@@ -182,23 +152,19 @@ def run_pywake(yamlFile, output_dir='output'):
     ##################
     # construct site
     ##################
-    if 'timeseries' in resource_dat['wind_resource'].keys():
+    if 'time' in resource_dat['wind_resource'].keys():
        timeseries = True
-       wind_resource_timeseries = resource_dat['wind_resource']['timeseries']
-       times = [d['time'] for d in wind_resource_timeseries]
-       if 'z' in wind_resource_timeseries[0]:
-          ws = [np.interp(hh, d['z'], d['speed']) for d in wind_resource_timeseries]
-          wd = [np.interp(hh, d['z'], d['direction']) for d in wind_resource_timeseries]
-       else:
-          ws = [d['speed'] for d in wind_resource_timeseries]
-          wd = [d['direction'] for d in wind_resource_timeseries]
+       wind_resource_timeseries = resource_dat['wind_resource']['time']
+       times = wind_resource_timeseries
+       ws = resource_dat['wind_resource']['wind_speed']['data']
+       wd = resource_dat['wind_resource']['wind_direction']['data']
        assert(len(times) == len(ws))
        assert(len(wd) == len(ws))
        site = Hornsrev1Site()
-       if 'TI' not in resource_dat['wind_resource']['timeseries'][0]:
+       if 'turbulence_intensity' not in resource_dat['wind_resource']:
           TI = 0.02
        else:
-          TI = [d['TI'] for d in wind_resource_timeseries]
+          TI =  resource_dat['wind_resource']['turbulence_intensity']
        #ite = XRSite(xr.Dataset(
        # data_vars={'P': (('time'), np.ones(len(ws)) / len(speeds)), },
        # coords={'time': range(len(times)),
@@ -325,7 +291,7 @@ def run_pywake(yamlFile, output_dir='output'):
     else:
         raise Exception('%s rotor averaging model not implemented' % rotor_averaging_data['name'])
     
-    if blockage_data['name'] == 'None':
+    if blockage_data['name'] == 'None' or  blockage_data['name'] is None:
        blockage = None
     elif blockage_data['name'] == 'SelfSimilarityDeficit2020':
        blockage = SelfSimilarityDeficit2020(ss_alpha=blockage_data['ss_alpha'])
