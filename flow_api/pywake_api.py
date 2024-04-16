@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import os
 import yaml
+from scipy.interpolate import interp1d
 from py_wake.deficit_models.fuga import FugaDeficit
 from py_wake.site import XRSite
 from py_wake.wind_turbines import WindTurbine
@@ -14,7 +15,7 @@ from py_wake.wind_farm_models import PropagateDownwind, All2AllIterative
 from py_wake.examples.data.hornsrev1 import Hornsrev1Site
 from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
 from py_wake.deflection_models import JimenezWakeDeflection
-from py_wake.deficit_models.noj import NOJDeficit
+from py_wake.deficit_models.noj import NOJLocalDeficit
 from py_wake.deficit_models.gaussian import BastankhahGaussianDeficit
 from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel
 from py_wake import NOJ, BastankhahGaussian
@@ -29,6 +30,7 @@ DEFAULTS = {
     'wake_model': {
         'name': 'Jensen',
         'k': 0.04,  # Default wake expansion coefficient for Jensen
+        'k2': 0.0,  # TI wake expansion modifier
     },
     'deflection_model': {
         'name': 'Jimenez',
@@ -156,8 +158,16 @@ def run_pywake(yamlFile, output_dir='output'):
        timeseries = True
        wind_resource_timeseries = resource_dat['wind_resource']['time']
        times = wind_resource_timeseries
+       if 'height' in resource_dat['wind_resource'].keys():
+           heights = resource_dat['wind_resource']['height']
+       else:
+           heights = None
        ws = resource_dat['wind_resource']['wind_speed']['data']
        wd = resource_dat['wind_resource']['wind_direction']['data']
+       print(np.array(ws).shape, np.array(heights).shape)
+       if heights:
+          ws = interp1d(heights, ws, axis=1)(hh)
+          wd = interp1d(heights, wd, axis=1)(hh)
        assert(len(times) == len(ws))
        assert(len(wd) == len(ws))
        site = Hornsrev1Site()
@@ -165,6 +175,7 @@ def run_pywake(yamlFile, output_dir='output'):
           TI = 0.02
        else:
           TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
+          if heights: TI = interp1d(heights, TI, axis=1)(hh)
        #ite = XRSite(xr.Dataset(
        # data_vars={'P': (('time'), np.ones(len(ws)) / len(speeds)), },
        # coords={'time': range(len(times)),
@@ -217,8 +228,8 @@ def run_pywake(yamlFile, output_dir='output'):
     deficit_args = {}
     deficit_param_mapping = {}
     if wake_model_data['name'] == 'Jensen':
-       wakeModel = NOJDeficit
-       deficit_param_mapping = {'k': 'k'}
+       wakeModel = NOJLocalDeficit
+       deficit_param_mapping = {'k': 'k', 'k2': 'k2'}
     elif wake_model_data['name'] == 'Bastankhah':
        wakeModel = BastankhahGaussianDeficit
        deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
@@ -248,6 +259,11 @@ def run_pywake(yamlFile, output_dir='output'):
         if key == 'name': continue
         if key in deficit_param_mapping.keys():
             deficit_args[deficit_param_mapping[key]] = wake_model_data[key]
+
+    if 'k2' in deficit_args:
+        k = deficit_args.pop('k')
+        k2 = deficit_args.pop('k2')
+        deficit_args['a'] = [k, k2]
 
     # Continuing from the previous example...
     
