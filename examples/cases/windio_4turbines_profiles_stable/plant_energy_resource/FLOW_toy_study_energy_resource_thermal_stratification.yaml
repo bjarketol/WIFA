@@ -1,5 +1,5 @@
 name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
 wind_resource:
-    timeseries: !includeTimeseriesNetCDF "Stochastic_nieuwstadt_profiles.nc"
-    thermal_stratification:
-      stability: "stable"
+    !include "Stochastic_nieuwstadt_profiles.nc"
+    #thermal_stratification:
+    #  stability: "stable"

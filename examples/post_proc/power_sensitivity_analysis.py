@@ -6,7 +6,7 @@ import os as os
 import sys
 import string, random
 from shutil import copy, copytree
-#
+import sys
 import netCDF4 as nc
 from ot_chaos import *
 import openturns as ot
@@ -14,14 +14,13 @@ import openturns.viewer as viewer
 import scipy as scipy
 import xarray as xr
 
-stochastic_input_file=""
-stochastic_varnames = ["direction", "speed", "z0"]
-MC_sample_size=100 ; number_of_turbines=4 #TODO:read
-power_file="turbine_data.nc"
+stochastic_varnames = ["wind_direction", "wind_speed", "z0"]
+power_file = sys.argv[1]
 
 #########Load the data############
 #stochastic inputs
-input_nc_file = nc.Dataset("windio_toy/plant_energy_resource/Stochastic_atHubHeight.nc")
+inputnc_file = nc.Dataset("windio_toy/plant_energy_resource/Stochastic_atHubHeight.nc")
+MC_sample_size=100 ; number_of_turbines=4 #TODO:read
 nvar = len(stochastic_varnames)
 MC_sample = np.zeros((len(inputnc_file.variables["time"]),nvar))
 for j in range(nvar):
