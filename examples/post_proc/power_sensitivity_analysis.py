@@ -6,40 +6,40 @@ import os as os
 import sys
 import string, random
 from shutil import copy, copytree
-import sys
+import matplotlib.pyplot as plt
 import netCDF4 as nc
-from ot_chaos import *
-import openturns as ot
-import openturns.viewer as viewer
 import scipy as scipy
 import xarray as xr
-
-stochastic_varnames = ["wind_direction", "wind_speed", "z0"]
-power_file = sys.argv[1]
+import openturns as ot
+import openturns.viewer as viewer
+from build_PCE import *
 
 #########Load the data############
 #stochastic inputs
-inputnc_file = nc.Dataset("windio_toy/plant_energy_resource/Stochastic_atHubHeight.nc")
+stochastic_varnames = ["wind_direction", "wind_speed", "z0"]
+plot_labels= ["dir", "speed", "z0"]
+
+marginals = ["normal", "normal", "uniform"]
 MC_sample_size=100 ; number_of_turbines=4 #TODO:read
+
+power_file="output_data_examples" + sep + "turbine_data_Stochastic_atHubheight.nc"
+input_nc_file = nc.Dataset("../cases/windio_4turbines/plant_energy_resource/Stochastic_atHubHeight.nc")
 nvar = len(stochastic_varnames)
-MC_sample = np.zeros((len(inputnc_file.variables["time"]),nvar))
+MC_sample = np.zeros((len(input_nc_file.variables["time"]),nvar))
 for j in range(nvar):
     varname=stochastic_varnames[j]
-    MC_sample[:,j] = nc_file.variables[varname][:]
+    MC_sample[:,j] = input_nc_file.variables[varname][:]
 
-#power outputs
-power_data = xr.load_dataset(power_file)
-power_table = np.zeros((MC_sample_size, number_of_turbines))
-for j in range(number_of_turbines):
-    power_table[:,j] = power_data['power'].sel(wt=j).values[:MC_sample_size]
-
+#stochastic power outputs
+power_data = nc.Dataset(power_file)
+power_table = power_data.variables['power'][:,:]
 
 #########Compute Sobol indices############
 input_variable_array = MC_sample[:MC_sample_size,:]
-power_sobol_indices = np.zeros((number_of_turbines,nvar))
+power_1st_sobol_indices = np.zeros((number_of_turbines,nvar))
 power_total_sobol_indices = np.zeros((number_of_turbines,nvar))
 sample_std = np.std(power_table,axis=0)
-PC_deg=3
+PCE_deg=3
 #
 copula_type = "independent"  #choices: gaussian, independent
 for i in range(number_of_turbines):
@@ -47,28 +47,57 @@ for i in range(number_of_turbines):
         std_to_test=sample_std[i]
     else:
         std_to_test=sample_std
-    if(std_to_test!=0):        
-        if(number_of_turbines>1):
-            fullSet = StatisticalSet(input_variable_array[:,:],power_table[:,i])
-        else:
-            fullSet = StatisticalSet(input_variable_array[:,:],power_table[:])
-        training_size = fullSet.setSize
-        test_size = 0
-        otChaosObject = OTChaos(fullSet, training_size=training_size, \
-                                test_size=test_size, prediction_size=0, number_of_sets=1)
-        otChaosObject.marginals = []
+    if(std_to_test!=0):
 
-        for v in range(fullSet.inputDimension):
-            otChaosObject.marginals.append(uq_var_marginals[v])
-            otChaosObject.copula = copula_type
+        copula = copula_type
 
-        otChaosObject.polynomialDegree= PC_deg
-        otChaosObject.construct_PCE_ot()
-        chaosSI = ot.FunctionalChaosSobolIndices(otChaosObject.polynomialChaosResult) 
-        for v in range(fullSet.inputDimension):                    
+        polynomialChaosResult = construct_PCE_ot(input_variable_array[:,:], \
+                                                 power_table[i,:], marginals, \
+                                                 copula, PCE_deg, LARS=True)
+
+        chaosSI = ot.FunctionalChaosSobolIndices(polynomialChaosResult)
+        for v in range(nvar):
             if(number_of_turbines>1):
-                power_sobol_indices[i,v] =  chaosSI.getSobolIndex(v)  
-                power_total_sobol_indices[i,v] =  chaosSI.getSobolTotalIndex(v)  
-            else:
-                power_sobol_indices[i,v] =  chaosSI.getSobolIndex(v)  
+                power_1st_sobol_indices[i,v] =  chaosSI.getSobolIndex(v)
                 power_total_sobol_indices[i,v] =  chaosSI.getSobolTotalIndex(v)
+            else:
+                power_1st_sobol_indices[i,v] =  chaosSI.getSobolIndex(v)
+                power_total_sobol_indices[i,v] =  chaosSI.getSobolTotalIndex(v)
+
+#########Plot Sobol indices############
+colors=['#002d74', '#e85113']
+fig,ax = plt.subplots(1,4,figsize=(13,3))
+# Bar positions
+bar_width=0.24
+items = plot_labels
+bar_positions1 = np.arange(len(items)) + 0.5*bar_width
+bar_positions2 = np.arange(len(items)) + 1.5*bar_width
+
+for i in range(number_of_turbines):
+    values1 = [] ; values2 = []
+    for j in range(len(items)):
+        values1.append(power_1st_sobol_indices[i,j])
+        values2.append(power_total_sobol_indices[i,j])
+
+    # Create bar plots
+    ax[i].bar(bar_positions1, values1, width=bar_width, label='$1^{st}$ indices', color=colors[0])
+    ax[i].bar(bar_positions2, values2, width=bar_width, label='Total indices', color=colors[1])
+
+    # Set labels and title
+    ax[i].set_xlabel('Variables')
+    if(i==0):
+        ax[i].set_ylabel(r"Sobol indices")
+    # Set x-axis ticks and labels
+    ax[i].set_xticks(bar_positions2)
+    ax[i].set_xticklabels(items)
+    ax[i].set_title("Turbine " + str(i+1), fontsize=15)
+    if(i==3):
+        ax[i].legend(loc="upper right", fontsize=12)
+    ax[i].tick_params(axis='both', which='major', labelsize=15)
+    ax[i].xaxis.label.set_size(15)
+    ax[i].yaxis.label.set_size(15)
+    ax[i].set_ylim(0.0,1.1)
+
+# Show the plot
+plt.tight_layout()
+plt.show()
