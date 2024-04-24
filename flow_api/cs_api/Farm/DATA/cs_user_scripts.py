@@ -28,6 +28,28 @@ import os
 # Local functions
 #===============================================================================
 
+#-------------------------------------------------------------------------------
+# Process the command line
+#-------------------------------------------------------------------------------
+
+def process_command_line(argv):
+    """
+    Processes the passed command line arguments.
+    """
+    from optparse import OptionParser
+    parser = OptionParser(usage="usage: %prog [options]")
+
+    parser.add_option("--meteo", "--meteo-file", dest="MeteoFile", type="string",
+                      help="Name of meteo file")
+
+    (options, args) = parser.parse_args(argv)
+
+    return options
+
+#===============================================================================
+# Local functions
+#===============================================================================
+
 #===============================================================================
 # Defining parameters for a calculation domain
 #===============================================================================
@@ -64,6 +86,26 @@ def define_domain_parameters(domain):
     domain.compile_cxxflags = None
     domain.compile_fcflags = None
     domain.compile_libs = "-lgdal -lproj"
+
+    if domain.kw_args:
+        options = process_command_line(domain.kw_args)
+
+        from code_saturne.model.XMLengine import Case
+        from code_saturne.model.XMLinitialize import XMLinit
+        from code_saturne.model.AtmosphericFlowsModel import AtmosphericFlowsModel
+
+        fp = os.path.join(domain.exec_dir, 'setup.xml')
+        case = Case(package = domain.package, file_name = fp)
+        case['xmlfile'] = fp
+        case.xmlCleanAllBlank(case.xmlRootNode())
+        XMLinit(case).initialize()
+
+        if (options.MeteoFile):
+            t = AtmosphericFlowsModel(case)
+            fullPathMeteo = options.MeteoFile
+            t.setMeteoDataFileName(fullPathMeteo)
+
+        case.xmlSaveDocument()
 
 
     return

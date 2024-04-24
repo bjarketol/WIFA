@@ -1,18 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?><Code_Saturne_GUI case="Dynamique" solver_version="6.0;7.0;8.0" study="cs_api" version="2.0">
+<?xml version="1.0" encoding="utf-8"?><Code_Saturne_GUI case="Precursor" solver_version="8.0;8.1;8.0" study="cs_api_timeseries_validation" version="2.0">
   <additional_scalars>
-    <users>
-      <property dimension="1" label="source_term_x" name="source_term_x" support="cells" type="user">
-        <probes_recording status="off"/>
-      </property>
-      <property dimension="1" label="source_term_y" name="source_term_y" support="cells" type="user">
-        <probes_recording status="off"/>
-      </property>
-      <property dimension="1" label="source_term_coeff" name="source_term_coeff" support="cells" type="user"/>
-    </users>
+    <users/>
   </additional_scalars>
   <analysis_control>
     <output>
-      <listing_printing_frequency>1</listing_printing_frequency>
+      <listing_printing_frequency>1000</listing_printing_frequency>
       <mesh id="-1" label="Fluid domain" type="cells">
         <all_variables status="on"/>
         <location>all[]</location>
@@ -30,26 +22,42 @@
       <writer id="-1" label="results">
         <directory name="postprocessing"/>
         <format name="ensight" options="separate_meshes"/>
-        <frequency period="none"/>
+        <frequency period="time_step">5000</frequency>
         <output_at_end status="on"/>
+        <output_at_start status="on"/>
         <time_dependency choice="fixed_mesh"/>
       </writer>
     </output>
-    <profiles/>
+    <profiles>
+      <profile label="profile1">
+        <format name="CSV"/>
+        <formula>zz0=0.0;
+zz1=26000.0;
+x = 0;
+y = 0;
+z = zz1*s + zz0*(1.-s);</formula>
+        <output_frequency>5000</output_frequency>
+        <output_type>frequency</output_type>
+        <points>5000</points>
+        <var_prop component="-1" name="real_temperature"/>
+        <var_prop component="-1" name="velocity"/>
+        <var_prop component="-1" name="temperature"/>
+        <var_prop component="-1" name="total_pressure"/>
+        <var_prop component="-1" name="turbulent_viscosity"/>
+        <var_prop component="-1" name="pressure"/>
+        <var_prop component="-1" name="density"/>
+        <var_prop component="-1" name="k"/>
+        <var_prop component="-1" name="epsilon"/>
+      </profile>
+    </profiles>
     <scalar_balances/>
     <time_averages/>
     <time_parameters>
-      <iterations>20</iterations>
-      <max_courant_num>0.9</max_courant_num>
+      <iterations>1000000</iterations>
+      <max_courant_num>0.2</max_courant_num>
       <max_fourier_num>10</max_fourier_num>
-      <property label="CourantNb" name="courant_number">
-        <probes_recording status="off"/>
-      </property>
-      <property label="FourierNb" name="fourier_number">
-        <listing_printing status="off"/>
-        <postprocessing_recording status="off"/>
-        <probes_recording status="off"/>
-      </property>
+      <property label="CourantNb" name="courant_number"/>
+      <property label="FourierNb" name="fourier_number"/>
       <property label="LocalTime" name="local_time_step"/>
       <thermal_time_step status="off"/>
       <time_passing>2</time_passing>
@@ -60,23 +68,17 @@
     </time_parameters>
   </analysis_control>
   <boundary_conditions>
-    <boundary label="Bords" name="1" nature="inlet">Bords</boundary>
-    <boundary label="Sommet" name="2" nature="inlet">Sommet</boundary>
-    <boundary label="Sol" name="3" nature="wall">Sol</boundary>
-    <inlet field_id="none" label="Bords">
-      <scalar choice="dirichlet" name="temperature" type="thermal">
-        <dirichlet>0</dirichlet>
-      </scalar>
+    <boundary label="ground" name="1" nature="wall">Z0</boundary>
+    <boundary label="top" name="2" nature="inlet">Z1</boundary>
+    <inlet field_id="none" label="None">
       <turbulence choice="hydraulic_diameter">
         <hydraulic_diameter>1</hydraulic_diameter>
       </turbulence>
       <velocity_pressure choice="norm" direction="normal">
-        <meteo_automatic status="on"/>
-        <meteo_data status="on"/>
         <norm>1</norm>
       </velocity_pressure>
     </inlet>
-    <inlet field_id="none" label="Sommet">
+    <inlet field_id="none" label="top">
       <scalar choice="dirichlet" name="temperature" type="thermal">
         <dirichlet>0</dirichlet>
       </scalar>
@@ -89,15 +91,8 @@
         <norm>1</norm>
       </velocity_pressure>
     </inlet>
-    <inlet field_id="none" label="None">
-      <turbulence choice="hydraulic_diameter">
-        <hydraulic_diameter>1</hydraulic_diameter>
-      </turbulence>
-      <velocity_pressure choice="norm" direction="normal">
-        <norm>1</norm>
-      </velocity_pressure>
-    </inlet>
-    <wall field_id="none" label="Sol">
+    <outlet field_id="none" label="None"/>
+    <wall field_id="none" label="ground">
       <scalar choice="neumann" name="temperature" type="thermal">
         <neumann>0</neumann>
       </scalar>
@@ -105,39 +100,21 @@
         <dirichlet component="0" name="velocity">0</dirichlet>
         <dirichlet component="1" name="velocity">0</dirichlet>
         <dirichlet component="2" name="velocity">0</dirichlet>
-        <roughness>0.05</roughness>
+        <roughness>0.0001</roughness>
       </velocity_pressure>
     </wall>
   </boundary_conditions>
   <calculation_management>
     <block_io/>
-    <partitioning>
-      <type>scotch</type>
-    </partitioning>
+    <partitioning/>
     <start_restart>
       <frozen_field status="off"/>
     </start_restart>
   </calculation_management>
   <lagrangian model="off"/>
   <numerical_parameters>
-    <extended_neighborhood choice=""/>
     <gradient_reconstruction choice="green_iter"/>
-    <gradient_transposed status="off"/>
     <velocity_pressure_algo choice="simplec"/>
-    <velocity_pressure_coupling status="on">
-      <property label="VPsolve1" name="weight_matrix_X">
-        <listing_printing status="off"/>
-        <postprocessing_recording status="off"/>
-      </property>
-      <property label="VPsolve2" name="weight_matrix_Y">
-        <listing_printing status="off"/>
-        <postprocessing_recording status="off"/>
-      </property>
-      <property label="VPsolve3" name="weight_matrix_Z">
-        <listing_printing status="off"/>
-        <postprocessing_recording status="off"/>
-      </property>
-    </velocity_pressure_coupling>
   </numerical_parameters>
   <physical_properties>
     <fluid_properties>
@@ -145,7 +122,6 @@
       <method choice="user_properties"/>
       <property choice="predefined_law" label="Density" name="density">
         <initial_value>1.17862</initial_value>
-        <probes_recording status="off"/>
       </property>
       <property choice="constant" label="DiffDyn" name="dynamic_diffusion">
         <initial_value>0.01</initial_value>
@@ -167,8 +143,8 @@
         <listing_printing status="off"/>
         <postprocessing_recording status="off"/>
       </property>
-      <reference_pressure>101325</reference_pressure>
-      <reference_temperature>287.59</reference_temperature>
+      <reference_pressure>100000</reference_pressure>
+      <reference_temperature>289.22</reference_temperature>
     </fluid_properties>
     <gravity>
       <gravity_x>0</gravity_x>
@@ -176,21 +152,17 @@
       <gravity_z>-9.81</gravity_z>
     </gravity>
     <notebook>
-      <var description="0 for old source term and &gt; 0 for other options" editable="No" id="0" name="st_method" oturns="No" value="0.0"/>
-      <var description="0 for full farm simulation and &gt; 0 to run the designated turbine in isolation" editable="No" id="1" name="isol" oturns="No" value="0"/>
-      <var description="-1 to switch off coriolis, 1 to activate" editable="No" id="2" name="Coriolis" oturns="No" value="1.0"/>
-      <var description="1 if meteo file, 2 if MO profile" editable="No" id="3" name="meteo_profile" oturns="No" value="1"/>
-      <var description="Inverse Lmo" editable="No" id="4" name="Lmoinv" oturns="No" value="-0.0196"/>
-      <var description="Rugosity" editable="No" id="5" name="z0" oturns="No" value="0.13"/>
-      <var description="Reference altitude" editable="No" id="6" name="zref" oturns="No" value="100.0"/>
-      <var description="Wind direction" editable="No" id="7" name="teta" oturns="No" value="70.0"/>
-      <var description="Wind speed" editable="No" id="8" name="ureff" oturns="No" value="3.6"/>
-      <var description="Ground temperature" editable="No" id="9" name="t0" oturns="No" value="287.59"/>
-      <var description="-1 to switch off Dyunkerke model, 1 to activate" editable="No" id="10" name="Dyunkerke" oturns="No" value="-1.0"/>
-      <var description="Latitude " editable="No" id="11" name="lat" oturns="No" value="55.0"/>
-      <var description="Longitude " editable="No" id="12" name="long" oturns="No" value="0.0"/>
-      <var description="1 to solve the energy equation, 0 if constant density" editable="No" id="13" name="energy" oturns="No" value="0.0"/>
-      <var description="Mesh cell size at disk" editable="No" id="14" name="AD_mesh_cell_size" oturns="No" value="5.0"/>
+      <var description="-1 to switch off Dyunkerke model, 1 to activate" editable="No" id="0" name="Dyunkerke" oturns="No" value="1.0"/>
+      <var description="Reference velocity" editable="No" id="1" name="ureff" oturns="No" value="8.5"/>
+      <var description="Reference height" editable="No" id="2" name="zref" oturns="No" value="150.0"/>
+      <var description="Latitude " editable="No" id="3" name="lat" oturns="No" value="55.0"/>
+      <var description="Bottom roughness" editable="No" id="4" name="z0" oturns="No" value="0.0001"/>
+      <var description="Ground temperature" editable="No" id="5" name="t0" oturns="No" value="288.15"/>
+      <var description="Inverse Monin-Obukhov lengthscale" editable="No" id="6" name="Lmoinv" oturns="No" value="125.0"/>
+      <var description="Velocity scale (needed for stable)" editable="No" id="7" name="ustar" oturns="No" value="0.241"/>
+      <var description="Temperature scale (needed for stable)" editable="No" id="8" name="tstar" oturns="No" value="0.033"/>
+      <var description="Boundary layer height (needed for stable)" editable="No" id="9" name="zi" oturns="No" value="201.0"/>
+      <var description="Precursor Max number of timesteps" editable="No" id="10" name="precntmax" oturns="No" value="1000000"/>
     </notebook>
     <omega>
       <omega_x>0</omega_x>
@@ -204,16 +176,39 @@
     <faces_cutting status="off"/>
     <joining/>
     <mesh_cartesian>
-      <x_direction law="constant" max="1.0" min="0.0" ncells="1" prog="1.0"/>
-      <y_direction law="constant" max="1.0" min="0.0" ncells="1" prog="1.0"/>
-      <z_direction law="constant" max="1.0" min="0.0" ncells="1" prog="1.0"/>
+      <x_direction law="constant" max="10.0" min="-10.0" ncells="1" prog="1.0"/>
+      <y_direction law="constant" max="10.0" min="-10.0" ncells="1" prog="1.0"/>
+      <z_direction law="geometric" max="26000" min="0.0" ncells="1000" prog="1.0027"/>
     </mesh_cartesian>
-    <mesh_origin choice="mesh_import"/>
+    <mesh_origin choice="mesh_cartesian"/>
     <mesh_smoothing status="off"/>
-    <meshes_list>
-      <mesh name="mesh_for_cs_test.med"/>
-    </meshes_list>
-    <periodicity/>
+    <meshes_list/>
+    <periodicity>
+      <face_periodicity mode="translation" name="1">
+        <fraction>0.1</fraction>
+        <plane>25</plane>
+        <selector>X0 or X1</selector>
+        <translation>
+          <translation_x>20</translation_x>
+          <translation_y>0</translation_y>
+          <translation_z>0</translation_z>
+        </translation>
+        <verbosity>1</verbosity>
+        <visualization>1</visualization>
+      </face_periodicity>
+      <face_periodicity mode="translation" name="2">
+        <fraction>0.1</fraction>
+        <plane>25</plane>
+        <selector>Y0 or Y1</selector>
+        <translation>
+          <translation_x>0</translation_x>
+          <translation_y>20</translation_y>
+          <translation_z>0</translation_z>
+        </translation>
+        <verbosity>1</verbosity>
+        <visualization>1</visualization>
+      </face_periodicity>
+    </periodicity>
     <thin_walls/>
     <volumic_conditions>
       <zone groundwater_law="off" head_losses="off" id="1" initialization="off" label="all_cells" momentum_source_term="off" physical_properties="on" porosity="off" scalar_source_term="off" solid="off" thermal_source_term="off">all[]</zone>
@@ -230,18 +225,18 @@
       <meteo_data>meteo_file</meteo_data>
       <meteo_dlmo>0</meteo_dlmo>
       <meteo_psea>101325</meteo_psea>
-      <meteo_t0>287.59</meteo_t0>
-      <meteo_uref>5</meteo_uref>
+      <meteo_t0>296.65</meteo_t0>
+      <meteo_uref>10</meteo_uref>
       <meteo_ustar>-1</meteo_ustar>
-      <meteo_z0>0.05</meteo_z0>
-      <meteo_zref>10</meteo_zref>
+      <meteo_z0>0.1</meteo_z0>
+      <meteo_zref>500</meteo_zref>
       <property label="RealTemp" name="real_temperature"/>
       <read_meteo_data status="on"/>
-      <start_day>94</start_day>
+      <start_day>188</start_day>
       <start_hour>13</start_hour>
-      <start_min>55</start_min>
-      <start_sec>49</start_sec>
-      <start_year>2022</start_year>
+      <start_min>40</start_min>
+      <start_sec>17</start_sec>
+      <start_year>2023</start_year>
       <wind_direction>270</wind_direction>
     </atmospheric_flows>
     <compressible_model model="off"/>
@@ -299,27 +294,20 @@
     <turbulence model="k-epsilon-PL">
       <gravity_terms status="on"/>
       <initialization choice="reference_value" zone_id="1"/>
-      <property label="TurbVisc" name="turbulent_viscosity">
-        <probes_recording status="off"/>
-      </property>
+      <property label="TurbVisc" name="turbulent_viscosity"/>
       <reference_velocity>1</reference_velocity>
       <variable label="epsilon" name="epsilon">
         <blending_factor>0</blending_factor>
-        <order_scheme choice="upwind"/>
-        <probes_recording status="off"/>
         <rhs_reconstruction>1</rhs_reconstruction>
-        <solver_choice choice="symmetric_gauss_seidel"/>
       </variable>
       <variable label="k" name="k">
         <blending_factor>0</blending_factor>
-        <order_scheme choice="upwind"/>
-        <probes_recording status="off"/>
         <rhs_reconstruction>1</rhs_reconstruction>
-        <solver_choice choice="symmetric_gauss_seidel"/>
       </variable>
       <wall_function>3</wall_function>
     </turbulence>
     <velocity_pressure>
+      <initialization/>
       <property label="Stress" name="stress" support="boundary"/>
       <property label="Stress, normal" name="stress_normal" support="boundary">
         <postprocessing_recording status="off"/>
@@ -327,19 +315,13 @@
       <property label="Stress, tangential" name="stress_tangential" support="boundary">
         <postprocessing_recording status="off"/>
       </property>
-      <property label="total_pressure" name="total_pressure">
-        <probes_recording status="off"/>
-      </property>
+      <property label="total_pressure" name="total_pressure"/>
       <property label="Yplus" name="yplus" support="boundary"/>
       <variable label="Pressure" name="pressure">
-        <listing_printing status="off"/>
-        <postprocessing_recording status="off"/>
-        <probes_recording status="off"/>
         <rhs_reconstruction>2</rhs_reconstruction>
       </variable>
       <variable dimension="3" label="Velocity" name="velocity">
         <blending_factor>1</blending_factor>
-        <probes_recording status="off"/>
         <rhs_reconstruction>1</rhs_reconstruction>
         <solver_choice choice="symmetric_gauss_seidel"/>
       </variable>
