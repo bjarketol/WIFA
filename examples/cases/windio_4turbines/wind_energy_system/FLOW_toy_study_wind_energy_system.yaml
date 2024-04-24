@@ -5,7 +5,7 @@ attributes:
   flow_model:
     name: wayve
   analyses:
-    properties: !include settings
+    properties: !include FLOW_toy_study_analysis.yaml
 
   outputs:
     output_folder: results"
