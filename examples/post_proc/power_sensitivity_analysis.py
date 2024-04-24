@@ -12,6 +12,7 @@ import scipy as scipy
 import xarray as xr
 import openturns as ot
 import openturns.viewer as viewer
+import scipy.stats as stats
 from build_PCE import *
 
 #########Load the data############
@@ -63,6 +64,30 @@ for i in range(number_of_turbines):
             else:
                 power_1st_sobol_indices[i,v] =  chaosSI.getSobolIndex(v)
                 power_total_sobol_indices[i,v] =  chaosSI.getSobolTotalIndex(v)
+
+
+#########Plot power###############
+fig, ax = plt.subplots(1,4,figsize=(13,3))
+xs=np.linspace(0, 13, num=100)
+for j in range(number_of_turbines):
+    # plot and compare to histogram
+    
+    #plot and compare empirical distributions
+    power_KDE = stats.gaussian_kde(power_table[:,j]/10**6, bw_method='silverman')
+    #
+    ax[j].set_title("Turbine "+str(j+1), fontsize=15)
+    ax[j].grid(True)
+    ax[j].plot(xs, power_KDE(xs))
+    #
+    ax[j].set_xlabel("Power (MW)")
+    ax[j].set_ylabel("PDF")
+    ax[j].tick_params(axis='both', which='major', labelsize=15)
+    ax[j].xaxis.label.set_size(15)
+    ax[j].yaxis.label.set_size(15)
+    
+    
+plt.tight_layout()
+plt.show()
 
 #########Plot Sobol indices############
 colors=['#002d74', '#e85113']
