@@ -70,13 +70,48 @@ void
 yawing2(cs_real_t *coords, cs_real_t wind_dir, cs_real_t *mean_coords, cs_real_t *yawed_coords) {
   //
   const cs_real_t dpi = atan(1.0)*4.0;
-  cs_real_t ra_wind_dir= (270.0-wind_dir)*dpi/180.0; //radian absolute wind_dir  
+  cs_real_t ra_wind_dir= (270.0-wind_dir)*dpi/180.0; //radian absolute wind_dir
   //
   yawed_coords[0] = cos(ra_wind_dir)*(coords[0]-mean_coords[0]) - sin(ra_wind_dir)*(coords[1]-mean_coords[1]) + mean_coords[0];
   //
   yawed_coords[1] = sin(ra_wind_dir)*(coords[0]-mean_coords[0]) + cos(ra_wind_dir)*(coords[1]-mean_coords[1]) + mean_coords[1];
   //
   yawed_coords[2] = coords[2];
+}
+
+cs_real_t
+interp_ct_or_cp(cs_real_t *ct_or_cp_values, cs_real_t *ct_or_cp_speeds, \
+		cs_lnum_t number_of_values, cs_real_t disk_velocity) {
+  //
+  cs_real_t val_1, val_2, u_1, u_2;
+  cs_real_t interpolated_ct_or_cp;
+  val_1=ct_or_cp_values[0];
+  val_2=ct_or_cp_values[number_of_values-1];
+  u_1 = ct_or_cp_speeds[0];
+  u_2 = ct_or_cp_speeds[number_of_values-1];
+  if(disk_velocity<u_1 || disk_velocity>u_2) {
+    interpolated_ct_or_cp = 0.0;
+  }
+  else {
+    val_2 = ct_or_cp_values[0];
+    u_2 = ct_or_cp_speeds[0];
+    for (cs_lnum_t ct_count=1; ct_count < number_of_values; ct_count ++){
+      val_1= val_2;
+      u_1=u_2;
+      //
+      val_2= ct_or_cp_values[ct_count];
+      u_2=ct_or_cp_speeds[ct_count];
+      //
+      if(disk_velocity>=u_1 && disk_velocity<=u_2) {
+	/* //linear interpolation between two values;*/
+	cs_real_t a = (val_2 - val_1)/(u_2-u_1);
+	cs_real_t b = val_1 - a*u_1;
+	interpolated_ct_or_cp = a*disk_velocity+b;
+	break;
+      }
+    }
+  }
+  return interpolated_ct_or_cp;
 }
 
 void
@@ -89,29 +124,32 @@ cs_user_source_terms(cs_domain_t  *domain,
   const cs_real_3_t *cell_cen
     = (const cs_real_3_t *)domain->mesh_quantities->cell_cen;
 
-  const cs_mesh_t *m = domain->mesh;  
+  const cs_mesh_t *m = domain->mesh;
   const cs_mesh_quantities_t *mq = cs_glob_mesh_quantities;
   const cs_lnum_t n_cells = m->n_cells;
   const cs_lnum_t n_cells_ext = m->n_cells_with_ghosts;
-  
+
   const cs_real_t *cpro_rom = CS_F_(rho)->val;
   const cs_real_3_t *vel = CS_F_(vel)->val;
 
   const cs_field_t *fld = cs_field_by_id(f_id);
- 
+
   /*physical variables for density variation */
   cs_real_t *source_term_x = cs_field_by_name("source_term_x")->val;
   cs_real_t *source_term_y = cs_field_by_name("source_term_y")->val;
+  cs_real_t *source_term_z = cs_field_by_name("source_term_z")->val;
   cs_real_t *st_coeff = cs_field_by_name("source_term_coeff")->val;
+  cs_real_t *nudamp_top = cs_field_by_name("nudamp_top")->val;
+  cs_real_t *nudamp_bound = cs_field_by_name("nudamp_bound")->val;
   cs_lnum_t   cell_id = 0;
   double domain_volume = 0.;
-  
+
   cs_time_step_t *ts = cs_get_glob_time_step();
 
 
   /******************************************
    * READ Wind Turbines from coordinates file
-   *******************************************/  
+   *******************************************/
   //file name and tables
   char WT_file_name[1024];
   sprintf(WT_file_name,"turbines_info.csv");
@@ -142,13 +180,11 @@ cs_user_source_terms(cs_domain_t  *domain,
   cs_real_t *WT_z_coords=NULL;
   cs_real_t *WT_diameters=NULL;
   cs_lnum_t *WT_types=NULL;
-  cs_real_t *power_values=NULL;
   BFT_MALLOC(WT_x_coords, n_WT, cs_real_t);
   BFT_MALLOC(WT_y_coords, n_WT, cs_real_t);
   BFT_MALLOC(WT_z_coords, n_WT, cs_real_t);
   BFT_MALLOC(WT_diameters, n_WT, cs_real_t);
   BFT_MALLOC(WT_types, n_WT, cs_lnum_t);
-  BFT_MALLOC(power_values, n_WT, cs_real_t);
 
    //read and parse this file
   stream = fopen(WT_file_name, "r");
@@ -162,14 +198,14 @@ cs_user_source_terms(cs_domain_t  *domain,
     if (++line_count >= n_WT+1)
       break;
 
-    //skip header 
+    //skip header
     if(i>0) {
       // parse line
       tok = strtok(line, sep);
       if (tok == NULL)
 	continue;
       WT_x_coords[i-1]=atof(tok);
-    
+
       tok = strtok(NULL, sep);
       if (tok == NULL)
 	continue;
@@ -189,7 +225,7 @@ cs_user_source_terms(cs_domain_t  *domain,
       if (tok == NULL)
       	continue;
       WT_types[i-1]=atoi(tok);
-      
+
       //bft_printf("Turbine x,y,z,diameter,type= %.2f,%.2f,%.2f,%.2f,%d \n ",WT_x_coords[i-1],WT_y_coords[i-1],WT_z_coords[i-1],WT_diameters[i-1],WT_types[i-1]);
     }
   }
@@ -208,6 +244,9 @@ cs_user_source_terms(cs_domain_t  *domain,
   /******************************************
    * READ Cp and Ct from data files
    *******************************************/
+  //for IEC 61400-12 air density correction
+  cs_real_t standard_rho = 1.225;
+  //
   char cp_file_names[WT_type_number][1024];
   char ct_file_names[WT_type_number][1024];
   cs_real_t *ct_speeds[WT_type_number];
@@ -217,9 +256,9 @@ cs_user_source_terms(cs_domain_t  *domain,
   cs_lnum_t *n_ct[WT_type_number];
   cs_lnum_t *n_cp[WT_type_number];
   for (cs_lnum_t WT_type_count=0; WT_type_count < WT_type_number; WT_type_count ++){
-    sprintf(ct_file_names[WT_type_count],"ct_table_type%d.csv",WT_type_count+1);
-    sprintf(cp_file_names[WT_type_count],"cp_table_type%d.csv",WT_type_count+1);
-    
+    sprintf(ct_file_names[WT_type_count],"ctstar_table_type%d.csv",WT_type_count+1);
+    sprintf(cp_file_names[WT_type_count],"cpstar_table_type%d.csv",WT_type_count+1);
+
     //calculate number of lines in the file
     FILE* stream_ct = fopen(ct_file_names[WT_type_count], "r");
     char *tok2;
@@ -256,8 +295,9 @@ cs_user_source_terms(cs_domain_t  *domain,
       tok3 = strtok(line, sep3);
       if (tok3 == NULL)
   	continue;
-      ct_speeds[WT_type_count][i]=atof(tok3)*pow(1.260/cs_glob_fluid_properties->ro0,1./3.);
-    
+      //IEC 61400-12 air density correction
+      ct_speeds[WT_type_count][i]=atof(tok3)*pow(standard_rho/cs_glob_fluid_properties->ro0,1./3.);
+
       tok3 = strtok(NULL, sep3);
       if (tok3 == NULL)
   	continue;
@@ -302,15 +342,16 @@ cs_user_source_terms(cs_domain_t  *domain,
       tok5 = strtok(line, sep5);
       if (tok5 == NULL)
   	continue;
-      cp_speeds[WT_type_count][i]=atof(tok5)*pow(1.260/cs_glob_fluid_properties->ro0,1./3.);
-    
+      //IEC 61400-12 air density correction
+      cp_speeds[WT_type_count][i]=atof(tok5)*pow(standard_rho/cs_glob_fluid_properties->ro0,1./3.);
+
       tok5 = strtok(NULL, sep5);
       if (tok5 == NULL)
   	continue;
       cp_values[WT_type_count][i]=atof(tok5);
     }
     fclose(stream_cp);
-    
+
     if ((ts->nt_cur) <= 1){
       bft_printf("Turbine type %d files are %s and %s, with %d ct values and %d cp values \n ",WT_type_count+1,
 		 ct_file_names[WT_type_count],cp_file_names[WT_type_count],n_ct[WT_type_count], n_cp[WT_type_count]);
@@ -321,7 +362,7 @@ cs_user_source_terms(cs_domain_t  *domain,
    *******************************************/
   char name[128];
   char criteria[100];
-  
+
   /* For velocity
    * ============ */
 
@@ -333,7 +374,6 @@ cs_user_source_terms(cs_domain_t  *domain,
                  cs_field_get_label(CS_F_(vel)));
     }
     const cs_real_t dpi = atan(1.0)*4.0;
-    cs_real_t wind_dir=cs_glob_atmo_option->meteo_angle;
     //
     cs_real_3_t *_st_exp = (cs_real_3_t *)st_exp;
     cs_real_33_t *_st_imp = (cs_real_33_t *)st_imp;
@@ -399,14 +439,15 @@ cs_user_source_terms(cs_domain_t  *domain,
       cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &vgeo);
       cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_x);
       cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_y);
-      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_z);      
+      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_z);
       if ((ts->nt_cur) <= 1){
 	bft_printf("Geostrophic wind interpolated from prescribed meteo velocity at point (x,y,z)=(%.2f,%.2f,%.2f) is (u,v)=(%.2f,%.2f).\n ",closest_x,closest_y,closest_z,ugeo,vgeo);
       }
     }
     //
     const cs_real_t  lat = cs_notebook_parameter_value_by_name("lat");
-    const cs_real_t fcorio = 2.0*7.292115e-5*sin(lat*dpi/180.0);
+    cs_real_t fcorio;
+    fcorio = 2.0*7.292115e-5*sin(lat*dpi/180.0);
 
     /* Coriolis force */
     if (cs_notebook_parameter_value_by_name("Coriolis") > 0) {
@@ -419,17 +460,75 @@ cs_user_source_terms(cs_domain_t  *domain,
   	_st_imp[c_id][0][1] = cell_vol[c_id]*cpro_rom[c_id]*fcorio;
       }
     }
+    /* Damping layer */
+    if (cs_notebook_parameter_value_by_name("damping") > 0) {
+      const cs_real_t  gamma = cs_notebook_parameter_value_by_name("gamma");
+      const cs_real_t  nura = cs_notebook_parameter_value_by_name("nura");
+      const cs_real_t  lra = cs_notebook_parameter_value_by_name("Lra");
+      const cs_real_t  sra = cs_notebook_parameter_value_by_name("Sra");
+      //
+      const cs_real_t  start_rad = cs_notebook_parameter_value_by_name("start_rad");
+      //
+      const cs_real_t  zra = zsommet - lra;
+      cs_real_t pref = cs_glob_atmo_constants->ps;
+      cs_real_t rair = cs_glob_fluid_properties->r_pg_cnst;
+      cs_real_t cp0 = cs_glob_fluid_properties->cp0;
+      cs_real_t rscp = rair/cp0;
+      cs_real_t psea = cs_glob_atmo_option->meteo_psea;
+      cs_real_t theta0 = cs_glob_atmo_option->meteo_t0 * pow(pref/psea, rscp);
+      int nbmett = cs_glob_atmo_option->nbmett; //nprofz
+      int nbmetm = cs_glob_atmo_option->nbmetm; //nproft, dim_u_met, dim_pot_t_met, ..
+      for (cs_lnum_t c_id = 0; c_id < n_cells; c_id++) {
+	//TODO : deal with case where domain is not centered
+	cs_real_t x = cell_cen[c_id][0];
+	cs_real_t y = cell_cen[c_id][1];
+	cs_real_t z = cell_cen[c_id][2];
+	cs_real_t radius = sqrt(pow(x, 2) + pow(y, 2));
+	cs_real_t umet, vmet;
+	if(radius>start_rad){
+	  //TODO : deal with case where no meteo file
+	  umet = cs_intprf(nbmett, //nprofz
+			   nbmetm, //nproft
+			   cs_glob_atmo_option->z_dyn_met, //profz
+			   cs_glob_atmo_option->time_met, //proft
+			   cs_glob_atmo_option->u_met, //profu
+			   z, //xz
+			   cs_glob_time_step->t_cur); //t
+	  vmet = cs_intprf(nbmett, //nprofz
+			   nbmetm, //nproft
+			   cs_glob_atmo_option->z_dyn_met, //profz
+			   cs_glob_atmo_option->time_met, //proft
+			   cs_glob_atmo_option->v_met, //profv
+			   z, //xz
+			   cs_glob_time_step->t_cur); //t
+	  nudamp_bound[c_id] = nura*sqrt(9.81*gamma/theta0)*(1-cos(dpi/sra*(radius-start_rad)/lra));
+	  _st_exp[c_id][0]    += -cell_vol[c_id]*cpro_rom[c_id]*nudamp_bound[c_id]*(vel[c_id][0]-umet);
+	  _st_exp[c_id][1]    += -cell_vol[c_id]*cpro_rom[c_id]*nudamp_bound[c_id]*(vel[c_id][1]-vmet);
+	  _st_exp[c_id][2]    += -cell_vol[c_id]*cpro_rom[c_id]*nudamp_bound[c_id]*(vel[c_id][2]);
+	}
+	if(z>=zra) {
+	  nudamp_top[c_id] = nura*sqrt(9.81*gamma/theta0)*(1-cos(dpi/sra*(z-zra)/lra));
+	  _st_exp[c_id][0]    += -cell_vol[c_id]*cpro_rom[c_id]*nudamp_top[c_id]*(vel[c_id][0]-ugeo);
+	  _st_exp[c_id][1]    += -cell_vol[c_id]*cpro_rom[c_id]*nudamp_top[c_id]*(vel[c_id][1]-vgeo);
+	  _st_exp[c_id][2]    += -cell_vol[c_id]*cpro_rom[c_id]*nudamp_top[c_id]*(vel[c_id][2]);
+	}
+      }
+    }
     //
     cs_real_t WT_volume[n_WT];
     cs_real_t WT_ux[n_WT];
     cs_real_t WT_uy[n_WT];
     cs_real_t WT_uz[n_WT];
     cs_real_t WT_u[n_WT];
+    cs_real_t WT_rho[n_WT];
+    cs_real_t WT_hub_u[n_WT];
+    cs_real_t WT_dir[n_WT];
+    cs_real_t WT_ra_dir[n_WT];
     cs_real_t u_sonde,u_x,u_y;
-    cs_real_t WT_ct[n_WT];
     cs_real_t WT_ctstar[n_WT];
-    cs_real_t WT_cp[n_WT];
     cs_real_t WT_cpstar[n_WT];
+    cs_real_t WT_thrust[n_WT];
+    cs_real_t power_values_cpstar[n_WT];
     //
     cs_real_t AD_mesh_cell_size = cs_notebook_parameter_value_by_name("AD_mesh_cell_size");
     cs_real_t AD_half_rotor_thickness = 1.2*AD_mesh_cell_size;
@@ -438,11 +537,17 @@ cs_user_source_terms(cs_domain_t  *domain,
     /******************LOOP ON TURBINES*************************/
     for (cs_lnum_t WT_count=0; WT_count < n_WT; WT_count ++){
       WT_u[WT_count]=0.0;
-      WT_ct[WT_count]=0.0;
+      WT_rho[WT_count]=0.0,
+      WT_ux[WT_count]=0.0;
+      WT_uy[WT_count]=0.0;
+      WT_uz[WT_count]=0.0;
+      WT_hub_u[WT_count]=0.0;
+      WT_dir[WT_count]=0.0;
+      WT_ra_dir[WT_count]=0.0;
       WT_ctstar[WT_count]=0.0;
-      WT_cp[WT_count]=0.0;
       WT_cpstar[WT_count]=0.0;
-      power_values[WT_count]=0.0;
+      WT_thrust[WT_count]=0.0;
+      power_values_cpstar[WT_count]=0.0;
     }
     cs_lnum_t start_WT_count, end_WT_count;
     if (cs_notebook_parameter_value_by_name("isol")>0) {
@@ -455,12 +560,20 @@ cs_user_source_terms(cs_domain_t  *domain,
     }
 
     cs_real_t mean_coords[3];
+    cs_real_t interp_value;
+    cs_real_t wind_dir=cs_glob_atmo_option->meteo_angle;
+    cs_real_t ra_wind_dir= (270.0-wind_dir)*dpi/180.0; //radian absolute wind_dir
     //
     for (cs_lnum_t WT_count=start_WT_count; WT_count < end_WT_count; WT_count ++){
       //
       cs_real_t WT_d = WT_diameters[WT_count];
       cs_real_t WT_radius = WT_d/2.;
       cs_real_t WT_surf = dpi*pow(WT_radius,2);
+      cs_lnum_t local_WT_type = WT_types[WT_count]-1;
+      cs_lnum_t local_n_ct = n_ct[local_WT_type];
+      cs_lnum_t local_n_cp = n_cp[local_WT_type];
+
+
       //Get AD zone and define source term in it
       /***********************************************************/
       //get Actuator Disk zone by name
@@ -468,6 +581,49 @@ cs_user_source_terms(cs_domain_t  *domain,
       cs_zone_t *z = cs_volume_zone_by_name_try(name);
       //
       WT_volume[WT_count]=0.0;
+      WT_u[WT_count]=0.0;
+      WT_ux[WT_count]=0.0;
+      WT_uy[WT_count]=0.0;
+      WT_uz[WT_count]=0.0;
+      WT_rho[WT_count]=0.0;
+      WT_dir[WT_count]=0.0;
+      WT_ra_dir[WT_count]=0.0;
+      WT_hub_u[WT_count]=0.0;
+
+      //Compute local Wind direction at Turbine hub height
+      cs_real_t closest_ux, closest_uy, closest_uz;
+      cs_lnum_t closest_id;
+      int closest_id_rank;
+      cs_real_t xyz_ref[3] = {WT_x_coords[WT_count], WT_y_coords[WT_count], WT_z_coords[WT_count]};
+      cs_geom_closest_point(m->n_cells,
+  			    (const cs_real_3_t *)(mq->cell_cen),
+  			    xyz_ref,
+  			    &closest_id,
+  			    &closest_id_rank);
+
+      if (closest_id_rank == cs_glob_rank_id) {
+  	closest_ux = vel[closest_id][0];
+  	closest_uy = vel[closest_id][1];
+  	closest_uz = vel[closest_id][2];
+      }
+      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_ux);
+      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_uy);
+      cs_parall_bcast(closest_id_rank, 1, CS_REAL_TYPE, &closest_uz);
+      WT_hub_u[WT_count]=sqrt(pow(closest_ux,2)+pow(closest_uy,2));
+      WT_dir[WT_count]=270.0 - atan2(closest_uy,closest_ux)*180.0/dpi; //wind origin (meteo)
+      WT_ra_dir[WT_count]=atan2(closest_uy,closest_ux); //radian absolute wind_dir
+
+      cs_real_t cos_wind_dir, sin_wind_dir;
+      if(cs_notebook_parameter_value_by_name("control")>0) {
+	cos_wind_dir = cos(WT_ra_dir[WT_count]);
+	sin_wind_dir = sin(WT_ra_dir[WT_count]);
+      }
+      else {
+	cos_wind_dir = cos(ra_wind_dir);
+	sin_wind_dir = sin(ra_wind_dir);
+      }
+
+      //
       for (cs_lnum_t nc = 0; nc < z->n_elts; nc++) {
     	cs_lnum_t c_id = z->elt_ids[nc];
     	//
@@ -484,26 +640,20 @@ cs_user_source_terms(cs_domain_t  *domain,
     	mean_coords[0] = 0.0;
     	mean_coords[1] = 0.0;
     	mean_coords[2] = 0.0;
-    	yawing2(dxdydz, 360.0 - wind_dir, mean_coords, deyawed_dxdydz);
+
+	if(cs_notebook_parameter_value_by_name("control")>0) {
+	  yawing2(dxdydz, 360.0 -  WT_dir[WT_count], mean_coords, deyawed_dxdydz);
+	}
+	else {
+	  yawing2(dxdydz, 360.0 - wind_dir, mean_coords, deyawed_dxdydz);
+	}
+
     	cs_real_t deyawed_x_dist,deyawed_y_dist,deyawed_z_dist;
     	deyawed_x_dist = deyawed_dxdydz[0];
     	deyawed_y_dist = deyawed_dxdydz[1];
     	deyawed_z_dist = deyawed_dxdydz[2];
-	
     	cs_real_t cell_radius = sqrt(pow(deyawed_y_dist,2)+pow(deyawed_z_dist,2));
     	//
-	
-    	/* //calculate linear decay until 0 at cancel_dist
-    	/* //1 = a*WT_radius + b; */
-    	/* //0 = a*(WT_radius + cancel_dist) + b; */
-    	/* //1 = a*(-cancel_dist); */
-    	/* //a = -1/cancel_dist; */
-    	/* //b = -a*(WT_radius + cancel_dist); */
-    	//
-    	cs_real_t a_radius = -1.0/cancel_dist;
-    	cs_real_t b_radius = -a_radius*(WT_radius + cancel_dist);
-    	cs_real_t a_xdist = -1.0/cancel_dist;
-    	cs_real_t b_xdist = -a_xdist*(AD_half_rotor_thickness + cancel_dist);
     	st_coeff[c_id]=0.0;
     	if (cs_notebook_parameter_value_by_name("st_method")==0) {
     	  if (cell_radius<=WT_radius &&
@@ -515,7 +665,7 @@ cs_user_source_terms(cs_domain_t  *domain,
     	    st_coeff[c_id]= 0.0;
     	  }
     	  else {
-    	    st_coeff[c_id]= 0.2;
+    	    st_coeff[c_id]= 0.0; //worked with 0.2
     	  }
     	  /* else if (fabs(deyawed_x_dist)<=AD_half_rotor_thickness + select_dist)  { */
     	  /*   st_coeff[c_id]=fmax(a_xdist*fabs(deyawed_x_dist) + b_xdist,0.0); */
@@ -524,158 +674,107 @@ cs_user_source_terms(cs_domain_t  *domain,
     	  /*   st_coeff[c_id]= fmax(a_radius*cell_radius + b_radius,0.0); */
     	  /* } */
     	}
-    	//Ren et al 2019
-    	else if (cs_notebook_parameter_value_by_name("st_method")==1) {
-    	  cs_real_t D0 = -4.0/3.0;
-    	  cs_real_t D1 = -2.0/9.0;
-    	  cs_real_t b=cell_radius/WT_radius;
-	    
-    	  if (cell_radius<=WT_radius && fabs(deyawed_x_dist)<=AD_half_rotor_thickness) {
-    	    st_coeff[c_id]= (D0+D1*pow(b,2)+pow(b,4))/(D0+0.5*D1+1./3.);
-    	  }
-    	  else {
-    	    st_coeff[c_id]= 0.0;
-    	  }
-    	}
     	WT_volume[WT_count]=WT_volume[WT_count]+st_coeff[c_id]*cell_vol[c_id];
+      	WT_ux[WT_count] += vel[c_id][0]*(st_coeff[c_id]*cell_vol[c_id]);
+      	WT_uy[WT_count] += vel[c_id][1]*(st_coeff[c_id]*cell_vol[c_id]);
+      	WT_uz[WT_count] += vel[c_id][2]*(st_coeff[c_id]*cell_vol[c_id]);
+        WT_rho[WT_count] += cpro_rom[c_id]*(st_coeff[c_id]*cell_vol[c_id]);
+
       }
       cs_parall_sum(1, CS_REAL_TYPE, &WT_volume[WT_count]);
-      if ((ts->nt_cur) <= 1){
-	bft_printf(" Turbine %d source term zone volume is %.2f \n ",WT_count+1, WT_volume[WT_count]);
-      }
-	      
-      WT_u[WT_count]=0.0;
-      WT_ux[WT_count]=0.0;
-      WT_uy[WT_count]=0.0;
-      WT_uz[WT_count]=0.0;
-      for (cs_lnum_t nc =0; nc < z->n_elts; nc++){
-      	cs_lnum_t c_id = z->elt_ids[nc];
-      	WT_ux[WT_count] = WT_ux[WT_count] + vel[c_id][0]*st_coeff[c_id]*cell_vol[c_id]/WT_volume[WT_count];
-      	WT_uy[WT_count] = WT_uy[WT_count] + vel[c_id][1]*st_coeff[c_id]*cell_vol[c_id]/WT_volume[WT_count];
-      	WT_uz[WT_count] = WT_uz[WT_count] + vel[c_id][2]*st_coeff[c_id]*cell_vol[c_id]/WT_volume[WT_count];
-      }
       cs_parall_sum(1, CS_REAL_TYPE, &WT_ux[WT_count]);
       cs_parall_sum(1, CS_REAL_TYPE, &WT_uy[WT_count]);
       cs_parall_sum(1, CS_REAL_TYPE, &WT_uz[WT_count]);
-      WT_u[WT_count]=sqrt(pow(WT_ux[WT_count],2)+pow(WT_uy[WT_count],2)+pow(WT_uz[WT_count],2));
-      //bft_printf(" Velocities of WT %d are (ux,uy,umagn)=(%.4f,%.4f,%.4f) \n ",WT_count, WT_ux[WT_count],WT_uy[WT_count],WT_u[WT_count]);
+      cs_parall_sum(1, CS_REAL_TYPE, &WT_rho[WT_count]);
+      //
+      WT_ux[WT_count] = WT_ux[WT_count]/WT_volume[WT_count];
+      WT_uy[WT_count] = WT_uy[WT_count]/WT_volume[WT_count];
+      WT_uz[WT_count] = WT_uz[WT_count]/WT_volume[WT_count];
+      WT_rho[WT_count] = WT_rho[WT_count]/WT_volume[WT_count];
+      //WT_dir[WT_count]=270.0 - atan2(WT_uy[WT_count],WT_ux[WT_count])*180.0/dpi;
+      WT_u[WT_count]=sqrt(pow(WT_ux[WT_count],2)+pow(WT_uy[WT_count],2));
 
-      ////for testing
-      //cs_real_t ra_wind_dir= (270.0-wind_dir)*dpi/180.0; //radian absolute wind_dir
+      //
+      interp_value = interp_ct_or_cp(ct_values[local_WT_type], ct_speeds[local_WT_type], \
+		      local_n_ct, WT_u[WT_count]);
+      WT_ctstar[WT_count] = interp_value;
+
+      interp_value = interp_ct_or_cp(cp_values[local_WT_type], cp_speeds[local_WT_type], \
+		      local_n_cp, WT_u[WT_count]);
+      WT_cpstar[WT_count] = interp_value;
+
+      WT_thrust[WT_count] = 0.5*WT_rho[WT_count]*WT_surf*WT_ctstar[WT_count]*cs_math_pow2(WT_u[WT_count]);
+      power_values_cpstar[WT_count] = 0.5*WT_rho[WT_count]*WT_surf*WT_cpstar[WT_count]*cs_math_pow2(WT_u[WT_count])*WT_u[WT_count];
+      //save simple example
       //u_sonde=5.0;
-      //u_x = u_sonde*cos(ra_wind_dir);
-      //u_y = u_sonde*sin(ra_wind_dir);
-      //
+      //u_x = u_sonde*cos_wind_dir;
+      //u_y = u_sonde*sin_wind_dir;
 
-      cs_real_t ct_1, ct_2, ct_u_1, ct_u_2;
-      cs_lnum_t local_WT_type = WT_types[WT_count]-1;
-      cs_lnum_t local_n_ct = n_ct[local_WT_type];
-      ct_u_1 = ct_speeds[local_WT_type][0];
-      ct_u_2 = ct_speeds[local_WT_type][local_n_ct-1];
-      if(WT_u[WT_count]<ct_u_1 || WT_u[WT_count]>ct_u_2) {
-      	WT_ct[WT_count] = 0.0;
-      	WT_ctstar[WT_count] = 0.0;
-      }
-      else {
-      	ct_u_2 = ct_speeds[local_WT_type][0];
-      	ct_2 = ct_values[local_WT_type][0];
-      	for (cs_lnum_t ct_count=1; ct_count < local_n_ct; ct_count ++){
-      	  ct_u_1=ct_u_2;
-      	  ct_u_2=ct_speeds[local_WT_type][ct_count];
-      	  ct_1=ct_2;
-      	  ct_2=ct_values[local_WT_type][ct_count];
-      	  if(WT_u[WT_count]>=ct_u_1 && WT_u[WT_count]<=ct_u_2) {
-      	    /* //linear interpolation of ct between two values;*/
-	    /* //ct_1 = a*ct_u_1 + b; */
-      	    /* //ct_2 = a*ct_u_2 + b; */
-      	    /* //a = (ct_2 - ct_1)/(ct_u_2-ct_u_1); */
-      	    /* //b = ct_1 - a*ct_u_1; */
-      	    //
-      	    cs_real_t a_ct = (ct_2 - ct_1)/(ct_u_2-ct_u_1);
-      	    cs_real_t b_ct = ct_1 - a_ct*ct_u_1;
-      	    WT_ct[WT_count] = a_ct*WT_u[WT_count]+b_ct;
-      	    WT_ctstar[WT_count] = 4.0*WT_ct[WT_count]/pow(1+sqrt(1-WT_ct[WT_count]),2);
-      	    break;
-      	  }
-      	}
-      }
-      cs_real_t cp_1, cp_2, cp_u_1, cp_u_2;
-      cs_lnum_t local_n_cp = n_cp[local_WT_type];
-      cp_u_1 = cp_speeds[local_WT_type][0];
-      cp_u_2 = cp_speeds[local_WT_type][local_n_cp-1];
-      if(WT_u[WT_count]<cp_u_1 || WT_u[WT_count]>cp_u_2) {
-      	WT_cp[WT_count] = 0.0;
-      	WT_cpstar[WT_count] = 0.0;
-      }
-      else {
-      	cp_u_2 = cp_speeds[local_WT_type][0];
-      	cp_2 = cp_values[local_WT_type][0];
-      	for (cs_lnum_t cp_count=1; cp_count < local_n_cp; cp_count ++){
-      	  cp_u_1=cp_u_2;
-      	  cp_u_2=cp_speeds[local_WT_type][cp_count];
-      	  cp_1=cp_2;
-      	  cp_2=cp_values[local_WT_type][cp_count];
-      	  if(WT_u[WT_count]>=cp_u_1 && WT_u[WT_count]<=cp_u_2) {
-      	    /* //linear interpolation of cp between two values; */
-	    /* //cp_1 = a*cp_u_1 + b; */
-      	    /* //cp_2 = a*cp_u_2 + b; */
-      	    /* //a = (cp_2 - cp_1)/(cp_u_2-cp_u_1); */
-      	    /* //b = cp_1 - a*cp_u_1; */
-      	    //
-      	    cs_real_t a_cp = (cp_2 - cp_1)/(cp_u_2-cp_u_1);
-      	    cs_real_t b_cp = cp_1 - a_cp*cp_u_1;
-      	    WT_cp[WT_count] = a_cp*WT_u[WT_count]+b_cp;
-      	    WT_cpstar[WT_count] = 8.0*WT_cp[WT_count]/pow(1+sqrt(1-WT_ct[WT_count]),3);
-      	    break;
-      	  }
-      	}
-      }      
-      //bft_printf(" Velocity, CT and CP of WT %d are %.4f, %.4f and %.4f\n ",WT_count, WT_u[WT_count], WT_ct[WT_count], WT_cp[WT_count]);
-      //
-      //WT_cpstar as u is taken at wind turbine position, not freestream
-      power_values[WT_count] = 0.5*cs_glob_fluid_properties->ro0*WT_surf*WT_cpstar[WT_count]*pow(WT_u[WT_count],3);
       for (cs_lnum_t nc = 0; nc < z->n_elts; nc++) {
     	cs_lnum_t c_id = z->elt_ids[nc];
     	//WT_ctstar as u is taken at wind turbine position, not freestream
-	cs_real_t AD_coeff=0.5*cpro_rom[c_id]*WT_surf*WT_ctstar[WT_count];
-    	// explicit source term
-    	_st_exp[c_id][0]    += -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*WT_u[WT_count]*WT_ux[WT_count]/WT_volume[WT_count];
-    	//_st_exp[c_id][1]    += -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*WT_u[WT_count]*WT_uy[WT_count]/WT_volume[WT_count];
-    	source_term_x[c_id] = _st_exp[c_id][0];
-    	//source_term_y[c_id] = _st_exp[c_id][1];
-	
-    	// semi implicite source terms
-    	/* _st_exp[c_id][0]    += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(-1*u_x*u_x*u_x/u_sonde - u_x*u_y*u_y/u_sonde)/WT_volume[WT_count]; */
-    	/* _st_exp[c_id][1]    += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(-1*u_y*u_y*u_y/u_sonde - u_y*u_x*u_x/u_sonde)/WT_volume[WT_count]; */
-	
-    	/* _st_imp[c_id][0][0] += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_sonde + u_x*u_x/u_sonde)/WT_volume[WT_count]; */
-    	/* _st_imp[c_id][0][1] += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_x*u_y/u_sonde)/WT_volume[WT_count]; */
-	
-    	/* _st_imp[c_id][1][0] += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_y*u_x/u_sonde)/WT_volume[WT_count]; */
-    	/* _st_imp[c_id][1][1] += -cell_vol[c_id]*AD_coeff*st_coeff[c_id]*(u_sonde+u_y*u_y/u_sonde)/WT_volume[WT_count]; */
-    	/* source_term_x[c_id] += -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*u_sonde*u_x/WT_volume[WT_count]; */
-    	/* source_term_y[c_id] += -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*u_sonde*u_y/WT_volume[WT_count]; */
-	
+	cs_real_t AD_coeff=0.5*WT_rho[WT_count]*WT_surf*WT_ctstar[WT_count];
+    	//_st_exp[c_id][0]    += -(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*cs_math_pow2(WT_u[WT_count])/WT_volume[WT_count];
+    	//_st_exp[c_id][1]    += 0.0;
+	//
+    	_st_exp[c_id][0]    += -cos_wind_dir*(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*pow(WT_u[WT_count],2)/WT_volume[WT_count];
+    	_st_exp[c_id][1]    += -sin_wind_dir*(cell_vol[c_id]*st_coeff[c_id])*AD_coeff*pow(WT_u[WT_count],2)/WT_volume[WT_count];
       }
+
+      if ((ts->nt_cur) <= 1){
+	bft_printf(" Turbine %d source term zone volume is %.2f \n ",WT_count+1, WT_volume[WT_count]);
+      }
+
     }
-    
-    cs_real_t total_power;
-    total_power=0.0;
+
+    for (cs_lnum_t c_id = 0; c_id < n_cells; c_id++) {
+      source_term_x[c_id] = _st_exp[c_id][0];
+      source_term_y[c_id] = _st_exp[c_id][1];
+      source_term_z[c_id] = _st_exp[c_id][2];
+    }
+    cs_real_t total_power_cpstar;
+    total_power_cpstar=0.0;
     for (cs_lnum_t WT_count=0; WT_count < n_WT; WT_count ++){
-      total_power=total_power + power_values[WT_count];
+      total_power_cpstar=total_power_cpstar + power_values_cpstar[WT_count];
     }
     //if ((ts->nt_cur) == (ts->nt_max)-1){
-    if ((ts->nt_cur%10) == 0){
-      FILE* stream10 = fopen("power.txt", "w");
-      fprintf(stream10,"#total wind farm power is %.4f\n",total_power);
-      fprintf(stream10,"#wind_turbine,xhub,yhub,zhub,turbine_diameter,turbine_type,velocity, ct, ct*, cp, cp*, power\n");
+    cs_lnum_t WTntprint=cs_notebook_parameter_value_by_name("WTntprint");
+    if ((ts->nt_cur%WTntprint) == 0){
+      char power_file_name[1024];
+      sprintf(power_file_name,"power_iter%d.csv",ts->nt_cur);
+      FILE* stream10 = fopen(power_file_name, "w");
+      fprintf(stream10,"#total wind farm power calculated with cp_star, is %.4f\n",total_power_cpstar);
+      fprintf(stream10,"#wind_turbine,xhub,yhub,zhub,turbine_diameter,turbine_type,ux,uy,uz,u,u_hub,dir,rho,ct*,cp*,thrust,power_cpstar\n");
       for (cs_lnum_t WT_count=0; WT_count < n_WT; WT_count ++){
-  	fprintf(stream10,"%d,%.4f,%.4f,%.4f,%.4f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",WT_count+1, WT_x_coords[WT_count],WT_y_coords[WT_count],WT_z_coords[WT_count],WT_diameters[WT_count],WT_types[WT_count], WT_u[WT_count], WT_ct[WT_count],WT_ctstar[WT_count], WT_cp[WT_count], WT_cpstar[WT_count],power_values[WT_count]);
+  	fprintf(stream10,"%d,%.4f,%.4f,%.4f,%.4f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n",WT_count+1, WT_x_coords[WT_count],WT_y_coords[WT_count],WT_z_coords[WT_count],WT_diameters[WT_count],WT_types[WT_count], WT_ux[WT_count],WT_uy[WT_count],WT_uz[WT_count],WT_u[WT_count],WT_hub_u[WT_count],WT_dir[WT_count],WT_rho[WT_count],WT_ctstar[WT_count], WT_cpstar[WT_count],WT_thrust[WT_count],power_values_cpstar[WT_count]);
       }
       fclose(stream10);
     }
 }
-  
+
+  /* For the temperature forcing
+   * =========================== */
+
+  if (fld == CS_F_(t)) {
+    if (cs_glob_atmo_option->meteo_dlmo>0)
+    {
+      /* u* */
+      const cs_real_t ustar = cs_glob_atmo_option->meteo_ustar0;
+      /* theta* */
+      const cs_real_t tstar = cs_glob_atmo_option->meteo_tstar;
+      const cs_real_t  cp0 = cs_glob_fluid_properties->cp0;
+      const cs_real_t  zi = cs_notebook_parameter_value_by_name("zi");
+      for (cs_lnum_t c_id = 0; c_id < n_cells; c_id++) {
+        const cs_real_t rhom = CS_F_(rho)->val[c_id];
+        cs_real_t z = cell_cen[c_id][2];
+        cs_real_t sterm = cp0*cpro_rom[c_id]*ustar*tstar*2.0/zi*pow(1-z/zi, 2.0-1);
+        if (z < zi) {
+          st_exp[c_id] = cell_vol[c_id]*sterm;
+        }
+      }
+    }
+  }
+
   /****************************************/
   /* Dyunkerke model */
   if (f_id == CS_F_(eps)->id &&
@@ -752,8 +851,8 @@ cs_user_source_terms(cs_domain_t  *domain,
       }
     }
 
-    BFT_FREE(w3);
-    BFT_FREE(vol_divmugradk);
+    //BFT_FREE(w3);
+    //BFT_FREE(vol_divmugradk);
 
   }
 }

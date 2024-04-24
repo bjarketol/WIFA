@@ -107,6 +107,7 @@ cs_user_boundary_conditions(cs_domain_t  *domain,
   cs_real_t rscp = rair/cp0;
   cs_real_t psea = cs_glob_atmo_option->meteo_psea;
   cs_real_t theta0 = cs_glob_atmo_option->meteo_t0 * pow(pref/psea, rscp);
+  cs_real_t dlmo = cs_glob_atmo_option->meteo_dlmo;
 
   cs_lnum_t face_id=0;
   int var_id = cs_field_get_key_int(CS_F_(t), cs_field_key_id("variable_id")) - 1;
@@ -119,9 +120,11 @@ cs_user_boundary_conditions(cs_domain_t  *domain,
       f_roughness->val[face_id]=cs_glob_atmo_option->meteo_z0;
       /* /\* How to treat thermal rugosity is still uncertain *\/ */
       f_thermal_roughness->val[face_id]=cs_glob_atmo_option->meteo_z0;
-      /* //null flux after discussion with KUL */
-      /* CS_F_(t)->bc_coeffs->icodcl[face_id] = 3; */
-      /* CS_F_(t)->bc_coeffs->rcodcl3[face_id] = 0.0; */
+      if (dlmo>0)
+      {
+        CS_F_(t)->bc_coeffs->icodcl[face_id] = -6;
+        CS_F_(t)->bc_coeffs->rcodcl1[face_id] = cs_glob_atmo_option->meteo_t0;
+      }
     }
   }
 

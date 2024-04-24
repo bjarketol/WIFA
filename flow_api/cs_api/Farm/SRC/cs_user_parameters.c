@@ -76,7 +76,7 @@ cs_user_model(void)
   cs_wall_functions_t *wf = cs_get_glob_wall_functions();
   wf->iwalfs = CS_WALL_F_S_MONIN_OBUKHOV;
   wf->iwallf = CS_WALL_F_2SCALES_SMOOTH_ROUGH;
-  
+
   if(cs_notebook_parameter_value_by_name("energy")==0) {
     cs_glob_physical_model_flag[CS_ATMOSPHERIC] = CS_ATMO_CONSTANT_DENSITY;
   }
@@ -86,42 +86,41 @@ cs_user_model(void)
    *   1: meteo mass flow rate is imposed with a constant large scale
    *      pressure gradient
    *   2: same plus velocity profile imposed at ingoing faces
-   */  
+   */
   //cs_glob_atmo_option->open_bcs_treatment = 1; //was 0
 
-  /* Read the meteo file (1) or LMO profile with following parameters (2) */  
+  /* Read the meteo file (1) or LMO profile with following parameters (2) */
   cs_glob_atmo_option->meteo_profile = cs_notebook_parameter_value_by_name("meteo_profile");
-  if(cs_glob_atmo_option->meteo_profile==1) {
-    cs_glob_atmo_option->meteo_file_name = "meteo_file";
-    /* Velocity direction at hub height for actuator disk source terms */
-    cs_glob_atmo_option->meteo_angle = cs_notebook_parameter_value_by_name("teta");
-    cs_glob_atmo_option->meteo_z0 = cs_notebook_parameter_value_by_name("z0");
-  }
-  else if (cs_glob_atmo_option->meteo_profile==2) {
-    /* Inverse LMO length */
-    cs_glob_atmo_option->meteo_dlmo = cs_notebook_parameter_value_by_name("Lmoinv");
-    /* Large scale roughness */
-    cs_glob_atmo_option->meteo_z0 = cs_notebook_parameter_value_by_name("z0");
-    /* Velocity direction */
-    cs_glob_atmo_option->meteo_angle = cs_notebook_parameter_value_by_name("teta");
+  if (cs_glob_atmo_option->meteo_profile==2) {
     /* Elevation for reference velocity */
     cs_glob_atmo_option->meteo_zref = cs_notebook_parameter_value_by_name("zref");
     /* Friction velocity */
     cs_glob_atmo_option->meteo_uref = cs_notebook_parameter_value_by_name("ureff");
-    /* Ground temperature */ 
-    cs_glob_atmo_option->meteo_t0 = cs_notebook_parameter_value_by_name("t0");
   }
 
   //Needed for to compute the Coriolis force
   cs_glob_atmo_option->longitude = cs_notebook_parameter_value_by_name("long");
   cs_glob_atmo_option->latitude = cs_notebook_parameter_value_by_name("lat");
+  /* Large scale roughness */
+  cs_glob_atmo_option->meteo_z0 = cs_notebook_parameter_value_by_name("z0");
+  /* Velocity direction */
+  cs_glob_atmo_option->meteo_angle = cs_notebook_parameter_value_by_name("teta");
   
+  /* Inverse LMO length */
+  cs_glob_atmo_option->meteo_dlmo = cs_notebook_parameter_value_by_name("Lmoinv");
+  /* Friction velocity */
+  cs_glob_atmo_option->meteo_ustar0 = cs_notebook_parameter_value_by_name("ustar");
+  /* Temperature scale */
+  cs_glob_atmo_option->meteo_tstar = cs_notebook_parameter_value_by_name("tstar");
+  /* Ground temperature */
+  cs_glob_atmo_option->meteo_t0 = cs_notebook_parameter_value_by_name("t0");
+
   /* Post processing options */
-  
+
   /* Output ground in the results file*/
   cs_glob_atmo_option->compute_z_ground = true;
-  
-  /* Added properties at the boundary */  
+
+  /* Added properties at the boundary */
   /* /\* To post process roughness read in tif file *\/ */
   /* cs_parameters_add_property("gdalroughness", */
   /*                            1, */
@@ -130,8 +129,8 @@ cs_user_model(void)
   /* cs_parameters_add_property("roughness_zone", */
   /*                            1, */
   /*                            CS_MESH_LOCATION_BOUNDARY_FACES); */
-  
-  /* To post-process k and epsilon */  
+
+  /* To post-process k and epsilon */
   cs_parameters_add_property("tke_transport",
                              1,CS_MESH_LOCATION_CELLS);
   cs_parameters_add_property("eps_transport",
@@ -144,8 +143,8 @@ cs_user_model(void)
 
   cs_parameters_add_property("boundary_uk",
                              1,
-                             CS_MESH_LOCATION_CELLS);  
-  
+                             CS_MESH_LOCATION_CELLS);
+
 }
 
 /*----------------------------------------------------------------------------*/
@@ -174,7 +173,7 @@ cs_user_parameters(cs_domain_t *domain)
     fp->xyzp0[0] = 0.;
     fp->xyzp0[1] = 0.;
     fp->xyzp0[2] = 0.;
-#endif 
+#endif
 
   /* Example: activate mesh robustness options */
   /*-------------------------------------------*/
@@ -191,6 +190,9 @@ cs_user_parameters(cs_domain_t *domain)
   cs_velocity_pressure_param_t *vp_param = cs_get_glob_velocity_pressure_param();
   vp_param->igpust=0;
 
+  cs_time_step_t *ts = cs_get_glob_time_step();
+  ts->nt_max = cs_notebook_parameter_value_by_name("ntmax");
+    
   /* Warning, meteo file does not overwrite reference values... */
   cs_fluid_properties_t *phys_pro = cs_get_glob_fluid_properties();
   cs_real_t rair = phys_pro->r_pg_cnst;
@@ -199,7 +201,7 @@ cs_user_parameters(cs_domain_t *domain)
   //phys_pro->t0 = cs_glob_atmo_option->meteo_t0; /* ref temp T0 */
   //phys_pro->ro0 = phys_pro->p0/(rair * cs_glob_atmo_option->meteo_t0); /* ref density T0 */
 
-  
+
   //TODO: clarify if thi is really needed
   /* ischcv is the type of convective scheme:
      0: second order linear upwind
@@ -216,11 +218,11 @@ cs_user_parameters(cs_domain_t *domain)
   int key_cal_opt_id = cs_field_key_id("var_cal_opt");
 
   //set numerical options of epsilon
-  cs_field_get_key_struct(CS_F_(eps), key_cal_opt_id, &vcopt);  
+  cs_field_get_key_struct(CS_F_(eps), key_cal_opt_id, &vcopt);
   vcopt.ischcv = 1;
   vcopt.isstpc = 2;
   cs_field_set_key_struct(CS_F_(eps), key_cal_opt_id, &vcopt);
-  int kccmin = cs_field_key_id("min_scalar");  
+  int kccmin = cs_field_key_id("min_scalar");
   /* Set the Value for the Sup and Inf of the studied scalar
    * for the Gamma beta limiter for the temperature */
   cs_field_set_key_double(CS_F_(eps), kccmin,0.);
@@ -229,11 +231,11 @@ cs_user_parameters(cs_domain_t *domain)
   cs_field_get_key_struct(CS_F_(k), key_cal_opt_id, &vcopt);
   vcopt.ischcv = 1;
   vcopt.isstpc = 2;
-  cs_field_set_key_struct(CS_F_(k), key_cal_opt_id, &vcopt);  
+  cs_field_set_key_struct(CS_F_(k), key_cal_opt_id, &vcopt);
   /* Set the Value for the Sup and Inf of the studied scalar
    * for the Gamma beta limiter for the temperature */
   cs_field_set_key_double(CS_F_(k), kccmin, 0.);
-  
+
 }
 
 /*----------------------------------------------------------------------------*/

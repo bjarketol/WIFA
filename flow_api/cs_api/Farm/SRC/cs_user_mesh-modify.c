@@ -193,6 +193,11 @@ cs_user_mesh_modify(cs_mesh_t  *mesh)
   cs_real_t yawed_disk_1_coords[3];
   cs_real_t yawed_disk_2_coords[3];
   //
+  cs_real_t base_corner_coords[3];
+  cs_real_t xTranslate_base_corner_coords[3];
+  cs_real_t yTranslate_base_corner_coords[3];
+  cs_real_t zTranslate_base_corner_coords[3];
+  //
   char name[128];//for Actuator Disk (AD) zone name
   //
   cs_real_t AD_mesh_cell_size = cs_notebook_parameter_value_by_name("AD_mesh_cell_size");
@@ -212,27 +217,53 @@ cs_user_mesh_modify(cs_mesh_t  *mesh)
     cs_real_t WT_radius = WT_d/2.;
     /***********************************************************/
     /* Cylinder corresponding to AD zone */
-    disk_1_coords[0] = WT_x_coords[WT_count] - 2.0 * AD_half_rotor_thickness;
-    disk_1_coords[1] = WT_y_coords[WT_count];
-    disk_1_coords[2] = WT_z_coords[WT_count];
-    //
-    disk_2_coords[0] = WT_x_coords[WT_count] + 2.0 * AD_half_rotor_thickness;
-    disk_2_coords[1] = WT_y_coords[WT_count];
-    disk_2_coords[2] = WT_z_coords[WT_count];
-    
-    //yaw disks centers in the cylinder local referential 
-    mean_coords[0] = 0.5*(disk_1_coords[0]+disk_2_coords[0]);
-    mean_coords[1] = 0.5*(disk_1_coords[1]+disk_2_coords[1]);
-    mean_coords[2] = 0.5*(disk_1_coords[2]+disk_2_coords[2]);
-    yawing(disk_1_coords, wind_dir, mean_coords, yawed_disk_1_coords);
-    yawing(disk_2_coords, wind_dir, mean_coords, yawed_disk_2_coords);
+    if(cs_notebook_parameter_value_by_name("control")>0) {      
+      base_corner_coords[0] =  WT_x_coords[WT_count]-1.1*WT_radius;
+      base_corner_coords[1] =  WT_y_coords[WT_count]-1.1*WT_radius;
+      base_corner_coords[2] =  WT_z_coords[WT_count]-1.1*WT_radius;
+      //dx
+      xTranslate_base_corner_coords[0] = 2.2*WT_radius;
+      xTranslate_base_corner_coords[1] = 0.0;
+      xTranslate_base_corner_coords[2] = 0.0;
+      //dy  
+      yTranslate_base_corner_coords[0] = 0.0;
+      yTranslate_base_corner_coords[1] = 2.2*WT_radius;
+      yTranslate_base_corner_coords[2] = 0.0;
+      //dz
+      zTranslate_base_corner_coords[0] = 0.0;
+      zTranslate_base_corner_coords[1] = 0.0;
+      zTranslate_base_corner_coords[2] = 2.2*WT_radius;
 
-    //select zone
-    sprintf(criteria, "cylinder[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", \
-    	    yawed_disk_1_coords[0],yawed_disk_1_coords[1],yawed_disk_1_coords[2],
-    	    yawed_disk_2_coords[0],yawed_disk_2_coords[1],yawed_disk_2_coords[2],
-    	    1.5*WT_radius);
+      //select zone 
+      sprintf(criteria, "box[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", \
+	      base_corner_coords[0],base_corner_coords[1],base_corner_coords[2],
+	      xTranslate_base_corner_coords[0],xTranslate_base_corner_coords[1],xTranslate_base_corner_coords[2],
+	      yTranslate_base_corner_coords[0],yTranslate_base_corner_coords[1],yTranslate_base_corner_coords[2],
+	      zTranslate_base_corner_coords[0],zTranslate_base_corner_coords[1],zTranslate_base_corner_coords[2]);
+    }
+    else {
+      disk_1_coords[0] = WT_x_coords[WT_count] - 2.0 * AD_half_rotor_thickness;
+      disk_1_coords[1] = WT_y_coords[WT_count];
+      disk_1_coords[2] = WT_z_coords[WT_count];
+      //
+      disk_2_coords[0] = WT_x_coords[WT_count] + 2.0 * AD_half_rotor_thickness;
+      disk_2_coords[1] = WT_y_coords[WT_count];
+      disk_2_coords[2] = WT_z_coords[WT_count];
+      
+      //yaw disks centers in the cylinder local referential 
+      mean_coords[0] = 0.5*(disk_1_coords[0]+disk_2_coords[0]);
+      mean_coords[1] = 0.5*(disk_1_coords[1]+disk_2_coords[1]);
+      mean_coords[2] = 0.5*(disk_1_coords[2]+disk_2_coords[2]);
+      yawing(disk_1_coords, wind_dir, mean_coords, yawed_disk_1_coords);
+      yawing(disk_2_coords, wind_dir, mean_coords, yawed_disk_2_coords);
     
+      //select zone
+      sprintf(criteria, "cylinder[%.2f, %.2f, %.2f, %.2f, %.2f, %.2f, %.2f]", \
+	      yawed_disk_1_coords[0],yawed_disk_1_coords[1],yawed_disk_1_coords[2],
+	      yawed_disk_2_coords[0],yawed_disk_2_coords[1],yawed_disk_2_coords[2],
+	      1.5*WT_radius);
+    }
+
     bft_printf("Turbine_%d selection criteria : %s\n",WT_count+1,criteria);
     
     BFT_MALLOC(selected_cells, mesh->n_cells, cs_lnum_t);

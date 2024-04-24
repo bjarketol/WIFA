@@ -50,6 +50,11 @@ yawing2(cs_real_t *coords,
        cs_real_t *mean_coords,
        cs_real_t *yawed_coords);
 
+cs_real_t
+interp_ct_or_cp(cs_real_t *ct_or_cp_values,
+		cs_real_t *ct_or_cp_speeds,
+		cs_lnum_t number_of_values,
+		cs_real_t disk_velocity);
 /*----------------------------------------------------------------------------*/
 
 END_C_DECLS

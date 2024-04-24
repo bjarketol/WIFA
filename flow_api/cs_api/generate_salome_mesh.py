@@ -29,16 +29,18 @@ geompy = geomBuilder.New()
 
 parser = argparse.ArgumentParser(description='Script to generate a wind farm GMSH mesh using salome')
 parser.add_argument('--wind_origin',dest='wind_origin', type=float)
+parser.add_argument('--turbine_control',dest='turbine_control', type=float)
 parser.add_argument('--output_file',dest='output_file', type=str)
 parser.add_argument('--disk_mesh_size',dest='disk_mesh_size', type=float)
 parser.add_argument('--domain_size',dest='domain_size', type=float)
 parser.add_argument('--domain_height',dest='domain_height', type=float)
+parser.add_argument('--damping_layer',dest='damping_layer', type=float)
 args = parser.parse_args()
 
 #######################
 #lu dans des fichiers
 #######################
-xy_turbines=np.genfromtxt('Dynamique/DATA/turbines_info.csv',delimiter=',').transpose()[:2,:]
+xy_turbines=np.genfromtxt('Farm/DATA/turbines_info.csv',delimiter=',').transpose()[:2,:]
 nombre_turbines = xy_turbines.shape[1]
 
 #dimensions en x et y du domaine
@@ -47,12 +49,15 @@ Ly = args.domain_size
 
 #caractéristiques turbines:
 #hauteur moyeu
-hub_heights_array = np.genfromtxt('Dynamique/DATA/turbines_info.csv',delimiter=',')[:,2]
+hub_heights_array = np.genfromtxt('Farm/DATA/turbines_info.csv',delimiter=',')[:,2]
 #diametre du rotor
-diameters_array = np.genfromtxt('Dynamique/DATA/turbines_info.csv',delimiter=',')[:,3]
+diameters_array = np.genfromtxt('Farm/DATA/turbines_info.csv',delimiter=',')[:,3]
 
 #hm = np.max(hub_heights_array) #not used anymore, replaced by:
-extrusion_max_height = np.max(hub_heights_array+diameters_array)
+#Domain height
+Lz = args.domain_height 
+extrusion1_max_height = np.max(hub_heights_array+diameters_array)
+extrusion2_height = 0.6*Lz
 #
 # angle de rotation (en degres)
 provenance_vent = args.wind_origin
@@ -66,10 +71,6 @@ dom = 0 # (0 pour circulaire et 1 pour rectangulaire)
 ###########################
 #paramètres non utilisateur
 ###########################
-
-#hauteur du domaine
-Lz = args.domain_height
-
 #taille maille bord domaine
 tc = args.disk_mesh_size*10
 #taille min
@@ -84,7 +85,11 @@ traff6 = 8.5*tm
 lb = 5*tc
 #caractéristiques maillage vertical
 tv1 = 5
-tv2 = 100
+if(args.damping_layer>0):
+ #TODO : generalize. Supposes a domain of height 25km
+ tv2=2000
+else:
+ tv2 = 100
 #########################
 #début du script
 #########################
@@ -122,23 +127,21 @@ zone_raff6_pa =[]
 zone_raff7_pa =[]
 
 #placement des différentes zones de raffinement et zones sonde
-for i in range(nombre_turbines): 
+if(args.turbine_control>0):
+ for i in range(nombre_turbines):
   diametre=diameters_array[i]
-  zone_raff1_eolienne = geompy.MakeBoxDXDYDZ(4*tm, ((1.1*diametre)//tm)*tm, diametre+40)
-  S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -4*tm/2 ,-(((1.1*diametre)//tm)*tm)/2, 0)
-  S = geompy.MakeRotation(S,Vz,angle)
-  S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+  zone_raff1_eolienne = geompy.MakeBoxDXDYDZ(((1.1*diametre)//tm)*tm, ((1.1*diametre)//tm)*tm, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -(((1.1*diametre)//tm)*tm)/2 ,-(((1.1*diametre)//tm)*tm)/2, 0)
+  S = geompy.TranslateDXDYDZ(S,  xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff1_eol.append(S)
 
-  zone_raff2_eolienne = geompy.MakeBoxDXDYDZ(8*tm+2*traff2,((1.1*diametre)//tm)*tm+4*tm+2*traff2, diametre+40)
-  S = geompy.TranslateDXDYDZ(zone_raff2_eolienne, -(8*tm+2*traff2)/2 , -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/2,0)
-  S = geompy.MakeRotation(S,Vz,angle)
+  zone_raff2_eolienne = geompy.MakeBoxDXDYDZ(((1.1*diametre)//tm)*tm+4*tm+2*traff2,((1.1*diametre)//tm)*tm+4*tm+2*traff2, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff2_eolienne, -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/2, -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/2,0)
   S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff2_eol.append(S)
 
-  zone_raff3_eolienne = geompy.MakeBoxDXDYDZ(12*tm+2*traff2+2*traff3, ((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3, diametre+40)
-  S = geompy.TranslateDXDYDZ(zone_raff3_eolienne, -(12*tm+2*traff2+2*traff3)/2, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/2, 0)
-  S = geompy.MakeRotation(S,Vz,angle)
+  zone_raff3_eolienne = geompy.MakeBoxDXDYDZ(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3, ((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff3_eolienne, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/2, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/2, 0)
   S = geompy.TranslateDXDYDZ(S,xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff3_eol.append(S)
 
@@ -161,6 +164,46 @@ for i in range(nombre_turbines):
   S = geompy.TranslateDXDYDZ(zone_raff7_parc, -20*diametre/2, -20*diametre/2,0)
   S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff7_pa.append(S)
+else:
+  for i in range(nombre_turbines): 
+    diametre=diameters_array[i]
+    zone_raff1_eolienne = geompy.MakeBoxDXDYDZ(4*tm, ((1.1*diametre)//tm)*tm, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -4*tm/2 ,-(((1.1*diametre)//tm)*tm)/2, 0)
+    S = geompy.MakeRotation(S,Vz,angle)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff1_eol.append(S)
+
+    zone_raff2_eolienne = geompy.MakeBoxDXDYDZ(8*tm+2*traff2,((1.1*diametre)//tm)*tm+4*tm+2*traff2, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff2_eolienne, -(8*tm+2*traff2)/2 , -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/2,0)
+    S = geompy.MakeRotation(S,Vz,angle)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff2_eol.append(S)
+
+    zone_raff3_eolienne = geompy.MakeBoxDXDYDZ(12*tm+2*traff2+2*traff3, ((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff3_eolienne, -(12*tm+2*traff2+2*traff3)/2, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/2, 0)
+    S = geompy.MakeRotation(S,Vz,angle)
+    S = geompy.TranslateDXDYDZ(S,xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff3_eol.append(S)
+
+    zone_raff4_parc = geompy.MakeBoxDXDYDZ(8*diametre, 8*diametre, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff4_parc, -8*diametre/2, -8*diametre/2,0)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff4_pa.append(S)
+
+    zone_raff5_parc = geompy.MakeBoxDXDYDZ(10.5*diametre, 10.5*diametre, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff5_parc, -10.5*diametre/2, -10.5*diametre/2,0)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff5_pa.append(S)
+
+    zone_raff6_parc = geompy.MakeBoxDXDYDZ(15*diametre, 15*diametre, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff6_parc, -15*diametre/2, -15*diametre/2,0)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff6_pa.append(S)
+
+    zone_raff7_parc = geompy.MakeBoxDXDYDZ(20*diametre, 20*diametre, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff7_parc, -20*diametre/2, -20*diametre/2,0)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff7_pa.append(S)
 
 raff1_list=[]
 for i in range(nombre_turbines):
@@ -386,11 +429,19 @@ geompy.UnionList(alongy_raff7, edges_y_raff7)
 
 #pour extrusion du maillage
 marge = 10
-end_point = geompy.MakeVertex(0, 0, extrusion_max_height + marge)
+end_point = geompy.MakeVertex(0, 0, extrusion1_max_height + marge)
 edge_wire = geompy.MakeEdge(origin, end_point)
 wire = geompy.MakeWire([edge_wire], 1e-07)
 
-end_point2 = geompy.MakeVertex(0, 0,Lz )
+
+if(args.damping_layer>0):
+ end_point2 = geompy.MakeVertex(0, 0,extrusion2_height) 
+ end_point3 = geompy.MakeVertex(0, 0,Lz )
+ edge_wire3 = geompy.MakeEdge(end_point2, end_point3)
+ wire3 = geompy.MakeWire([edge_wire3], 1e-07)
+else:
+ end_point2 = geompy.MakeVertex(0, 0,Lz )
+# 
 edge_wire2 = geompy.MakeEdge(end_point, end_point2)
 wire2 = geompy.MakeWire([edge_wire2], 1e-07)
 
@@ -558,7 +609,17 @@ Number_of_Segments_z2 = Regular_1D_z2.StartEndLength(tv1,tv2)
 isDone = path_meshz2.Compute()
 smesh.SetName(path_meshz2.GetMesh(), 'path_2')
 
-path = smesh.Concatenate( [ path_meshz.GetMesh(), path_meshz2.GetMesh() ], 1, 1, 1e-05, False )
+if(args.damping_layer>0.0):
+ path_meshz3 = smesh.Mesh(wire3)
+ Regular_1D_z3 = path_meshz3.Segment()
+ #Local_Length_z2 =  Regular_1D_z2.GeometricProgression(6,1.15,[])
+ Number_of_Segments_z3 = Regular_1D_z3.LocalLength(tv2)
+ isDone = path_meshz3.Compute()
+ smesh.SetName(path_meshz3.GetMesh(), 'path_3')
+ path = smesh.Concatenate( [path_meshz.GetMesh(), path_meshz2.GetMesh(),  path_meshz3.GetMesh() ], 1, 1, 1e-05, False )
+else:
+ path = smesh.Concatenate( [ path_meshz.GetMesh(), path_meshz2.GetMesh() ], 1, 1, 1e-05, False )
+
 smesh.SetName(path.GetMesh(), 'path')
 
 #extrusion
