@@ -1,0 +1,43 @@
+# pywake/foxes
+wake_model:
+  name: Bastankhah
+  k: 0.04
+  ceps: 0.2
+deflection_model:
+  name: Jimenez
+superposition_model:
+  name: Linear
+rotor_averaging:
+  name: center
+blockage:
+  name: None
+
+# wayve
+layers_description:
+  farm_layer_height: 150
+  number_of_layers: 10
+APM_additional_terms:
+  term_list: None
+
+wake_tool: "foxes"
+
+# saturne
+run_type: "simulate" #"postprocess"
+#
+cases_run:
+  all_occurences: True
+#
+HPC_config:
+  run_node_number: 5
+  run_ntasks_per_node: 48
+  run_wall_time_hours: 6
+  run_partition: "p1"
+  #
+  mesh_node_number: 2
+  mesh_ntasks_per_node: 48
+  mesh_wall_time_hours: 1
+  run_partition: "p2"
+
+mesh:
+  remesh: True
+  mesh_file_name: MESH/toy_mesh.med
