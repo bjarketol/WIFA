@@ -2,6 +2,7 @@
 import sys
 import vtk
 import numpy as np
+import matplotlib.tri as tri
 from vtk.util.numpy_support import vtk_to_numpy as vtk_to_np
 
 def load_ensight_data(path,case):
@@ -91,3 +92,31 @@ def extract_plane_from_ensight(data,origin=(0.,0.,0.),normal=(0.,0.,1.)):
     plane_cut.GetCellData().SetActiveScalars("Velocity")
 
     return plane_cut
+
+def extract_saturne_triangulation(slicexy, normal):
+    '''extract the triangulation of a horizontal slice of data'''
+    triangles = slicexy.GetPolys().GetData()
+    npts = slicexy.GetPoints().GetNumberOfPoints()
+    ntri = int(triangles.GetNumberOfTuples()/4)
+    x, y, z = get_point_coords_from_ensight(slicexy)  # points coordinates
+
+    if(normal == (0, 0, 1)):
+        x1 = x
+        y1 = y
+    if(normal == (1, 0, 0)):
+        x1 = y
+        y1 = z
+    if(normal == (0, 1, 0)):
+        x1 = x
+        y1 = z
+
+    # Get the triangulation of the mesh
+    triang = np.zeros((ntri, 3))
+    for i in range(0, ntri):
+        triang[i, 0] = triangles.GetTuple(4*i + 1)[0]
+        triang[i, 1] = triangles.GetTuple(4*i + 2)[0]
+        triang[i, 2] = triangles.GetTuple(4*i + 3)[0]
+
+    triangulation = tri.Triangulation(x1, y1, triang)
+
+    return x1, y1, triang, triangulation

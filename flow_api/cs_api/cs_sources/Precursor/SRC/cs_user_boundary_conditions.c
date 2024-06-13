@@ -98,7 +98,7 @@ cs_user_boundary_conditions(cs_domain_t  *domain,
                             int           bc_type[])
 {
   CS_UNUSED(bc_type);
-  
+
   cs_real_t pref = cs_glob_atmo_constants->ps;
   cs_real_t rair = cs_glob_fluid_properties->r_pg_cnst;
   cs_real_t cp0 = cs_glob_fluid_properties->cp0;

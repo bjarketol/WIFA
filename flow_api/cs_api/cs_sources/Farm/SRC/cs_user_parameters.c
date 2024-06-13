@@ -108,10 +108,6 @@ cs_user_model(void)
   
   /* Inverse LMO length */
   cs_glob_atmo_option->meteo_dlmo = cs_notebook_parameter_value_by_name("Lmoinv");
-  /* Friction velocity */
-  cs_glob_atmo_option->meteo_ustar0 = cs_notebook_parameter_value_by_name("ustar");
-  /* Temperature scale */
-  cs_glob_atmo_option->meteo_tstar = cs_notebook_parameter_value_by_name("tstar");
   /* Ground temperature */
   cs_glob_atmo_option->meteo_t0 = cs_notebook_parameter_value_by_name("t0");
 

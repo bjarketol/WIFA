@@ -102,16 +102,12 @@ cs_user_model(void)
   cs_glob_atmo_option->compute_z_ground = true;
 
   cs_glob_atmo_option->meteo_z0 = cs_notebook_parameter_value_by_name("z0");
-  
-  cs_glob_atmo_option->meteo_t0 = cs_notebook_parameter_value_by_name("t0");
-  
-  cs_glob_atmo_option->meteo_dlmo = cs_notebook_parameter_value_by_name("Lmoinv");
-  
-  cs_glob_atmo_option->meteo_uref = cs_notebook_parameter_value_by_name("ureff");
-  
-  cs_glob_atmo_option->meteo_ustar0 = cs_notebook_parameter_value_by_name("ustar");
 
-  cs_glob_atmo_option->meteo_tstar = cs_notebook_parameter_value_by_name("tstar");
+  cs_glob_atmo_option->meteo_t0 = cs_notebook_parameter_value_by_name("t0");
+
+  cs_glob_atmo_option->meteo_dlmo = cs_notebook_parameter_value_by_name("Lmoinv");
+
+  cs_glob_atmo_option->meteo_uref = cs_notebook_parameter_value_by_name("ureff");
 
   /* Automatic open boundary conditions
    *   1: meteo mass flow rate is imposed with a constant large scale

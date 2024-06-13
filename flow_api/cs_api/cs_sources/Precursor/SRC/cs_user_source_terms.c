@@ -84,7 +84,7 @@ cs_user_source_terms(cs_domain_t  *domain,
   const cs_real_t  cp0 = cs_glob_fluid_properties->cp0;
 
   const cs_real_t *cpro_rom = CS_F_(rho)->val;
-  
+
   const cs_real_3_t *vel = CS_F_(vel)->val;
 
   const cs_field_t *fld = cs_field_by_id(f_id);
@@ -93,13 +93,13 @@ cs_user_source_terms(cs_domain_t  *domain,
   const cs_real_t  z_ref = cs_notebook_parameter_value_by_name("zref");
 
   const cs_real_t  zi = cs_notebook_parameter_value_by_name("zi");
-  
+
   /* u* */
-  const cs_real_t ustar = cs_glob_atmo_option->meteo_ustar0;
+  const cs_real_t ustar = cs_notebook_parameter_value_by_name("ustar");
 
   /* theta* */
-  const cs_real_t tstar = cs_glob_atmo_option->meteo_tstar;
-  
+  const cs_real_t tstar = cs_notebook_parameter_value_by_name("tstar");
+
   cs_time_step_t *ts = cs_get_glob_time_step();
 
   /* For velocity
@@ -124,9 +124,9 @@ cs_user_source_terms(cs_domain_t  *domain,
     cs_real_t fcorio;
     fcorio = 2.0*7.292115e-5*sin(lat*dpi/180.0);
 
-    if ((ts->nt_cur) > 200000 && (ts->nt_cur)%10000==0){
+    if ((ts->nt_cur) > 20000 && (ts->nt_cur)%500==0){
 	  cs_real_t uzrefn = u_ref;
-      cs_real_t uzref, vzref; 
+      cs_real_t uzref, vzref;
       cs_lnum_t closest_id;
       int closest_id_rank;
       cs_real_t xyz_ref[3] = {0.0, 0.0, z_ref};
@@ -147,12 +147,15 @@ cs_user_source_terms(cs_domain_t  *domain,
       if (fabs(u_ref-uzrefn)>0.05){
           cs_glob_atmo_option->meteo_uref += CS_MAX(CS_MIN(u_ref-uzrefn, 0.01), -0.01);
       }
+      else{
+        ts->nt_max = ts->nt_cur + 490;
+      }
       bft_printf("uzrefn = %.2f ; uref = %.2f\n ",uzrefn, cs_glob_atmo_option->meteo_uref);
     }
 
     if(cs_glob_atmo_option->meteo_dlmo>0 && ts->nt_cur==1)
     {
-      cs_real_t utop; 
+      cs_real_t utop;
       cs_lnum_t closest_id_top;
       int closest_id_rank_top;
       cs_real_t xyz_ref_top[3] = {0.0, 0.0, 20000};

@@ -2,7 +2,7 @@ from netCDF4 import Dataset
 import sys
 from os import path, sep
 import numpy as np
-import cs_postprocess_utils as cs_pp
+import csPostpro.cs_postprocess_utils as cs_pp
 
 
 def get_output_at_plane_and_time(ens, output_varname, origin, normal,
@@ -152,7 +152,7 @@ for i, casei in enumerate(cases):
             i1, i2, i3 = triang.triangles[k]
             xtri[k] = (x[i1] + x[i2] + x[i3])/3.
             ytri[k] = (y[i1] + y[i2] + y[i3])/3.
-        
+
         #
         points = rootgrp.createDimension("points", npoints)
         nc_cases = rootgrp.createDimension("time", len(cases))

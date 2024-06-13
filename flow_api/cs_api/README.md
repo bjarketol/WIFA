@@ -1,3 +1,8 @@
+# Prerequisites
+
+salome and code_saturne 8.0
+paths should be defined in : cs_modules/csLaunch/cs_config.py
+
 # Installation guidelines for code_saturne and salome_cfd
 ## code_saturne
 

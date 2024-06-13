@@ -1,0 +1,6 @@
+cs_path=""
+cs_api_path=""
+salome_path=""
+lib_path=""
+python_path=""
+python_exe="python3"
