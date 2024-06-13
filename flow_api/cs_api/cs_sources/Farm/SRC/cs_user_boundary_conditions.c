@@ -100,7 +100,7 @@ cs_user_boundary_conditions(cs_domain_t  *domain,
   CS_UNUSED(bc_type);
   cs_field_t *f_roughness = cs_field_by_name("boundary_roughness");
   cs_field_t *f_thermal_roughness = cs_field_by_name("boundary_thermal_roughness");
-  
+
   cs_real_t pref = cs_glob_atmo_constants->ps;
   cs_real_t rair = cs_glob_fluid_properties->r_pg_cnst;
   cs_real_t cp0 = cs_glob_fluid_properties->cp0;
@@ -122,7 +122,7 @@ cs_user_boundary_conditions(cs_domain_t  *domain,
       f_thermal_roughness->val[face_id]=cs_glob_atmo_option->meteo_z0;
       if (dlmo>0)
       {
-        CS_F_(t)->bc_coeffs->icodcl[face_id] = -6;
+        CS_F_(t)->bc_coeffs->icodcl[face_id] = 6;
         CS_F_(t)->bc_coeffs->rcodcl1[face_id] = cs_glob_atmo_option->meteo_t0;
       }
     }

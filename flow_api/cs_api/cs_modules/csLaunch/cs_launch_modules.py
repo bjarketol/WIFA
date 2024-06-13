@@ -11,11 +11,9 @@ from os import path, chdir, environ, getcwd
 import yaml
 #from yaml.loader import SafeLoader
 from datetime import datetime, timedelta
-from yml_utils import *
-from netCDF4 import Dataset
+from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 from functools import reduce
-import nieuwstadt_stable_profiles_utils as nwstdt
-
+import csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
 
 def theta2temp(theta,z_or_dz,P0,Pref=1000.,g=9.81,Rair=287.,Cp=1005.):
     """
@@ -178,7 +176,6 @@ class CS_inflow:
 
         #Run precursor simulation
         self.run_precursor = False
-        self.stability = None #"unstable", "stable", "neutral"
         self.capping_inversion = False
         self.LMO_values = []
         self.ABL_heights = []
@@ -223,12 +220,16 @@ class CS_mesh:
         self.mesh_file_name = "mesh.med"
 
 class CS_study:
-    def __init__(self, farm_notebook_arg_names=None,farm_notebook_arg_values=None, \
+    def __init__(self,farm_notebook_arg_names=None,farm_notebook_arg_values=None, \
                  prec_notebook_arg_names=None,prec_notebook_arg_values=None, \
                  case_dir=None, result_dir=None, wind_energy_system_file=None, \
-                 cs_path=None, salome_path=None, lib_path=None, python_path=None):
+                 cs_path=None, salome_path=None, lib_path=None, python_path=None, python_exe=None,\
+                 cs_run_folder=None, cs_api_path=None):
 
         #case
+        self.cs_run_folder = cs_run_folder
+        self.cs_api_path = cs_api_path
+        #
         self.case_dir = case_dir
         self.result_dir = result_dir
         self.case_name = None
@@ -236,12 +237,13 @@ class CS_study:
         self.salome_path = salome_path
         self.lib_path = lib_path
         self.python_path = python_path
+        self.python_exe = python_exe
 
         #HPC config
         self.run_node_number = None
         self.run_ntasks_per_node = None
         self.run_wall_time_hours = 10.0
-        self.prec_wall_time_hours = 1.0
+        self.prec_wall_time_hours = 6.0
         self.run_partition = None
         self.mesh_node_number = None
         self.mesh_ntasks_per_node = None
@@ -273,6 +275,20 @@ class CS_study:
         #output configuration
         self.output = CS_output()
 
+    def set_run_env(self):
+        ######CREATE WORK DIRECTORY##########
+        #Localize run and copy cs work folders from there to new name
+        mkdir(self.cs_run_folder)
+        mkdir(self.cs_run_folder + sep + "MESH")
+        mkdir(self.cs_run_folder + sep + "logs")
+        mkdir(self.cs_run_folder + sep + "meteo_files")
+        mkdir(self.cs_run_folder + sep + "precursor_meteo_files")
+
+        #
+        os.system("cp -r " + self.cs_api_path + sep + "cs_sources" + sep + "Farm" + " " + self.cs_run_folder+sep+"/.")
+        os.system("cp -r " + self.cs_api_path + sep + "cs_sources" + sep + "Precursor" + " " + self.cs_run_folder+sep+"/.")
+        ######################################
+
     def run_case(self, first_case=True, remesh=True, turbine_control=False, damping_layer=False, mesh_file_name="mesh_for_cs_test.med",launch_file_name="launch.sh", job_name="windfarm",log_folder=".", meteo_file_name="",precursor=False, precursor_meteo_file_name=""):
         """
         Function to run code_saturne
@@ -280,7 +296,7 @@ class CS_study:
         TODO: replace with code_saturne python api
         """
         mesh_nodes=self.mesh_node_number
-        mesh_ntasks_per_nodes=self.mesh_ntasks_per_node
+        mesh_ntasks_per_nodes=self.mesh_ntasks_per_node        
         mesh_wall_time=str(timedelta(hours=self.mesh_wall_time_hours))
         mesh_partition=self.mesh_partition
         cs_nodes=self.run_node_number
@@ -289,8 +305,9 @@ class CS_study:
         prec_wall_time=str(timedelta(hours=self.prec_wall_time_hours))
         cs_partition=self.run_partition
         wckey=self.wckey
-        #
-        bash_file_name=launch_file_name
+
+        bash_file_name=self.cs_run_folder + sep + launch_file_name
+
         if(first_case):
             CS_append='CS_jobids=${CS##* }'
             bash_file=open(bash_file_name,"w")
@@ -302,16 +319,25 @@ class CS_study:
                             "#SBATCH --wckey="+wckey+"\n"+ \
                             "#SBATCH --output="+log_folder+sep+self.case_name+"_job.out.log\n"+ \
                             "#SBATCH --error="+log_folder+sep+self.case_name+"_job.err.log\n"+ \
-                            "#SBATCH --job-name="+self.case_name+"_job"+"\n")
+                            "#SBATCH --job-name="+self.case_name+"_job"+"\n" + \
+                            "\n" + \
+                            "module load Miniforge3"+"\n")
         else:
             CS_append='CS_jobids+=":"${CS##* }'
             bash_file=open(bash_file_name,"a")
+
+
         #
-        #TODO : raise exception if remesh=False and mesh_file does not exist
+        split_mesh_folder, split_mesh_file_name= os.path.split(mesh_file_name)
+        if(not(remesh)):
+            #TODO : raise exception if mesh_file does not exist
+            os.system("cp -r " + mesh_file_name+ " " + self.cs_run_folder+sep+"MESH"+sep+".")
         #
         self.mesh.AD_mesh_cell_size=int(np.min(self.farm.rotor_diameters)/8.0)
         #
         self.mesh.mesh_domain_size = np.round(max(self.farm.farm_size*3.2, self.mesh.AD_mesh_cell_size*600),-2) + 2*self.mesh.damping_length
+
+
         #
         if('start_rad' in self.farm_notebook_arg_names):
             s_id = self.farm_notebook_arg_names.index('start_rad')
@@ -324,7 +350,7 @@ class CS_study:
             cs_launch_command += " "+self.prec_notebook_arg_names[k]+"="+str(self.prec_notebook_arg_values[k])
 
         cs_launch_command += " AD_mesh_cell_size="+str(self.mesh.AD_mesh_cell_size)
-        cs_launch_command += " --parametric-args='-m ../"+mesh_file_name+"'"
+        cs_launch_command += " --parametric-args='-m ../"+"MESH"+sep+split_mesh_file_name+"'"
 
         if(precursor):
             precursor_launch_command = self.cs_path +" submit -p setup.xml --case "+"Precursor"+" --notebook-args"
@@ -339,9 +365,14 @@ class CS_study:
 
         cs_launch_command += " --id "+ self.result_dir + " --nodes="+str(cs_nodes)+" --partition="+cs_partition+" -J cs_"+job_name+" --time="+cs_wall_time + " --ntasks-per-node="+str(cs_ntasks_per_nodes) + " --wckey="+wckey+" --exclusive"
 
-        if(remesh):
-            #
-            salome_launch_command = self.salome_path + " -t python3 generate_salome_mesh.py args:--wind_origin="+str(self.wind_origin)+",--disk_mesh_size="+str(self.mesh.AD_mesh_cell_size)+",--domain_size="+str(self.mesh.mesh_domain_size)+",--domain_height="+str(self.mesh.domain_height)+",--output_file='"+mesh_file_name+"'"
+        if(remesh and first_case):
+
+            #Original: turbine mesh depending on wind_origin
+            #salome_launch_command = self.salome_path + " -t python3 "+self.cs_api_path+sep+"cs_modules"+sep+"csLaunch"+sep+"generate_salome_mesh.py args:--wind_origin="+str(self.wind_origin)+",--disk_mesh_size="+str(self.mesh.AD_mesh_cell_size)+",--domain_size="+str(self.mesh.mesh_domain_size)+",--domain_height="+str(self.mesh.domain_height)+",--output_file='"+mesh_file_name+"'"
+
+            #Non-oriented turbine mesh to avoid multiple remesh in case of timeseries
+            #TODO: make dependent on teta variations for single launches. Keyword to force in windio?
+            salome_launch_command = self.salome_path + " -t python3 "+self.cs_api_path+sep+"cs_modules"+sep+"csLaunch"+sep+"generate_salome_mesh.py args:--wind_origin="+str("270.0")+",--disk_mesh_size="+str(self.mesh.AD_mesh_cell_size)+",--domain_size="+str(self.mesh.mesh_domain_size)+",--domain_height="+str(self.mesh.domain_height)+",--output_file='MESH"+sep+split_mesh_file_name+"'"
             #
             if(turbine_control):
                 salome_launch_command += ",--turbine_control=1.0"
@@ -359,13 +390,21 @@ class CS_study:
             else:
                 cs_launch_command += " --dependency=afterok:$mesh_jobid\n"
 
+            #
+        elif(remesh):
+            if(precursor):
+                precursor_launch_command += " --dependency=afterok:$mesh_jobid\n"
+                cs_launch_command += " --dependency=afterok:$meteo_jobid\n"
+            else:
+                cs_launch_command += " --dependency=afterok:$mesh_jobid\n"
+
         elif(precursor):
             cs_launch_command += " --dependency=afterok:$meteo_jobid"
 
         #============WRITE BASH FILE FOR SLURM================
 
         #MESH COMMAND
-        if(remesh):
+        if(remesh and first_case):
             bash_file.write("#\n"+"# Run Mesh generation with salome and get its jobid\n"+\
                             "mesh_sbatch_output=$(sbatch <<EOF\n"+\
                             "#!/bin/bash\n"+\
@@ -394,12 +433,12 @@ class CS_study:
                             "#SBATCH --nodes=1"+"\n"+\
                             "#SBATCH --cpus-per-task=1"+"\n"+\
                             "#SBATCH --time=00:10:00"+"\n"+\
-                            "#SBATCH --partition=bm"+"\n"+\
+                            "#SBATCH --partition=cn"+"\n"+\
                             "#SBATCH --wckey="+wckey+"\n"+\
                             "#SBATCH --output="+log_folder+sep+"meteo_"+job_name+".out.log\n"+ \
                             "#SBATCH --error="+log_folder+sep+"meteo_"+job_name+".err.log\n"+ \
                             "#SBATCH --job-name=meteo_"+job_name+"\n"+\
-                            "python3 write_meteo_file_from_precursor.py"+ \
+                            self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csMeteo"+sep+"write_meteo_file_from_precursor.py"+ \
                             " --resu_folder='Precursor/RESU/"+self.result_dir + \
                             "' --meteo_filename='"+meteo_file_name + "'"+\
                             " --hub_height="+str(self.farm.hub_heights[0]) + \
@@ -464,7 +503,7 @@ class CS_study:
 
         #
         if(standalone):
-            bash_file=open(launch_file_name,"w")
+            bash_file=open(self.cs_run_folder + sep + launch_file_name,"w")
             bash_file.write("#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
                             "#SBATCH --time=00:10:00\n"+ \
@@ -473,11 +512,11 @@ class CS_study:
                             "#SBATCH --output="+log_folder+sep+"postpro.out.log\n"+ \
                             "#SBATCH --error="+log_folder+sep+"postpro.err.log\n"+ \
                             "#SBATCH --job-name=postpro\n"+ \
-                            "#\n")            
-            bash_file.write("export LD_LIBRARY_PATH="+self.lib_path+" && export PYTHONPATH="+self.python_path+":$PYTHONPATH && python3 write_cs_fields.py "+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str)
+                            "#\n")
+            bash_file.write("export LD_LIBRARY_PATH="+self.lib_path+" && export PYTHONPATH="+self.python_path+":$PYTHONPATH && "+self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str)
             bash_file.close()
         else:
-            bash_file=open(launch_file_name,"a")            
+            bash_file=open(self.cs_run_folder + sep + launch_file_name,"a")
             bash_file.write("#\n"+"#Postprocessing : writing results in nectdf files\n"+\
                             "postpro_sbatch=$(sbatch --parsable --dependency=afterok:$CS_jobids <<EOF\n"+\
                             "#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
@@ -488,7 +527,7 @@ class CS_study:
                             "#SBATCH --output="+log_folder+sep+"postpro.out.log\n"+ \
                             "#SBATCH --error="+log_folder+sep+"postpro.err.log\n"+ \
                             "#SBATCH --job-name=postpro\n"+ \
-                            "export LD_LIBRARY_PATH="+self.lib_path+" && export PYTHONPATH="+self.python_path+":$PYTHONPATH && python3 write_cs_fields.py "+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str + "\n" \
+                            "export LD_LIBRARY_PATH="+self.lib_path+" && export PYTHONPATH="+self.python_path+":$PYTHONPATH && "+self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str + "\n" \
                             "EOF\n"+")\n" + \
                             "# Extract the job ID from the output of sbatch\n" + \
                             "postpro_jobid=${postpro_sbatch##* }\n")
@@ -544,10 +583,7 @@ class CS_study:
 
     def get_windio_data(self):
         #Load the files and store in dictionaries
-        with open(self.wind_energy_system_file) as f:
-            self.wind_system_data = yaml.load(f, Loader=Loader)
-
-
+        self.wind_system_data = load_yaml(self.wind_energy_system_file)
         ####################### LAYOUT and TURBINE DATA ############################
         #
         farm_layout_data = self.wind_system_data['wind_farm']
@@ -616,19 +652,17 @@ class CS_study:
         ct_curve= np.column_stack((turbines_data['performance']['Ct_curve']['Ct_wind_speeds'],turbines_data['performance']['Ct_curve']['Ct_values']))
         self.farm.ct_curves.append(ct_curve)
         #print(get_value(self.wind_system_data, 'wind_farm.turbines.performance.power_curve.power_values'))
-
         ########################### INFLOW DATA ###################################
 
         site_data = self.wind_system_data['site']
         resource_data = site_data['energy_resource']
         #====TIMESERIES====
-        if('timeseries' in get_child_keys(self.wind_system_data,'site.energy_resource.wind_resource')):
-            timeseries_dict =  get_value(self.wind_system_data, 'site.energy_resource.wind_resource.timeseries')
-            timeseries_var = get_value(self.wind_system_data, 'site.energy_resource.wind_resource.timeseries')[0].keys()
-
-            self.inflow.times = np.array([float(d['time']) for d in timeseries_dict])
+        if('time' in get_child_keys(self.wind_system_data,'site.energy_resource.wind_resource')):
+            timeseries_var = get_child_keys(self.wind_system_data,'site.energy_resource.wind_resource')
+            
+            self.inflow.times = np.array(resource_data['wind_resource']['time'])
             ntimes = len(self.inflow.times)
-
+            
             #TODO: check if we should replace by input from the flow_api in case of binned
             self.inflow.run_times = np.arange(ntimes) #default
             if("cases_run" in get_child_keys(self.wind_system_data, branch="attributes.analysis")):
@@ -641,19 +675,18 @@ class CS_study:
                     self.inflow.run_times = get_value(self.wind_system_data,'attributes.analysis.cases_run.occurences_list')
                     self.inflow.times = self.inflow.times[self.inflow.run_times]
 
-            self.inflow.roughness_height = np.array([float(d['z0']) for d in timeseries_dict])
-
+            self.inflow.roughness_height = np.array(resource_data['wind_resource']['z0']['data'])
+            
             if('lat' in timeseries_var):
-                self.inflow.latitude = np.array([float(d['lat']) for d in timeseries_dict])
+                self.inflow.latitude = np.array(resource_data['wind_resource']['lat']['data'])
             else:
                 self.inflow.latitude = np.zeros((ntimes)) + 55. #default latitude value
 
             #====VERTICAL PROFILES====
-            if('z' in timeseries_var):
+            if('height' in timeseries_var):
                 #PROFILES
                 self.inflow.data_type = 'timeseries_profile'
-                self.inflow.heights = np.array(get_value(self.wind_system_data, \
-                                                         'site.energy_resource.wind_resource.timeseries')[0]['z'])
+                self.inflow.heights =  np.array(resource_data['wind_resource']['height'])
                 nzpoints = len(self.inflow.heights)
                 #
                 #required
@@ -662,46 +695,36 @@ class CS_study:
                 self.inflow.pottemp = np.zeros((nzpoints, ntimes))
                 self.inflow.tke = np.zeros((nzpoints, ntimes))
                 self.inflow.epsilon = np.zeros((nzpoints, ntimes))
-
-                for j in range(ntimes):
-                    if('speed' in timeseries_var):
-                        self.inflow.wind_velocity[:,j] = np.array(timeseries_dict[j]['speed'])
-                    else:
-                        raise ValueError('No "speed" profile in the data')
-                    if('direction' in timeseries_var):
-                        self.inflow.wind_dir[:,j] = np.array(timeseries_dict[j]['direction'])
-                    else:
-                        raise ValueError('No "direction" profile in the data')
-
-                #TODO : force only one accepted key
-                if('pot_temp' in timeseries_var):
-                    for j in range(ntimes):
-                        self.inflow.pottemp[:,j] = np.array(timeseries_dict[j]['pot_temp'])
-                elif('pottemp' in timeseries_var):
-                    for j in range(ntimes):
-                        self.inflow.pottemp[:,j] = np.array(timeseries_dict[j]['pottemp'])
+                
+                #Required                
+                if('wind_speed' in timeseries_var):
+                    self.inflow.wind_velocity[:,:] = np.array(resource_data['wind_resource']['wind_speed']['data']).transpose()
                 else:
-                    raise ValueError('No temperature (pot_temp or pottemp) profile in the data')
-                        #
+                    raise ValueError('No "speed" profile in the data')
+                if('wind_direction' in timeseries_var):
+                    self.inflow.wind_dir[:,:] = np.array(resource_data['wind_resource']['wind_direction']['data']).transpose()
+                else:
+                    raise ValueError('No "direction" profile in the data')
+                if('potential_temperature' in timeseries_var):
+                    self.inflow.pottemp[:,:] = np.array(resource_data['wind_resource']['potential_temperature']['data']).transpose()
+                else:
+                    raise ValueError('No potential_temperature profile in the data')
 
+                #Optional
                 if('k' in timeseries_var):
-                    for j in range(ntimes):
-                        self.inflow.tke[:,j] = np.array(timeseries_dict[j]['k'])
+                    self.inflow.tke[:,:] = np.array(resource_data['wind_resource']['k']['data']).transpose()
                 else:
                     self.inflow.tke[:,:] = 0.1
 
                 if('epsilon' in timeseries_var):
-                    for j in range(ntimes):
-                        self.inflow.epsilon[:,j] = np.array(timeseries_dict[j]['k'])
+                    self.inflow.epsilon[:,:] = np.array(resource_data['wind_resource']['epsilon']['data']).transpose()
                 else:
                     self.inflow.epsilon[:,:] = 0.003
 
                 #TODO : discriminate stability cases and capping inversion param etc.
                 #TODO : list of stabilities for each time occurence
-                self.inflow.stability = "neutral" #'stable', 'unstable'
                 self.inflow.capping_inversion=True
                 self.inflow.run_precursor = True
-
 
             #=========================
 
@@ -713,8 +736,10 @@ class CS_study:
                 self.inflow.capping_inversion = False #initialization
 
                 #Z profile is generated and tables initialized
-                Lz = 26000 ; Nz = 1000 ; dz = Lz/Nz
-                self.inflow.heights = np.linspace(dz/2,Lz-dz/2,Nz,endpoint=True)
+                Lz_bl = 2000. ; Nz_bl = 400 ; dz = Lz_bl/Nz_bl; Lz_fa = 26000. ; Nz_fa = 200
+                heights_bl = np.linspace(dz/2,Lz_bl-dz/2,Nz_bl,endpoint=True)
+                heights_fa = np.linspace(Lz_bl, Lz_fa, Nz_fa, endpoint=True)
+                self.inflow.heights = np.concatenate((heights_bl, heights_fa))
                 nzpoints = len(self.inflow.heights)
                 self.inflow.wind_velocity = np.zeros((nzpoints, ntimes))
                 self.inflow.u = np.zeros((nzpoints, ntimes))
@@ -725,68 +750,39 @@ class CS_study:
                 self.inflow.epsilon = np.zeros((nzpoints, ntimes))
 
                 #Required
-                self.inflow.wind_velocity = np.array([float(d['speed']) for d in timeseries_dict])
-                self.inflow.wind_dir = np.array([float(d['direction']) for d in timeseries_dict])
+                #TODO: exception if not in file
+                self.inflow.wind_velocity =  np.array(resource_data['wind_resource']['wind_speed']['data'])
+                self.inflow.wind_dir =  np.array(resource_data['wind_resource']['wind_direction']['data'])
+                
                 #Optional : stability and capping inversion information
                 if('LMO' in timeseries_var):
-                    self.inflow.LMO_values =  np.array([float(d['LMO']) for d in timeseries_dict])
+                    self.inflow.LMO_values = np.array(resource_data['wind_resource']['LMO']['data'])
                 else:
                     self.inflow.LMO_values = np.zeros((ntimes)) + 1e10
 
-                if('ABL_height' in timeseries_var):
-                    self.inflow.ABL_heights =  np.array([float(d['ABL_height']) for d in timeseries_dict])
-                else:
-                    self.inflow.ABL_heights = np.zeros((ntimes)) + 2000.
-
-                if('lapse_rate' in timeseries_var):
+                #==================Capping inversion========================
+                #Activate capping inversion and set default values
+                if('ABL_height' in timeseries_var or 'lapse_rate' in timeseries_var \
+                   or 'dtheta' in timeseries_var or 'dH' in timeseries_var):                    
                     self.inflow.capping_inversion = True
                     self.inflow.run_precursor = True
-                    self.inflow.lapse_rates = np.array([float(d['lapse_rate']) for d in timeseries_dict])
-                else:
-                    self.inflow.lapse_rates = np.zeros((ntimes)) + 0.001
-
-                if('dtheta' in timeseries_var):
-                    self.inflow.dtheta_values =  np.array([float(d['dtheta']) for d in timeseries_dict])
-                else:
+                    self.inflow.ABL_heights = np.zeros((ntimes)) + 1500.
+                    self.inflow.lapse_rates = np.zeros((ntimes)) + 0.002
                     self.inflow.dtheta_values = np.zeros((ntimes)) + 1.
+                    self.inflow.dH_values = np.zeros((ntimes)) + 300.
 
+                #Replace default with user values if any
+                if('ABL_height' in timeseries_var):
+                    self.inflow.ABL_heights = np.array(resource_data['wind_resource']['ABL_height']['data'])
+                if('lapse_rate' in timeseries_var):
+                    self.inflow.lapse_rates = np.array(resource_data['wind_resource']['lapse_rate']['data'])
+                if('dtheta' in timeseries_var):
+                    self.inflow.dtheta_values = np.array(resource_data['wind_resource']['dtheta']['data'])
                 if('dH' in timeseries_var):
-                    self.inflow.dH_values =  np.array([float(d['dH']) for d in timeseries_dict])
-                else:
-                    self.inflow.dH_values = np.zeros((ntimes)) + 500.
+                    self.inflow.dH_values = np.array(resource_data['wind_resource']['dH']['data'])
+                #=========================
 
-                #Thermal stratification
-                self.inflow.stability = "neutral"
-                if("stability" in get_child_keys(self.wind_system_data, \
-                                                 branch="site.energy_resource.wind_resource.thermal_stratification")):
-                    self.inflow.stability = get_value(self.wind_system_data,\
-                                                      'site.energy_resource.wind_resource.thermal_stratification.stability')
-                    #TODO: raise exception if unexpected value
-
-                #Above ABL
-                if("capping_inversion" in get_child_keys(self.wind_system_data, \
-                                            branch="site.energy_resource.wind_resource.thermal_stratification") \
-                   and "active" in get_child_keys(self.wind_system_data, \
-                                    branch="site.energy_resource.wind_resource.thermal_stratification.capping_inversion")):
-
-                    self.inflow.capping_inversion = get_value(self.wind_system_data,\
-                                            'site.energy_resource.wind_resource.thermal_stratification.capping_inversion.active')
-
-                if(self.inflow.capping_inversion):
-                    self.inflow.run_precursor = True
-                    #
-                    self.inflow.ABL_heights = np.zeros((ntimes)) +  get_value(self.wind_system_data,\
-                                            'site.energy_resource.wind_resource.thermal_stratification.capping_inversion.ABL_height')
-                    self.inflow.dtheta_values = np.zeros((ntimes)) +  get_value(self.wind_system_data,\
-                                            'site.energy_resource.wind_resource.thermal_stratification.capping_inversion.dtheta')
-                    self.inflow.lapse_rates = np.zeros((ntimes)) +  get_value(self.wind_system_data,\
-                                            'site.energy_resource.wind_resource.thermal_stratification.capping_inversion.lapse_rate')
-                    self.inflow.dH_values = np.zeros((ntimes)) +  get_value(self.wind_system_data,\
-                                            'site.energy_resource.wind_resource.thermal_stratification.capping_inversion.dH')
-
-            #=========================
-
-            if(self.inflow.stability == "neutral" and not(self.inflow.capping_inversion)):
+            if(not(self.inflow.capping_inversion)):
                 self.inflow.coriolis = False
             else:
                 self.inflow.coriolis = True
@@ -794,7 +790,6 @@ class CS_study:
             #print(list(timeseries_dict[1].keys()))
             #print(len(timeseries_dict[1]))
             #print(timeseries_dict[1]['z'])
-
 
         #######################  HPC RUNS CONFIG ############################
 
@@ -891,7 +886,7 @@ class CS_study:
         number_of_alt = len(alt)
 
         # l'ordre etant: s, x, y, z, epsilon, k, RealTemp, Velocity_x, Velocity_y, Velocity_z
-        meteo_file = open(cs_meteo_file_name, "w")
+        meteo_file = open(self.cs_run_folder + sep + cs_meteo_file_name, "w")
         meteo_file.write("/ year, quantile, hour, minute, second of the profile:\n")
         meteo_file.write(" 2023,  1, 1,  0,  0\n")
         meteo_file.write("/ location of the meteo profile in the domaine (x,y):\n")
@@ -969,16 +964,16 @@ class CS_study:
             self.farm.ctstar_curves.append(ctstar_curve)
 
         for j in range(len(self.farm.cp_curves)):
-            np.savetxt(self.case_dir + sep +'DATA'+sep+'cp_table_type'+str(j+1)+'.csv', \
+            np.savetxt(self.cs_run_folder + sep + self.case_dir + sep +'DATA'+sep+'cp_table_type'+str(j+1)+'.csv', \
                        self.farm.cp_curves[j],delimiter=',')
-            np.savetxt(self.case_dir + sep +'DATA'+sep+'ct_table_type'+str(j+1)+'.csv', \
+            np.savetxt(self.cs_run_folder + sep + self.case_dir + sep +'DATA'+sep+'ct_table_type'+str(j+1)+'.csv', \
                        self.farm.ct_curves[j],delimiter=',')
-            np.savetxt(self.case_dir + sep +'DATA'+sep+'cpstar_table_type'+str(j+1)+'.csv', \
+            np.savetxt(self.cs_run_folder + sep + self.case_dir + sep +'DATA'+sep+'cpstar_table_type'+str(j+1)+'.csv', \
                        self.farm.cpstar_curves[j],delimiter=',')
-            np.savetxt(self.case_dir + sep +'DATA'+sep+'ctstar_table_type'+str(j+1)+'.csv', \
+            np.savetxt(self.cs_run_folder + sep + self.case_dir + sep +'DATA'+sep+'ctstar_table_type'+str(j+1)+'.csv', \
                        self.farm.ctstar_curves[j],delimiter=',')
 
-        np.savetxt(self.case_dir + sep +'DATA'+sep+'turbines_info.csv',\
+        np.savetxt(self.cs_run_folder + sep + self.case_dir + sep +'DATA'+sep+'turbines_info.csv',\
                    self.farm.turbine_info,delimiter=',',\
                    header="x,y,hub_height,rotor_diameter,turbine_type")
 
@@ -986,7 +981,7 @@ class CS_study:
         os.system("cp "+ cs_meteo_file_name + " " + \
                   self.case_dir+sep+"DATA"+sep+"meteo_file")
 
-        cs_meteo_file = open(cs_meteo_file_name,"r")
+        cs_meteo_file = open(self.cs_run_folder + sep + cs_meteo_file_name,"r")
         read_wind_profile = False
         for line in cs_meteo_file:
             if(read_wind_profile and i>-1):
@@ -1009,7 +1004,7 @@ class CS_study:
 
 
     def get_wind_dir_from_meteo_file(self,cs_meteo_file_name, zmeteo):
-        cs_meteo_file = open(cs_meteo_file_name,"r")
+        cs_meteo_file = open(self.cs_run_folder + sep + cs_meteo_file_name,"r")
 
         read_wind_profile = False
         for line in cs_meteo_file:
@@ -1040,15 +1035,39 @@ class CS_study:
         eta = (alt-l)/(c*self.inflow.dH_values[time_iter])
 
         f = (np.tanh(eta)+1.0)/2.0
-        with np.errstate(over='ignore'):
-            g = (np.log(2*np.cosh(eta))+eta)/2.0
+        g = (np.log(2*np.cosh(eta))+eta)/2.0
         for i in np.where(np.isinf(g)):
-            g[i] = (np.abs(eta[i])+eta[i])/2.0
+          g[i] = (np.abs(eta[i])+eta[i])/2.0
         b = self.inflow.lapse_rates[time_iter]*self.inflow.dH_values[time_iter]/3
         a = self.inflow.dtheta_values[time_iter] + b
         th = (293.15 + a*f + b*g)
 
         return th
+
+    def generate_free_atm_temp_stable(self, time_iter, z, zi, dthdz, th_zi):
+        gamma = self.inflow.lapse_rates[time_iter]
+        dh = self.inflow.dH_values[time_iter]
+        dtheta = self.inflow.dtheta_values[time_iter]
+        f = lambda x : (np.tanh(x)+1.0)/2.0
+        g = lambda x : (np.abs(x)+x)/2.0 if np.isinf((np.log(2*np.cosh(x))+x)/2.0) else (np.log(2*np.cosh(x))+x)/2.0
+        if z<zi:
+            return 0
+        else:
+            ksi = 1.5
+            c = 1.0/(2*ksi)
+            l = zi + dh/2
+            b = gamma*dh/3
+            a = dtheta + b
+            ztest = np.linspace(zi-100, l, 1000)
+            etatest = (ztest-l)/(c*dh)
+            derivth = (a/2)*(1-pow(np.tanh(etatest), 2))/(c*dh) + b/2*(1/(c*dh))*(2*np.sinh(etatest))/(2*np.cosh(etatest)) + b/2*(1/(c*dh))
+            zoffset = ztest[np.where(derivth<=dthdz)][-1]
+            eta_offset =(zoffset-l)/(c*dh)
+            l += zi-zoffset
+            th_offset = a*f(eta_offset) + b*g(eta_offset)
+            eta = (z-l)/(c*dh)
+            th = a*f(eta) + b*g(eta)
+            return th  + th_zi  - th_offset
 
     def generate_prof_stable(self, time_iter):
         T0 = 293.15      # Bottom atmospheric temperature (K)
@@ -1060,10 +1079,10 @@ class CS_study:
 
         # Stab Parameters
         Lmo = self.inflow.LMO_values[time_iter]
-        lat = self.inflow.latitude
+        lat = self.inflow.latitude[time_iter]
         z0 = self.inflow.roughness_height[time_iter]
 
-        zi = 500
+        zi = 500.
 
         alphai = 2
 
@@ -1096,7 +1115,6 @@ class CS_study:
                                        + pow(nwstdt.psim_v_nieuwstadt(zref, zi, dlmo, z0, alphai), 2.), 0.5)
             thetastar = pow(ustar, 2)*dlmo/(kappa*9.81/T0)
             eps = np.abs(zi-zi_temp)/zi
-            print("eps = "+str(eps))
 
         uadim = np.empty(len(altitude))
         vadim = np.empty(len(altitude))
@@ -1120,12 +1138,14 @@ class CS_study:
                 uadim[i] = nwstdt.psim_u_nieuwstadt(zi, zi, dlmo, z0, alphai)/kappa
                 vadim[i] = nwstdt.psim_v_nieuwstadt(zi, zi, dlmo, z0, alphai)/kappa
                 # Setting temperature slope based on last points of profiles
-                theta_adim[i] = nwstdt.psih_nieuwstadt(zi, zi, dlmo, z0, alphai)/kappa + (nwstdt.psih_nieuwstadt(zi, zi, dlmo, z0, alphai) - nwstdt.psih_nieuwstadt(zi-1, zi, dlmo, z0, alphai))*(z-zi)/kappa
+                # theta_adim[i] = nwstdt.psih_nieuwstadt(zi, zi, dlmo, z0, alphai)/kappa + (nwstdt.psih_nieuwstadt(zi, zi, dlmo, z0, alphai) - nwstdt.psih_nieuwstadt(zi-1, zi, dlmo, z0, alphai))*(z-zi)/kappa
                 tke_adim[i] = 0
                 epsilon_adim[i] = 0
             u[i] = ustar*(np.cos(-alpha_prof)*uadim[i]-np.sin(-alpha_prof)*vadim[i])
             v[i] = ustar*(np.sin(-alpha_prof)*uadim[i]+np.cos(-alpha_prof)*vadim[i])
-            th[i] = thetastar*theta_adim[i] + T0
+            dthdz_zi = thetastar/kappa*nwstdt.phih_nieuwstadt(zi, zi, dlmo, alphai)
+            th_zi = thetastar/kappa*nwstdt.psih_nieuwstadt(zi, zi, dlmo, z0, alphai)
+            th[i] = thetastar*theta_adim[i] + T0 + self.generate_free_atm_temp_stable(time_iter, z, zi, dthdz_zi, th_zi)
             tke = pow(ustar, 2)*tke_adim
             tke = np.nan_to_num(tke)
             eps = np.abs(pow(ustar, 3)*epsilon_adim)
@@ -1155,7 +1175,7 @@ class CS_study:
         alt = self.inflow.heights
         #
         theta_prof = self.inflow.pottemp[:, self.inflow.time_iter]
-        zlapse = 10000
+        zlapse = 1500
 
         slope, intercept = np.polyfit(alt[np.where(alt>zlapse)[0]], theta_prof[np.where(alt>zlapse)[0]], 1)
         gamma=slope

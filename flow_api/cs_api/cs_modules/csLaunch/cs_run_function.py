@@ -1,35 +1,37 @@
-from cs_launch_modules import *
+from csLaunch.cs_launch_modules import *
 import os as os
 from os import sep, mkdir, walk
 import numpy as np
-
-
-#General config
-#TODO: config file in the api during install
-cs_path="/software/rd/saturne/code_saturne/8.0/arch/cronos_impi/bin/code_saturne"
-salome_path="/software/rd/salome/logiciels/salome/V9_10_0/salome"
-lib_path="/software/rd/saturne/opt/paraview-5.9/arch/cronos_impi_osmesa/lib:/software/rd/saturne/opt/paraview-5.9/arch/cronos_impi_osmesa/lib64:/software/rd/tools/compilateur/intel/oneAPI/2021.1.0.2659/mpi/2021.1.1/lib/release/:/software/rd/tools/compilateur/intel/oneAPI/2021.1.0.2659/mpi/2021.1.1/libfabric/lib:/software/rd/tools/python/intelpython2/lib/"
-python_path="/usr/lib64/python3.6/site-packages/:/usr/lib/python3.6/site-packages/::/software/rd/saturne/opt/paraview-5.9/arch/cronos_impi_osmesa/lib64/python3.6/site-packages:/software/rd/saturne/opt/paraview-5.9/arch/cronos_impi_osmesa/lib64/python3.6/site-packages/vtkmodules/"
-
+from csLaunch.cs_config import *
+from datetime import datetime
+import shutil
 
 def run_code_saturne(windio_input, test_mode=False):
     """Runner to code_saturne for the FLOW api
-    
+
     Parameters:
     windio_input (str): main windio file path
-    
+
     """
 
     #TODO: get that from windio
-    postprocess_only=False    
-    
-    #TODO: localize run and copy cs work folders from there to new name
+    postprocess_only=False
+
+
     #TODO: paths from windio or a config file in the api during install
-    windfarm_study = CS_study(case_dir="Farm", \
+    cs_run_folder="cs_run_" + datetime.now().strftime("%Y%m%d_%H-%M-%S")
+
+    windfarm_study = CS_study(cs_run_folder=cs_run_folder, \
+                              case_dir="Farm", \
                               cs_path=cs_path, \
+                              cs_api_path=cs_api_path, \
                               salome_path=salome_path, \
                               lib_path=lib_path, \
-                              python_path=python_path)
+                              python_path=python_path, \
+                              python_exe=python_exe)
+
+    #Creates the temporary folders for the run
+    windfarm_study.set_run_env()
 
     #Example 1 : get data from windio files
     windfarm_study.set_windio(windio_input)
@@ -83,7 +85,7 @@ def run_code_saturne(windio_input, test_mode=False):
         #
         'precntmax' : precntmax #max precursor number of timesteps. Default is 1000000.
     }
-    
+
     #cs files can be written before loop
     #as long as layout and turbines do not change
     windfarm_study.write_cs_input_files()
@@ -94,10 +96,9 @@ def run_code_saturne(windio_input, test_mode=False):
         windfarm_study.mesh.domain_height = 25000.0
         turbine_control = True
     else:
-        windfarm_study.mesh.domain_height = 1500.0
+        windfarm_study.mesh.domain_height = 800.0
         damping_layer = False
         turbine_control = False  #TODO : depends on Coriolis
-
     if(windfarm_study.inflow.run_precursor):
         precursor = True
     else:
@@ -114,8 +115,8 @@ def run_code_saturne(windio_input, test_mode=False):
         windfarm_study.set_notebook_param_from_dictionary(farm_notebook_parameters,\
                                                           prec_notebook_parameters)
         launch_file_name="postprocess.sh"
-        windfarm_study.postprocess(standalone=True,launch_file_name=launch_file_name+sep+"postprocess.sh", log_folder="logs")
-        os.system("sbatch "+ launch_file_name)
+        windfarm_study.postprocess(standalone=True,launch_file_name=cs_run_folder+sep+"postprocess.sh", log_folder="logs")
+        os.system("cd "+ cs_run_folder + " ; sbatch "+ launch_file_name)
     else:
         launch_file_name = "launch_farm.sh"
         #===================Time loop====================
@@ -129,50 +130,58 @@ def run_code_saturne(windio_input, test_mode=False):
             prec_notebook_parameters['lat']=windfarm_study.inflow.latitude[j]
             #
             if(windfarm_study.inflow.data_type == "timeseries_hub"):
-                farm_notebook_parameters['meteo_profile'] = 1
-                #
-                meteo_file_name = "meteo_files"+sep+"meteo_file_"+case_name_id
-                precursor_meteo_file_name = "precursor_meteo_files"+sep+"meteo_file_"+case_name_id
+                prec_notebook_parameters['ureff']=np.round(windfarm_study.inflow.wind_velocity[j],2)
+                prec_notebook_parameters['t0']=293.15 #20 deg Celcius, arbitrary #TODO: user choice?
                 farm_notebook_parameters['teta']=np.round(windfarm_study.inflow.wind_dir[j],2)
                 windfarm_study.wind_origin=np.round(windfarm_study.inflow.wind_dir[j],2)
-                #
-                precursor = True
-                prec_notebook_parameters['ureff']=np.round(windfarm_study.inflow.wind_velocity[j],2)
-                #
-                if(windfarm_study.inflow.stability == "neutral"):
-                    windfarm_study.inflow.pottemp[:,j] = windfarm_study.generate_temp_CNBL(j)
-                    windfarm_study.inflow.u[:,j] = np.ones(len(windfarm_study.inflow.heights))*windfarm_study.inflow.wind_velocity[j]
-                    windfarm_study.inflow.v[:,j] = np.zeros(len(windfarm_study.inflow.heights))
-                    windfarm_study.inflow.tke[:,j] = np.ones(len(windfarm_study.inflow.heights))*0.1
-                    windfarm_study.inflow.epsilon[:,j] = np.ones(len(windfarm_study.inflow.heights))*0.003
-                    windfarm_study.write_cs_meteo_file(precursor_meteo_file_name, j, precursor)
+                if (windfarm_study.inflow.capping_inversion):
+                    farm_notebook_parameters['meteo_profile'] = 1
                     #
-                    prec_notebook_parameters['Lmoinv']=0.0 #neutral
+                    meteo_file_name = "meteo_files"+sep+"meteo_file_"+case_name_id
+                    precursor_meteo_file_name = "precursor_meteo_files"+sep+"meteo_file_"+case_name_id
                     #
-                    prec_notebook_parameters['t0']=293.15 #20 deg Celcius, arbitrary #TODO: user choice?
+                    precursor = True
                     #
-                    prec_notebook_parameters['ustar']= 0
-                    prec_notebook_parameters['tstar']= 0
-                    prec_notebook_parameters['zi']= 0
-                elif(windfarm_study.inflow.stability == "stable"):
-                    pottemp, u, v, tke, epsilon, ustar, tstar, zi = windfarm_study.generate_prof_stable(j)
-                    windfarm_study.inflow.pottemp[:,j] = pottemp
-                    windfarm_study.inflow.u[:,j] = u
-                    windfarm_study.inflow.v[:,j] = v
-                    windfarm_study.inflow.tke[:,j] = tke
-                    windfarm_study.inflow.epsilon[:,j] = epsilon
-                    windfarm_study.write_cs_meteo_file(precursor_meteo_file_name, j, precursor)
-                    #
-                    prec_notebook_parameters['Lmoinv']= 1./windfarm_study.inflow.LMO_values[j]
-                    prec_notebook_parameters['precntmax'] = 20000
-                    #
-                    prec_notebook_parameters['t0']=293.15 #20 deg Celcius, arbitrary #TODO: user choice?
-                    #
-                    prec_notebook_parameters['ustar']= ustar
-                    prec_notebook_parameters['tstar']= tstar
-                    prec_notebook_parameters['zi']= zi
+                    if(np.abs(windfarm_study.inflow.LMO_values[j])>1000):
+                        windfarm_study.inflow.pottemp[:,j] = windfarm_study.generate_temp_CNBL(j)
+                        windfarm_study.inflow.u[:,j] = np.ones(len(windfarm_study.inflow.heights))*windfarm_study.inflow.wind_velocity[j]
+                        windfarm_study.inflow.v[:,j] = np.zeros(len(windfarm_study.inflow.heights))
+                        windfarm_study.inflow.tke[:,j] = np.ones(len(windfarm_study.inflow.heights))*0.1
+                        windfarm_study.inflow.epsilon[:,j] = np.ones(len(windfarm_study.inflow.heights))*0.003
+                        windfarm_study.write_cs_meteo_file(precursor_meteo_file_name, j, precursor)
+                        #
+                        prec_notebook_parameters['Lmoinv']=0.0 #neutral
+                        #
+                        #
+                        prec_notebook_parameters['ustar']= 0
+                        prec_notebook_parameters['tstar']= 0
+                        prec_notebook_parameters['zi']= 0
+                    elif(windfarm_study.inflow.LMO_values[j]>0):
+                        pottemp, u, v, tke, epsilon, ustar, tstar, zi = windfarm_study.generate_prof_stable(j)
+                        windfarm_study.inflow.pottemp[:,j] = pottemp
+                        windfarm_study.inflow.u[:,j] = u
+                        windfarm_study.inflow.v[:,j] = v
+                        windfarm_study.inflow.tke[:,j] = tke
+                        windfarm_study.inflow.epsilon[:,j] = epsilon
+                        windfarm_study.write_cs_meteo_file(precursor_meteo_file_name, j, precursor)
+                        #
+                        prec_notebook_parameters['Lmoinv']= 1./windfarm_study.inflow.LMO_values[j]
+                        if not test_mode:
+                            prec_notebook_parameters['precntmax'] = 20000
+                        #
+                        prec_notebook_parameters['ustar']= ustar
+                        prec_notebook_parameters['tstar']= tstar
+                        prec_notebook_parameters['zi']= zi
+                    else:
+                        raise ValueError('Ongoing devs - can not handle unstable stratification with capping inversion')
                 else:
-                    raise ValueError('Ongoing devs - can not handle stability "'+windfarm_study.inflow.stability+'"')
+                    farm_notebook_parameters['meteo_profile'] = 2
+                    meteo_file_name = ""
+                    precursor_meteo_file_name = ""
+                    if(np.abs(windfarm_study.inflow.LMO_values[j])>1000):
+                        prec_notebook_parameters['Lmoinv']=0.0 #neutral
+                    else:
+                        prec_notebook_parameters['Lmoinv']= np.round(1./windfarm_study.inflow.LMO_values[j],3)
             #
             elif(windfarm_study.inflow.data_type == "timeseries_profile"):
                 farm_notebook_parameters['meteo_profile'] = 1
@@ -184,23 +193,19 @@ def run_code_saturne(windio_input, test_mode=False):
 
                     windfarm_study.wind_origin = windfarm_study.get_wind_dir_from_meteo_file(precursor_meteo_file_name, \
                                                                                              zmeteo = windfarm_study.farm.hub_heights[0])
-                    if(damping_layer):
-                        windfarm_study.inflow.damping_lapse =  windfarm_study.get_lapse_rate_from_meteo_file(precursor_meteo_file_name)
                 else:
                     precursor_meteo_file_name = None
                     windfarm_study.write_cs_meteo_file(meteo_file_name, j)
 
                     windfarm_study.wind_origin = windfarm_study.get_wind_dir_from_meteo_file(meteo_file_name, \
                                                                                              zmeteo = windfarm_study.farm.hub_heights[0])
-                    if(damping_layer):
-                        windfarm_study.inflow.damping_lapse =  windfarm_study.get_lapse_rate_from_meteo_file(meteo_file_name)
-
                 farm_notebook_parameters['teta']=windfarm_study.wind_origin
 
             else:
                 raise ValueError('Can not handle this inflow type : ' +windfarm_study.inflow.data_type)
 
             if(damping_layer):
+                windfarm_study.inflow.damping_lapse =  windfarm_study.get_lapse_rate_from_meteo_file(meteo_file_name)
                 farm_notebook_parameters['damping'] = 1
                 farm_notebook_parameters['gamma'] = windfarm_study.inflow.damping_lapse
                 farm_notebook_parameters['nura'] = 3.0
@@ -219,7 +224,6 @@ def run_code_saturne(windio_input, test_mode=False):
             #mesh_file_name = "mesh_"+case_name_id+".med"
             job_name = windfarm_study.case_name+"_"+str(j+1)
             #
-            wckey="P12BH:EFLOW"
             if(j==windfarm_study.inflow.run_times[0]):
                 first_case=True
             else:
@@ -235,7 +239,8 @@ def run_code_saturne(windio_input, test_mode=False):
             #print("After cs simulation is finished, power output will be stored in "+windfarm_study.case_dir+sep+"RESU"+sep+windfarm_study.result_dir+sep+"power.txt file")
 
         windfarm_study.postprocess(launch_file_name=launch_file_name, log_folder="logs")
-        os.system("sbatch "+ launch_file_name)
+
+        os.system("cd "+ cs_run_folder + " ; sbatch "+ launch_file_name)
         #=================================================
 
 def validate_yaml_code_saturne(windio_input):
@@ -249,5 +254,5 @@ def validate_yaml_code_saturne(windio_input):
     windio_input (str): main windio file path
     """
     #TODO : check temperature profile
-    
+
     return 0

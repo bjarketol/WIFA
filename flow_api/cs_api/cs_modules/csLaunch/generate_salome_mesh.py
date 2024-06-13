@@ -55,7 +55,7 @@ diameters_array = np.genfromtxt('Farm/DATA/turbines_info.csv',delimiter=',')[:,3
 
 #hm = np.max(hub_heights_array) #not used anymore, replaced by:
 #Domain height
-Lz = args.domain_height 
+Lz = args.domain_height
 extrusion1_max_height = np.max(hub_heights_array+diameters_array)
 extrusion2_height = 0.6*Lz
 #
@@ -165,7 +165,7 @@ if(args.turbine_control>0):
   S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
   zone_raff7_pa.append(S)
 else:
-  for i in range(nombre_turbines): 
+  for i in range(nombre_turbines):
     diametre=diameters_array[i]
     zone_raff1_eolienne = geompy.MakeBoxDXDYDZ(4*tm, ((1.1*diametre)//tm)*tm, diametre+40)
     S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -4*tm/2 ,-(((1.1*diametre)//tm)*tm)/2, 0)
@@ -435,13 +435,13 @@ wire = geompy.MakeWire([edge_wire], 1e-07)
 
 
 if(args.damping_layer>0):
- end_point2 = geompy.MakeVertex(0, 0,extrusion2_height) 
+ end_point2 = geompy.MakeVertex(0, 0,extrusion2_height)
  end_point3 = geompy.MakeVertex(0, 0,Lz )
  edge_wire3 = geompy.MakeEdge(end_point2, end_point3)
  wire3 = geompy.MakeWire([edge_wire3], 1e-07)
 else:
  end_point2 = geompy.MakeVertex(0, 0,Lz )
-# 
+#
 edge_wire2 = geompy.MakeEdge(end_point, end_point2)
 wire2 = geompy.MakeWire([edge_wire2], 1e-07)
 
@@ -587,7 +587,11 @@ Gmsh_Parameters.Set2DAlgo( 4 )
 Gmsh_Parameters.SetRecombineAll( 1 )
 Gmsh_Parameters.SetMinSize(tmin)
 Gmsh_Parameters.SetMaxSize(tmax)
-#Gmsh_Parameters.SetSmouthSteps( 100 )
+# Gmsh_Parameters.SetSmouthSteps( 100 )
+Gmsh_Parameters.SetSubdivAlgo( 0 )
+Gmsh_Parameters.SetRemeshAlgo( 0 )
+Gmsh_Parameters.SetMeshCurvatureSize( 0 )
+Gmsh_Parameters.SetRecomb2DAlgo( 1 )
 Gmsh_Parameters.SetIs2d( 1 )
 isDone = Maillage_1.Compute()
 

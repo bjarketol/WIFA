@@ -66,11 +66,11 @@ if __name__ == "__main__":
     precntmax=args.precntmax
     #
     sea_level_pressure = 101325.
-        
+
     # get data
-    data = np.genfromtxt(RESU_folder + sep + "profiles" + sep + "profile1_"+str(precntmax)+".csv", delimiter=",", skip_header=1)
+    data = np.genfromtxt(RESU_folder + sep + "profiles" + sep + "profile1.csv", delimiter=",", skip_header=1)
     # get header
-    with open(RESU_folder + sep + "profiles" + sep + "profile1_"+str(precntmax)+".csv") as f:
+    with open(RESU_folder + sep + "profiles" + sep + "profile1.csv") as f:
         first_line = f.readline()
     var_name = first_line.replace(' ', '').replace('\n', '').split(',')
 

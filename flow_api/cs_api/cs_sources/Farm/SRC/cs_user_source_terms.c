@@ -759,9 +759,9 @@ cs_user_source_terms(cs_domain_t  *domain,
     if (cs_glob_atmo_option->meteo_dlmo>0)
     {
       /* u* */
-      const cs_real_t ustar = cs_glob_atmo_option->meteo_ustar0;
+      const cs_real_t ustar = cs_notebook_parameter_value_by_name("ustar");
       /* theta* */
-      const cs_real_t tstar = cs_glob_atmo_option->meteo_tstar;
+      const cs_real_t tstar = cs_notebook_parameter_value_by_name("tstar");
       const cs_real_t  cp0 = cs_glob_fluid_properties->cp0;
       const cs_real_t  zi = cs_notebook_parameter_value_by_name("zi");
       for (cs_lnum_t c_id = 0; c_id < n_cells; c_id++) {

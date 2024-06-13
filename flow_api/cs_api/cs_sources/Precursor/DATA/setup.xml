@@ -36,8 +36,8 @@ zz1=26000.0;
 x = 0;
 y = 0;
 z = zz1*s + zz0*(1.-s);</formula>
-        <output_frequency>5000</output_frequency>
-        <output_type>frequency</output_type>
+        <output_frequency>-1</output_frequency>
+        <output_type>end</output_type>
         <points>5000</points>
         <var_prop component="-1" name="real_temperature"/>
         <var_prop component="-1" name="velocity"/>
@@ -54,7 +54,7 @@ z = zz1*s + zz0*(1.-s);</formula>
     <time_averages/>
     <time_parameters>
       <iterations>1000000</iterations>
-      <max_courant_num>0.2</max_courant_num>
+      <max_courant_num>1</max_courant_num>
       <max_fourier_num>10</max_fourier_num>
       <property label="CourantNb" name="courant_number"/>
       <property label="FourierNb" name="fourier_number"/>
@@ -63,7 +63,7 @@ z = zz1*s + zz0*(1.-s);</formula>
       <time_passing>2</time_passing>
       <time_step_max_factor>10</time_step_max_factor>
       <time_step_min_factor>0.0001</time_step_min_factor>
-      <time_step_ref>0.5</time_step_ref>
+      <time_step_ref>5</time_step_ref>
       <time_step_var>0.2</time_step_var>
     </time_parameters>
   </analysis_control>
@@ -180,16 +180,19 @@ z = zz1*s + zz0*(1.-s);</formula>
       <y_direction law="constant" max="10.0" min="-10.0" ncells="1" prog="1.0"/>
       <z_direction law="geometric" max="26000" min="0.0" ncells="1000" prog="1.0027"/>
     </mesh_cartesian>
-    <mesh_origin choice="mesh_cartesian"/>
+    <mesh_origin choice="mesh_import"/>
     <mesh_smoothing status="off"/>
-    <meshes_list/>
+    <meshes_list>
+      <mesh name="Precursor_mesh_50m.med"/>
+      <meshdir name="."/>
+    </meshes_list>
     <periodicity>
       <face_periodicity mode="translation" name="1">
         <fraction>0.1</fraction>
         <plane>25</plane>
         <selector>X0 or X1</selector>
         <translation>
-          <translation_x>20</translation_x>
+          <translation_x>50</translation_x>
           <translation_y>0</translation_y>
           <translation_z>0</translation_z>
         </translation>
@@ -202,7 +205,7 @@ z = zz1*s + zz0*(1.-s);</formula>
         <selector>Y0 or Y1</selector>
         <translation>
           <translation_x>0</translation_x>
-          <translation_y>20</translation_y>
+          <translation_y>50</translation_y>
           <translation_z>0</translation_z>
         </translation>
         <verbosity>1</verbosity>
