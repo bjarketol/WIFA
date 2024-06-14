@@ -32,6 +32,12 @@ Contents
 
       API
 
+  .. toctree::
+      :maxdepth: 3
+
+      references
+      
+
 Indices and tables
 ==================
 
