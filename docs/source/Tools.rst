@@ -9,3 +9,4 @@ Tools
    foxes
    wayve
    codesaturne
+   pywake_ellipsys
