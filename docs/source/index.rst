@@ -6,10 +6,17 @@
 
 .. image:: ../img/Logo_FLOW.png
     :align: center
-    :width: 300
+    :width: 150
 
+=====================================
 Welcome to FLOW API's documentation!
-====================================
+=====================================
+
+The FLOW API integrates different tools (Pywake, FOXES, WAVE, code_saturne) of different fidelities to model the atmospheric flow of a wind farm, through a Python framework. This includes engineering wake models, an Atmospheric Perturbation Model (APM), and 3D CFD, all of which allow to estimate the power production of wind farms. These tools are interfaced using a common input and output schema: the WindIO ontology.
+
+The objective of the FLOW tool is to make the use of these models harmonized and easier, although they are initially different both in formulation and use. In particular, this would allow chaining to other tools (e.g. load models).
+
+The presented API is a culmination of close collaboration within the FLOW project. Each supported tool is a product of the institutions represented within the project.
 
 License
 -------
