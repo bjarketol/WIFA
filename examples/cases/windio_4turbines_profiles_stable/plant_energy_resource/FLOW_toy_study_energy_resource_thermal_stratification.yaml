@@ -1,5 +1,0 @@
-name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
-wind_resource:
-    !include "Stochastic_nieuwstadt_profiles.nc"
-    #thermal_stratification:
-    #  stability: "stable"
