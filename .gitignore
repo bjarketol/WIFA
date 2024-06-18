@@ -1,5 +1,7 @@
 .vscode/
 __pycache__/
+html/
+*.html
 *.pyc
 _*.yaml
 *foxes*states*.nc
