@@ -14,6 +14,23 @@ Pywake
 
 FOXES
 ~~~~~~~~~~~~~~~~~~~~~~~
+The installation of *FOXES* is described `here in the documentation <https://fraunhoferiwes.github.io/foxes.docs/installation.html>`_.
+
+For the latest relase, run (for `conda` consult the link above):
+
+.. code-block:: console
+  
+  pip install foxes
+
+For the latest developments, clone and install the `eu_flow <https://github.com/FraunhoferIWES/foxes/tree/eu_flow>`_
+branch from github:
+
+.. code-block:: console
+  
+  git clone git@github.com:FraunhoferIWES/foxes.git
+  cd foxes
+  git checkout eu_flow
+  pip install -e .
 
 
 WAYVE
