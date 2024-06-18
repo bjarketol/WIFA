@@ -23,7 +23,7 @@ yaml_dat = load_yaml(yaml_input)
 
 model_name = yaml_dat['attributes']['flow_model']['name']
 
-if model_name == 'pywake':
+if model_name.lower() == 'pywake':
     x = yaml_dat['wind_farm']['layouts']['initial_layout']['coordinates']['x']
 
     yaml_input_no_ext = os.path.splitext(yaml_input)[0]  # Remove the file extension
@@ -46,13 +46,13 @@ if model_name == 'pywake':
     # compute AEP (next step is to return a richer set of outputs)
     pywake_aep = run_pywake(yaml_input, output_dir=output_dir_name)
 
-elif model_name== 'foxes':
+elif model_name.lower() == 'foxes':
     foxes_aep = runFoxes(yaml_input)
     
-elif model_name == 'wayve':
+elif model_name.lower() == 'wayve':
     run_wayve(yaml_input)
     
-elif model_name=='code_saturne':
+elif model_name.lower() == 'code_saturne':
     run_code_saturne(yaml_input, test_mode=True)
 
 else:
