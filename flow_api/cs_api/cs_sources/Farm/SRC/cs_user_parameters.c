@@ -77,10 +77,6 @@ cs_user_model(void)
   wf->iwalfs = CS_WALL_F_S_MONIN_OBUKHOV;
   wf->iwallf = CS_WALL_F_2SCALES_SMOOTH_ROUGH;
 
-  if(cs_notebook_parameter_value_by_name("energy")==0) {
-    cs_glob_physical_model_flag[CS_ATMOSPHERIC] = CS_ATMO_CONSTANT_DENSITY;
-  }
-
   //TODO : check when it's needed. With constant density or dry atmo?
   /* Automatic open boundary conditions
    *   1: meteo mass flow rate is imposed with a constant large scale
@@ -105,7 +101,7 @@ cs_user_model(void)
   cs_glob_atmo_option->meteo_z0 = cs_notebook_parameter_value_by_name("z0");
   /* Velocity direction */
   cs_glob_atmo_option->meteo_angle = cs_notebook_parameter_value_by_name("teta");
-  
+
   /* Inverse LMO length */
   cs_glob_atmo_option->meteo_dlmo = cs_notebook_parameter_value_by_name("Lmoinv");
   /* Ground temperature */
@@ -188,7 +184,7 @@ cs_user_parameters(cs_domain_t *domain)
 
   cs_time_step_t *ts = cs_get_glob_time_step();
   ts->nt_max = cs_notebook_parameter_value_by_name("ntmax");
-    
+
   /* Warning, meteo file does not overwrite reference values... */
   cs_fluid_properties_t *phys_pro = cs_get_glob_fluid_properties();
   cs_real_t rair = phys_pro->r_pg_cnst;
