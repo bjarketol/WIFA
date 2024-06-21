@@ -4,23 +4,14 @@ import foxes.variables as FV
 
 def runFoxes(input_yaml):
 
-    site_pars = dict(
-            fixed_vars={FV.RHO: 1.225}
-    )
+    wio_runner = foxes.input.windio.read_windio(
+            input_yaml, verbosity=1)
 
-    keymap = {
-            'Bastankhah’s Gaussian wake model (simplified version)': "Bastankhah_linear_k002"
-    }
-    ana_pars = dict(keymap=keymap)
-
-    mbook, farm, states, algo = foxes.input.windio.read_case(
-                                    input_yaml,
-                                    site_pars=site_pars,
-                                    ana_pars=ana_pars)
-
-    farm_results = algo.calc_farm()
+    with wio_runner as runner:
+        runner.run()
 
     # results by turbine
+    """
     o = foxes.output.FarmResultsEval(farm_results)
     o.add_capacity(algo)
     o.add_capacity(algo, ambient=True)
@@ -47,5 +38,6 @@ def runFoxes(input_yaml):
     print(f"Farm efficiency   : {o.calc_farm_efficiency()*100:.2f} %")
     print(f"Annual farm yield : {turbine_results[FV.YLD].sum():.2f} GWh")
     return turbine_results[FV.YLD].sum()
+    """
 
 
