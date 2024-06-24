@@ -176,6 +176,7 @@ def run_code_saturne(windio_input, test_mode=False):
                         raise ValueError('Ongoing devs - can not handle unstable stratification with capping inversion')
                 else:
                     farm_notebook_parameters['meteo_profile'] = 2
+                    farm_notebook_parameters['energy'] = 0
                     meteo_file_name = ""
                     precursor_meteo_file_name = ""
                     if(np.abs(windfarm_study.inflow.LMO_values[j])>1000):
@@ -185,6 +186,7 @@ def run_code_saturne(windio_input, test_mode=False):
             #
             elif(windfarm_study.inflow.data_type == "timeseries_profile"):
                 farm_notebook_parameters['meteo_profile'] = 1
+                farm_notebook_parameters['energy'] = 0
                 #
                 meteo_file_name = "meteo_files"+sep+"meteo_file_"+case_name_id
                 if(precursor):
@@ -224,6 +226,7 @@ def run_code_saturne(windio_input, test_mode=False):
             #mesh_file_name = "mesh_"+case_name_id+".med"
             job_name = windfarm_study.case_name+"_"+str(j+1)
             #
+            wckey="P12BH:EFLOW"
             if(j==windfarm_study.inflow.run_times[0]):
                 first_case=True
             else:
@@ -239,7 +242,7 @@ def run_code_saturne(windio_input, test_mode=False):
             #print("After cs simulation is finished, power output will be stored in "+windfarm_study.case_dir+sep+"RESU"+sep+windfarm_study.result_dir+sep+"power.txt file")
 
         windfarm_study.postprocess(launch_file_name=launch_file_name, log_folder="logs")
-
+        # sys.exit()
         os.system("cd "+ cs_run_folder + " ; sbatch "+ launch_file_name)
         #=================================================
 

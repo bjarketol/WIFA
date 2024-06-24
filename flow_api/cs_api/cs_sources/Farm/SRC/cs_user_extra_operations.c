@@ -83,7 +83,7 @@ BEGIN_C_DECLS
 void
 cs_user_extra_operations(cs_domain_t     *domain)
 {
-  if (cs_glob_atmo_option->meteo_profile==2){
+  if (cs_notebook_parameter_value_by_name("energy")==0){
     /* mesh quantities */
     const cs_mesh_t *m = domain->mesh;
     const cs_mesh_quantities_t *mq = cs_glob_mesh_quantities;
@@ -93,11 +93,26 @@ cs_user_extra_operations(cs_domain_t     *domain)
     const cs_real_3_t *cell_cen = (const cs_real_3_t *)mq->cell_cen;
 
     cs_field_t *f_thm = cs_thermal_model_field();
+    if (cs_glob_atmo_option->meteo_profile==2){
+      cs_real_t *cpro_met_potemp = cs_field_by_name("meteo_pot_temperature")->val;
+      for (cs_lnum_t c_id = 0; c_id < n_cells; c_id++) {
+  	      f_thm->val[c_id] = cpro_met_potemp[c_id];
+      }
+    }
+    else{
+      int nbmett = cs_glob_atmo_option->nbmett; //nprofz
+      int nbmetm = cs_glob_atmo_option->nbmetm; //nproft, dim_u_met, dim_pot_t_met, ..
 
-    cs_real_t *cpro_met_potemp = cs_field_by_name("meteo_pot_temperature")->val;
-
-    for (cs_lnum_t c_id = 0; c_id < n_cells; c_id++) {
-  	    f_thm->val[c_id] = cpro_met_potemp[c_id];
+      for (cs_lnum_t c_id = 0; c_id < n_cells; c_id++) {
+        const cs_real_t z = cell_cen[c_id][2];
+          f_thm->val[c_id] = cs_intprf(nbmett, //nprofz
+                                       nbmetm, //nproft
+                                       cs_glob_atmo_option->z_dyn_met, //profz
+                                       cs_glob_atmo_option->time_met, //proft
+                                       cs_glob_atmo_option->pot_t_met, //prof theta
+                                       z, //xz
+                                       cs_glob_time_step->t_cur); //t ;
+      }
     }
   }
 }

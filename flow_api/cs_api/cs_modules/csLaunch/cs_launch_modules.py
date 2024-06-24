@@ -296,7 +296,7 @@ class CS_study:
         TODO: replace with code_saturne python api
         """
         mesh_nodes=self.mesh_node_number
-        mesh_ntasks_per_nodes=self.mesh_ntasks_per_node        
+        mesh_ntasks_per_nodes=self.mesh_ntasks_per_node
         mesh_wall_time=str(timedelta(hours=self.mesh_wall_time_hours))
         mesh_partition=self.mesh_partition
         cs_nodes=self.run_node_number
@@ -659,10 +659,9 @@ class CS_study:
         #====TIMESERIES====
         if('time' in get_child_keys(self.wind_system_data,'site.energy_resource.wind_resource')):
             timeseries_var = get_child_keys(self.wind_system_data,'site.energy_resource.wind_resource')
-            
             self.inflow.times = np.array(resource_data['wind_resource']['time'])
             ntimes = len(self.inflow.times)
-            
+
             #TODO: check if we should replace by input from the flow_api in case of binned
             self.inflow.run_times = np.arange(ntimes) #default
             if("cases_run" in get_child_keys(self.wind_system_data, branch="attributes.analysis")):
@@ -671,19 +670,18 @@ class CS_study:
                     if(not(all_occurences)):
                         self.inflow.run_times = get_value(self.wind_system_data,'attributes.analysis.cases_run.occurences_list')
                         self.inflow.times = self.inflow.times[self.inflow.run_times]
-                elif("occurences_list" in get_child_keys(self.wind_system_data, branch="attributes.analysis.cases_run")):
-                    self.inflow.run_times = get_value(self.wind_system_data,'attributes.analysis.cases_run.occurences_list')
-                    self.inflow.times = self.inflow.times[self.inflow.run_times]
+                        if (not all(isinstance(run_time, int) for run_time in self.inflow.run_times)):
+                            raise ValueError('occurences_list element is not of type int')
 
             self.inflow.roughness_height = np.array(resource_data['wind_resource']['z0']['data'])
-            
+
             if('lat' in timeseries_var):
                 self.inflow.latitude = np.array(resource_data['wind_resource']['lat']['data'])
             else:
                 self.inflow.latitude = np.zeros((ntimes)) + 55. #default latitude value
 
             #====VERTICAL PROFILES====
-            if('height' in timeseries_var):
+            if('potential_temperature' in timeseries_var and 'height' in timeseries_var):
                 #PROFILES
                 self.inflow.data_type = 'timeseries_profile'
                 self.inflow.heights =  np.array(resource_data['wind_resource']['height'])
@@ -695,20 +693,17 @@ class CS_study:
                 self.inflow.pottemp = np.zeros((nzpoints, ntimes))
                 self.inflow.tke = np.zeros((nzpoints, ntimes))
                 self.inflow.epsilon = np.zeros((nzpoints, ntimes))
-                
-                #Required                
+
+                #Required
                 if('wind_speed' in timeseries_var):
                     self.inflow.wind_velocity[:,:] = np.array(resource_data['wind_resource']['wind_speed']['data']).transpose()
                 else:
-                    raise ValueError('No "speed" profile in the data')
+                    raise ValueError('No "wind_speed" profile in the data')
                 if('wind_direction' in timeseries_var):
                     self.inflow.wind_dir[:,:] = np.array(resource_data['wind_resource']['wind_direction']['data']).transpose()
                 else:
-                    raise ValueError('No "direction" profile in the data')
-                if('potential_temperature' in timeseries_var):
-                    self.inflow.pottemp[:,:] = np.array(resource_data['wind_resource']['potential_temperature']['data']).transpose()
-                else:
-                    raise ValueError('No potential_temperature profile in the data')
+                    raise ValueError('No "wind_direction" profile in the data')
+                self.inflow.pottemp[:,:] = np.array(resource_data['wind_resource']['potential_temperature']['data']).transpose()
 
                 #Optional
                 if('k' in timeseries_var):
@@ -721,16 +716,11 @@ class CS_study:
                 else:
                     self.inflow.epsilon[:,:] = 0.003
 
-                #TODO : discriminate stability cases and capping inversion param etc.
-                #TODO : list of stabilities for each time occurence
                 self.inflow.capping_inversion=True
-                self.inflow.run_precursor = True
-
-            #=========================
+                self.inflow.run_precursor = False
 
             #=========HUB HEIGHT======
             else:
-                #TIME ONLY
                 self.inflow.data_type = 'timeseries_hub'
                 self.inflow.run_precursor = False #initialization
                 self.inflow.capping_inversion = False #initialization
@@ -741,19 +731,37 @@ class CS_study:
                 heights_fa = np.linspace(Lz_bl, Lz_fa, Nz_fa, endpoint=True)
                 self.inflow.heights = np.concatenate((heights_bl, heights_fa))
                 nzpoints = len(self.inflow.heights)
-                self.inflow.wind_velocity = np.zeros((nzpoints, ntimes))
+                self.inflow.wind_velocity = np.zeros(ntimes)
                 self.inflow.u = np.zeros((nzpoints, ntimes))
                 self.inflow.v = np.zeros((nzpoints, ntimes))
-                self.inflow.wind_dir = np.zeros((nzpoints, ntimes))
+                self.inflow.wind_dir = np.zeros(ntimes)
                 self.inflow.pottemp = np.zeros((nzpoints, ntimes))
                 self.inflow.tke = np.zeros((nzpoints, ntimes))
                 self.inflow.epsilon = np.zeros((nzpoints, ntimes))
 
-                #Required
-                #TODO: exception if not in file
-                self.inflow.wind_velocity =  np.array(resource_data['wind_resource']['wind_speed']['data'])
-                self.inflow.wind_dir =  np.array(resource_data['wind_resource']['wind_direction']['data'])
-                
+                if('wind_speed' in timeseries_var):
+                    if('height' in timeseries_var):
+                        height = np.array(resource_data['wind_resource']['height'])
+                        wind_velocity_prof = np.array(resource_data['wind_resource']['wind_speed']['data']).transpose()
+                        mean_hub_height = np.average(self.farm.hub_heights)
+                        for j in np.arange(ntimes):
+                            self.inflow.wind_velocity[j] = np.interp(mean_hub_height, height, wind_velocity_prof[:, j])
+                    else:
+                        self.inflow.wind_velocity = np.array(resource_data['wind_resource']['wind_speed']['data'])
+                else:
+                    raise ValueError('No "wind_speed" profile in the data')
+                if('wind_direction' in timeseries_var):
+                    if('height' in timeseries_var):
+                        height = np.array(resource_data['wind_resource']['height'])
+                        wind_direction_prof = np.array(resource_data['wind_resource']['wind_direction']['data']).transpose()
+                        mean_hub_height = np.average(self.farm.hub_heights)
+                        for j in np.arange(ntimes):
+                            self.inflow.wind_dir[j] = np.interp(mean_hub_height, height, wind_direction_prof[:, j])
+                    else:
+                        self.inflow.wind_dir = np.array(resource_data['wind_resource']['wind_direction']['data'])
+                else:
+                    raise ValueError('No "wind_direction" profile in the data')
+
                 #Optional : stability and capping inversion information
                 if('LMO' in timeseries_var):
                     self.inflow.LMO_values = np.array(resource_data['wind_resource']['LMO']['data'])
@@ -763,7 +771,7 @@ class CS_study:
                 #==================Capping inversion========================
                 #Activate capping inversion and set default values
                 if('ABL_height' in timeseries_var or 'lapse_rate' in timeseries_var \
-                   or 'dtheta' in timeseries_var or 'dH' in timeseries_var):                    
+                   or 'dtheta' in timeseries_var or 'dH' in timeseries_var):
                     self.inflow.capping_inversion = True
                     self.inflow.run_precursor = True
                     self.inflow.ABL_heights = np.zeros((ntimes)) + 1500.
