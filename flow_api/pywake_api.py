@@ -17,7 +17,7 @@ from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
 from py_wake.deflection_models import JimenezWakeDeflection
 from py_wake.deficit_models.noj import NOJLocalDeficit
 from py_wake.deficit_models.gaussian import BastankhahGaussianDeficit
-from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel
+from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel, CrespoHernandez
 from py_wake import NOJ, BastankhahGaussian
 from py_wake.deficit_models import SelfSimilarityDeficit2020
 from py_wake.superposition_models import LinearSum, SquaredSum
@@ -274,7 +274,9 @@ def run_pywake(yamlFile, output_dir='output'):
     blockage_data = get_with_default(system_dat['attributes']['analysis'], 'blockage', DEFAULTS)
     
     # Map the deflection model
-    if deflection_model_data['name'].lower() == 'jimenez':
+    if deflection_model_data['name'].lower() == 'none':
+        deflectionModel = None
+    elif deflection_model_data['name'].lower() == 'jimenez':
         deflectionModel = JimenezWakeDeflection(beta=deflection_model_data['beta'])  # Assuming Jimenez takes 'beta' as an argument
     else:
         raise Exception('%s deflection model not implemented' % deflection_model_data['name'])
@@ -288,6 +290,8 @@ def run_pywake(yamlFile, output_dir='output'):
     elif turbulence_model_data['name'].upper()  == 'STF2017':
         turbulenceModel = STF2017TurbulenceModel(c=[turbulence_model_data['c1'], turbulence_model_data['c2']])
         #turbulenceModel = STF(turbulence_model_data['c1'], turbulence_model_data['c2'])  # Assuming STF takes 'c1' and 'c2' as arguments
+    elif turbulence_model_data['name'].upper()  == 'CRESPOHERNANDEZ':
+        turbulenceModel = CrespoHernandez()
     else:
         raise Exception('%s turbulence model not implemented' % turbulence_model_data['name'])
     
