@@ -1,0 +1,46 @@
+image: continuumio/anaconda3:latest
+
+stages:
+  - test
+  - deploy
+
+test_flow_api:
+  stage: 
+    test
+  script:
+    - pip install --upgrade pip
+    # Does not work
+    # - pip install git+https://github.com/kilojoules/windIO@master
+    # So we install windIO with git clone instead
+    - git clone https://github.com/kilojoules/windIO.git
+    - cd windIO
+    - pip install -e .
+    - cd ..
+    - pip install git+https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake.git@v2.6.2
+    - pip install -e .
+    - py.test --durations=0 flow_api/tests/
+  except:
+    - /^test_doc.*/
+
+pages:
+  stage:
+    deploy
+  script:
+    - pip install --upgrade pip
+    - conda config --set ssl_verify false
+    - conda install pandoc
+    - pip install sphinx --upgrade
+    - pip install nbsphinx --upgrade
+    - pip install sphinx_rtd_theme
+    - pip install sphinx-rtd-dark-mode
+    - pip install sphinxcontrib-bibtex
+    - cd docs
+    - mkdir html
+    - sphinx-build source html/
+    - cd ../; mv docs/html public/
+  artifacts:
+    paths:
+      - public
+  only:
+    - main
+    - /^test_doc.*/
