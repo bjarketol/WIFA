@@ -1,6 +1,7 @@
 from foxes_api import runFoxes
 from pywake_api import run_pywake
 #from csLaunch.cs_run_function import *
+from wayve_api import run_wayve
 import os
 import yaml
 import sys

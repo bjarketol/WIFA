@@ -1,6 +1,7 @@
 .vscode/
 __pycache__/
 html/
+.idea/
 *.html
 *.pyc
 _*.yaml
