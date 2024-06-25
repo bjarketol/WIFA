@@ -274,7 +274,9 @@ def run_pywake(yamlFile, output_dir='output'):
     blockage_data = get_with_default(system_dat['attributes']['analysis'], 'blockage', DEFAULTS)
     
     # Map the deflection model
-    if deflection_model_data['name'].lower() == 'jimenez':
+    if deflection_model_data['name'].lower() == 'none':
+        deflectionModel = None
+    elif deflection_model_data['name'].lower() == 'jimenez':
         deflectionModel = JimenezWakeDeflection(beta=deflection_model_data['beta'])  # Assuming Jimenez takes 'beta' as an argument
     elif deflection_model_data['name'] == "None": deflectionModel = None
     else:
