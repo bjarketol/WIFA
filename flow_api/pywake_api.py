@@ -417,7 +417,7 @@ def run_pywake(yamlFile, output_dir='output'):
     if 'turbine_outputs' in system_dat['attributes']['outputs']:
        #print('aep per turbine', list(aep_per_turbine)); hey
        #data['FLOW_simulation_outputs']['AEP_per_turbine'] = [float(value) for value in aep_per_turbine]
-       sim_res[['Power', 'WS_eff']].to_netcdf(output_dir + os.sep + 'PowerTable.nc')
+       sim_res[['Power', 'WS_eff']].rename({'Power': 'power', 'WS_eff': 'effective_wind_speed'}).to_netcdf(output_dir + os.sep + 'PowerTable.nc')
 
     print(sim_res)
 
@@ -473,10 +473,34 @@ y = np.linspace(WFYLB, WFYUB, 100)),
     with open(output_yaml_nam, 'r') as f:
        yaml_content = f.read()
 
-    yaml_content = yaml_content.replace('INCLUDE_YAML_PLACEHOLDER', '!include recorded_inputs.yaml')
+    #yaml_content = yaml_content.replace('INCLUDE_YAML_PLACEHOLDER', '!include recorded_inputs.yaml')
+    #
+    ## Save the post-processed YAML
+    #with open(output_yaml_nam, 'w') as f:
+    #   f.write(yaml_content)
+    data = {
+        'wind_energy_system': 'INCLUDE_YAML_PLACEHOLDER',
+        'power_table': 'INCLUDE_POWER_TABLE_PLACEHOLDER',
+        'flow_field': 'INCLUDE_FLOW_FIELD_PLACEHOLDER'
+    }
 
+    # Write out the YAML data to the specified output directory
+    output_yaml_name = os.path.join(output_dir, 'output.yaml')
+    with open(output_yaml_name, 'w') as file:
+        yaml_content = yaml.dump(data, file, default_flow_style=False, allow_unicode=True)
+    
+    # Replace placeholders with actual include directives, ensuring no quotes are used
+    with open(output_yaml_name, 'r') as file:
+        yaml_content = file.read()
+    
+    yaml_content = yaml_content.replace('INCLUDE_YAML_PLACEHOLDER', '!include recorded_inputs.yaml')
+    yaml_content = yaml_content.replace('INCLUDE_POWER_TABLE_PLACEHOLDER', '!include PowerTable.nc')
+    yaml_content = yaml_content.replace('INCLUDE_FLOW_FIELD_PLACEHOLDER', '!include FarmFlow.nc')
+    
     # Save the post-processed YAML
-    with open(output_yaml_nam, 'w') as f:
-       f.write(yaml_content)
+    with open(output_yaml_name, 'w') as file:
+        file.write(yaml_content)
+
+
 
     return aep
