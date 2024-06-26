@@ -2,27 +2,31 @@ name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
 site: !include ../plant_energy_site/FLOW_UQ_vnv_toy_study_energy_site.yaml
 wind_farm: !include ../plant_wind_farm/FLOW_UQ_vnv_toy_study_wind_farm.yaml
 attributes:
-  analyses:
-    flow_model:
-      name: py_wake
-    wake_model:
-      name: Bastankhah
-      k: 0.04
-      ceps: 0.2
-    deflection_model:
-      name: Jimenez
-    turbulence_model:
-      name: None
-    superposition_model:
-      name: Linear
-    rotor_averaging:
-      name: center
-    blockage:
-      name: None
-    outputs:
-      AEP: True
-      AEP_per_turbine: True
-      name: pyWake_linear_bast
-      power_table:
-          - 'power_per_turbine' 
+  flow_model:
+    name: wayve
+  analysis: !include FLOW_UQ_vnv_toy_study_analysis.yaml
+
+  outputs:
+    output_folder: "results"
+    turbine_outputs:
+        turbine_nc_filename: 'turbine_data.nc' # dimension = states, turbine
+        output_variables: ['power', 'rotor_effective_velocity'] #'frequency'
+    #
+    flow_field:
+      report: True
+      flow_nc_filename: flow_field.nc
+      cases_run:
+        all_occurences: True
+      output_variables: ['wind_speed', 'wind_direction']
+      z_planes:
+        z_sampling: "hub_height"
+        xy_sampling: "default"
+    #
+    statistics:
+      stats_filename: None
+      AEP: False
+      AEP_per_turbine: False
+      power_percentiles:
+        report: False
+        percentiles: None
       
