@@ -1,6 +1,14 @@
 code_saturne
-------------
-Description of the solved equations and modelling hypothesis for wind farm flow modelling using code_saturne in the FLOW API.
+-------------------------------------
+.. image:: ../img/Logo_code_saturne.png
+    :align: left
+    :width: 150
+	 
+`code_saturne <https://www.code-saturne.org/cms/web/>`_ is a free open-source finite volume CFD solver for the Navier-Stokes equations, developped primarily by EDF. It solves the Navier-Stokes equations with scalar transport for 2D, 2D-axisymmetric, and 3D flows, whether steady or unsteady, laminar or turbulent, incompressible, dilatable, or weakly compressible, isothermal or not. 
+
+code_saturne contains modules dedicated to specific physics, namely for atmospheric flows. A detailed description of the modelling possibilities, including the atmospheric module, can be found in `code_saturne's online documentation <https://www.code-saturne.org/cms/web/documentation/v80/>`_. This page focuses on the modelling assumptions and added source files allowing to handle wind farm flow modelling in the FLOW API.
+
+This API can be launched with version 8.0 of code_saturne.
 
 .. toctree::
    :maxdepth: 2

@@ -1,5 +1,5 @@
 Tools
-------------------
+-----
 
 .. toctree::
    :maxdepth: 2
@@ -9,3 +9,4 @@ Tools
    foxes
    wayve
    codesaturne
+   pywake_ellipsys

@@ -17,7 +17,7 @@ from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
 from py_wake.deflection_models import JimenezWakeDeflection
 from py_wake.deficit_models.noj import NOJLocalDeficit
 from py_wake.deficit_models.gaussian import BastankhahGaussianDeficit
-from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel
+from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel, CrespoHernandez
 from py_wake import NOJ, BastankhahGaussian
 from py_wake.deficit_models import SelfSimilarityDeficit2020
 from py_wake.superposition_models import LinearSum, SquaredSum
@@ -210,8 +210,8 @@ def run_pywake(yamlFile, output_dir='output'):
        site = XRSite(ds=xr.Dataset(data_vars={'P': (['wd', 'ws'], P)}, coords = {'ws': ws, 'wd': wd, 'TI': resource_dat['wind_resource']['turbulence_intensity']['data']}))
        TI = resource_dat['wind_resource']['turbulence_intensity']['data']
 
-    #if 'name' in system_dat['attributes']['analyses']['outputs']:
-    #   output_dir = system_dat['attributes']['analyses']['outputs']['name']
+    #if 'name' in system_dat['attributes']['analysis']['outputs']:
+    #   output_dir = system_dat['attributes']['analysis']['outputs']['name']
     #   if not os.path.exists(output_dir):
     #      os.makedirs(output_dir)
 
@@ -223,7 +223,7 @@ def run_pywake(yamlFile, output_dir='output'):
     y = farm_dat['layouts']['initial_layout']['coordinates']['y']
     
 
-    wake_model_data = get_with_default(system_dat['attributes']['analyses'], 'wake_model', DEFAULTS)
+    wake_model_data = get_with_default(system_dat['attributes']['analysis'], 'wake_model', DEFAULTS)
 
     deficit_args = {}
     deficit_param_mapping = {}
@@ -267,15 +267,18 @@ def run_pywake(yamlFile, output_dir='output'):
 
     # Continuing from the previous example...
     
-    deflection_model_data = get_with_default(system_dat['attributes']['analyses'], 'deflection_model', DEFAULTS)
-    turbulence_model_data = get_with_default(system_dat['attributes']['analyses'], 'turbulence_model', DEFAULTS)
-    superposition_model_data = get_with_default(system_dat['attributes']['analyses'], 'superposition_model', DEFAULTS)
-    rotor_averaging_data = get_with_default(system_dat['attributes']['analyses'], 'rotor_averaging', DEFAULTS)
-    blockage_data = get_with_default(system_dat['attributes']['analyses'], 'blockage', DEFAULTS)
+    deflection_model_data = get_with_default(system_dat['attributes']['analysis'], 'deflection_model', DEFAULTS)
+    turbulence_model_data = get_with_default(system_dat['attributes']['analysis'], 'turbulence_model', DEFAULTS)
+    superposition_model_data = get_with_default(system_dat['attributes']['analysis'], 'superposition_model', DEFAULTS)
+    rotor_averaging_data = get_with_default(system_dat['attributes']['analysis'], 'rotor_averaging', DEFAULTS)
+    blockage_data = get_with_default(system_dat['attributes']['analysis'], 'blockage', DEFAULTS)
     
     # Map the deflection model
-    if deflection_model_data['name'].lower() == 'jimenez':
+    if deflection_model_data['name'].lower() == 'none':
+        deflectionModel = None
+    elif deflection_model_data['name'].lower() == 'jimenez':
         deflectionModel = JimenezWakeDeflection(beta=deflection_model_data['beta'])  # Assuming Jimenez takes 'beta' as an argument
+    elif deflection_model_data['name'] == "None": deflectionModel = None
     else:
         raise Exception('%s deflection model not implemented' % deflection_model_data['name'])
     deficit_args['use_effective_ws'] = True
@@ -288,6 +291,8 @@ def run_pywake(yamlFile, output_dir='output'):
     elif turbulence_model_data['name'].upper()  == 'STF2017':
         turbulenceModel = STF2017TurbulenceModel(c=[turbulence_model_data['c1'], turbulence_model_data['c2']])
         #turbulenceModel = STF(turbulence_model_data['c1'], turbulence_model_data['c2'])  # Assuming STF takes 'c1' and 'c2' as arguments
+    elif turbulence_model_data['name'].upper()  == 'CRESPOHERNANDEZ':
+        turbulenceModel = CrespoHernandez()
     else:
         raise Exception('%s turbulence model not implemented' % turbulence_model_data['name'])
     
@@ -395,10 +400,10 @@ def run_pywake(yamlFile, output_dir='output'):
     if 'AEP' in system_dat['attributes']['outputs']:
        data['FLOW_simulation_outputs']['AEP'] = float(aep)
     
-    #if 'power_percentiles' in system_dat['attributes']['analyses']['outputs']:
-    # if system_dat['attributes']['analyses']['outputs']['power_percentiles']['report']:
+    #if 'power_percentiles' in system_dat['attributes']['analysis']['outputs']:
+    # if system_dat['attributes']['analysis']['outputs']['power_percentiles']['report']:
     #   # compute power percentiles
-    #   percentiles = np.array(system_dat['attributes']['analyses']['outputs']['power_percentiles']['percentiles']) / 100
+    #   percentiles = np.array(system_dat['attributes']['analysis']['outputs']['power_percentiles']['percentiles']) / 100
     #   if not timeseries:
 
     #      # Flatten the power and P arrays
@@ -411,7 +416,7 @@ def run_pywake(yamlFile, output_dir='output'):
     #   else:
     #       total_power = sim_res.Power.sum(dim='wt')
     #       power_percentiles = total_power.quantile(percentiles, dim=['time']).to_numpy()
-    #   data['FLOW_simulation_outputs']['computed_percentiles'] = system_dat['attributes']['analyses']['outputs']['power_percentiles']['percentiles']
+    #   data['FLOW_simulation_outputs']['computed_percentiles'] = system_dat['attributes']['analysis']['outputs']['power_percentiles']['percentiles']
     #   data['FLOW_simulation_outputs']['power_percentiles'] = power_percentiles
     
     if 'turbine_outputs' in system_dat['attributes']['outputs']:
@@ -429,20 +434,20 @@ def run_pywake(yamlFile, output_dir='output'):
        flow_map = sim_res.flow_map(
                             x = np.linspace(WFXLB, WFXUB, 100),
                             y = np.linspace(WFYLB, WFYUB, 100),
-                            wd=system_dat['attributes']['analyses']['outputs']['flow_field']['directions'],
-                            ws=system_dat['attributes']['analyses']['outputs']['flow_field']['speeds'],)
+                            wd=system_dat['attributes']['analysis']['outputs']['flow_field']['directions'],
+                            ws=system_dat['attributes']['analysis']['outputs']['flow_field']['speeds'],)
 
        # remove unwanted data
        flow_map = flow_map.drop_vars(['WD', 'WS', 'TI', 'P'])
 
        # raise warning if user requests data we can not provide
-       if any(element not in ['velocity_u', 'turbulence_intensity'] for element in system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables']):
+       if any(element not in ['velocity_u', 'turbulence_intensity'] for element in system_dat['attributes']['analysis']['outputs']['flow_field']['output_variables']):
           warnings.warn('PyWake can only output velocity_u and turbulence_intensity')
 
        # remove TI or WS if they are not requested
-       if 'turbulence_intensity' not in system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables']:
+       if 'turbulence_intensity' not in system_dat['attributes']['analysis']['outputs']['flow_field']['output_variables']:
           flow_map = flow_map.drop_vars(['TI_eff'], inplace=True)
-       if 'velocity_u' not in system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables']:
+       if 'velocity_u' not in system_dat['attributes']['analysis']['outputs']['flow_field']['output_variables']:
           flow_map = flow_map.drop_vars(['WS_eff'], inplace=True)
 
     elif 'flow_field' in system_dat['attributes']['outputs'] and timeseries:
@@ -453,9 +458,9 @@ y = np.linspace(WFYLB, WFYUB, 100)),
                             wd=wd,
                             ws=ws)
      # power table    
-    #if 'power_table' in system_dat['attributes']['analyses']['outputs']:
+    #if 'power_table' in system_dat['attributes']['analysis']['outputs']:
     #   # todo: more in depth stuff here, include loads
-    #   #data['FLOW_simulation_outputs']['power_output_variables'] = tuple(system_dat['attributes']['analyses']['outputs']['flow_field']['output_variables'])
+    #   #data['FLOW_simulation_outputs']['power_output_variables'] = tuple(system_dat['attributes']['analysis']['outputs']['flow_field']['output_variables'])
 #
     if flow_map:
        # save data
