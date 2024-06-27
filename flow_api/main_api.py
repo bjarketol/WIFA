@@ -1,6 +1,6 @@
 from foxes_api import runFoxes
 from pywake_api import run_pywake
-#from csLaunch.cs_run_function import *
+from cs_api.cs_modules.csLaunch.cs_run_function import run_code_saturne
 from wayve_api import run_wayve
 import os
 import yaml
@@ -53,7 +53,7 @@ elif model_name.lower() == 'foxes':
 elif model_name.lower() == 'wayve':
     run_wayve(yaml_input)
     
-elif model_name.lower() == 'code_saturne':
+elif model_name.lower() == 'codesaturne':
     run_code_saturne(yaml_input, test_mode=True)
 
 else:
