@@ -506,8 +506,6 @@ y = np.linspace(WFYLB, WFYUB, 100)),
     with open(output_yaml_name, 'r') as file:
         yaml_content = file.read()
 
-<<<<<<< HEAD
-=======
     #yaml_content = yaml_content.replace('INCLUDE_YAML_PLACEHOLDER', '!include recorded_inputs.yaml')
     #
     ## Save the post-processed YAML
