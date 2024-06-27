@@ -422,13 +422,9 @@ def run_pywake(yamlFile, output_dir='output'):
     if 'turbine_outputs' in system_dat['attributes']['outputs']:
        #print('aep per turbine', list(aep_per_turbine)); hey
        #data['FLOW_simulation_outputs']['AEP_per_turbine'] = [float(value) for value in aep_per_turbine]
-<<<<<<< HEAD
        sim_res_formatted = sim_res[['Power', 'WS_eff']].rename({'Power': 'power', 'WS_eff': 'effective_wind_speed'})
        sim_res_formatted['power'] /= 1e3 # Watts to kW
        sim_res_formatted.to_netcdf(output_dir + os.sep + 'PowerTable.nc')
-=======
-       sim_res[['Power', 'WS_eff']].rename({'Power': 'power', 'WS_eff': 'effective_wind_speed'}).to_netcdf(output_dir + os.sep + 'PowerTable.nc')
->>>>>>> 21710d843339ebfd76c4afeca3330bcd37839407
 
     print(sim_res)
 
@@ -532,7 +528,6 @@ y = np.linspace(WFYLB, WFYUB, 100)),
     with open(output_yaml_name, 'r') as file:
         yaml_content = file.read()
     
->>>>>>> 21710d843339ebfd76c4afeca3330bcd37839407
     yaml_content = yaml_content.replace('INCLUDE_YAML_PLACEHOLDER', '!include recorded_inputs.yaml')
     yaml_content = yaml_content.replace('INCLUDE_POWER_TABLE_PLACEHOLDER', '!include PowerTable.nc')
     yaml_content = yaml_content.replace('INCLUDE_FLOW_FIELD_PLACEHOLDER', '!include FarmFlow.nc')
@@ -540,10 +535,5 @@ y = np.linspace(WFYLB, WFYUB, 100)),
     # Save the post-processed YAML
     with open(output_yaml_name, 'w') as file:
         file.write(yaml_content)
-
-<<<<<<< HEAD
-=======
-
->>>>>>> 21710d843339ebfd76c4afeca3330bcd37839407
 
     return aep
