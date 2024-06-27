@@ -2,7 +2,7 @@ from netCDF4 import Dataset
 import sys
 from os import path, sep
 import numpy as np
-import csPostpro.cs_postprocess_utils as cs_pp
+import cs_api.cs_modules.csPostpro.cs_postprocess_utils as cs_pp
 
 
 def get_output_at_plane_and_time(ens, output_varname, origin, normal,
@@ -52,25 +52,25 @@ fields = np.genfromtxt(postprocess_fields_file, delimiter=",", dtype=str)
 # File creation
 rootgrp = Dataset(postpro_dir+sep+turbine_file_name, "w", format="NETCDF4")
 # Dimensions
-turbines = rootgrp.createDimension("turbines", turbine_number)
+turbines = rootgrp.createDimension("turbine", turbine_number)
 time = rootgrp.createDimension("time", len(cases))
-#one = rootgrp.createDimension("one", 1)
-coord = rootgrp.createDimension("coord", 2)
+##one = rootgrp.createDimension("one", 1)
+#coord = rootgrp.createDimension("coord", 2)
 # Variables
 #total_power_file = rootgrp.createVariable("total_power", "f8", ("one", "time",))
-pos_file = rootgrp.createVariable("WT_positions", "f8", ("turbines", "coord", "time",))
-z_hub_file = rootgrp.createVariable("WT_hub_heights", "f8", ("turbines", "time",))
-diameters_file = rootgrp.createVariable("WT_diameters", "f8", ("turbines", "time",))
+#pos_file = rootgrp.createVariable("WT_positions", "f8", ("turbines", "coord", "time",))
+#z_hub_file = rootgrp.createVariable("WT_hub_heights", "f8", ("turbines", "time",))
+#diameters_file = rootgrp.createVariable("WT_diameters", "f8", ("turbines", "time",))
 #ux_file = rootgrp.createVariable("ux", "f8", ("turbines", "time",))
 #uy_file = rootgrp.createVariable("uy", "f8", ("turbines", "time",))
 #uz_file = rootgrp.createVariable("uz", "f8", ("turbines", "time",))
-u_file = rootgrp.createVariable("velocity", "f8", ("turbines", "time",))
+u_file = rootgrp.createVariable("effective_wind_speed", "f8", ("turbine", "time",))
 #u_hub_file = rootgrp.createVariable("u_hub", "f8", ("turbines", "time",))
-dir_file = rootgrp.createVariable("direction", "f8", ("turbines", "time",))
+dir_file = rootgrp.createVariable("wind_direction", "f8", ("turbine", "time",))
 #ctstar_file = rootgrp.createVariable("ctstar", "f8", ("turbines", "time",))
 #cpstar_file = rootgrp.createVariable("cpstar", "f8", ("turbines", "time",))
 #thrust_file = rootgrp.createVariable("thrust", "f8", ("turbines", "time",))
-powercp_file = rootgrp.createVariable("power", "f8", ("turbines", "time",))
+powercp_file = rootgrp.createVariable("power", "f8", ("turbine", "time",))
 
 for j, casei in enumerate(cases):
     print(str(j)+'/'+str(len(cases)),end='\r')
@@ -116,10 +116,10 @@ for j, casei in enumerate(cases):
     power_table_cpstar.append(power_file_table[:, 16])
 
     #total_power_file[:, j] = total_power[0]
-    pos_file[:, 0, j] = x_coords[0]
-    pos_file[:, 1, j] = y_coords[0]
-    z_hub_file[:, j] = z_hub[0]
-    diameters_file[:, j] = diameters[0]
+    #pos_file[:, 0, j] = x_coords[0]
+    #pos_file[:, 1, j] = y_coords[0]
+    #z_hub_file[:, j] = z_hub[0]
+    #diameters_file[:, j] = diameters[0]
     #ux_file[:, j] = ux[0]
     #uy_file[:, j] = uy[0]
     #uz_file[:, j] = uz[0]
@@ -170,14 +170,14 @@ for i, casei in enumerate(cases):
     for j, zj in enumerate(zplot):
         zplane_center = (0, 0, zj)
 
-        if "speed" or ("direction" in fields):
+        if "wind_speed" or ("wind_direction" in fields):
             velocity = get_output_at_plane_and_time(ens, "Velocity", zplane_center, (0, 0, 1), 0)
             if "speed" in fields:
                 speed = np.sqrt(pow(velocity[:, 0], 2.0) + pow(velocity[:, 1], 2.0))
-                rootgrp.variables["speed"][:, j, i] = speed
+                rootgrp.variables["wind_speed"][:, j, i] = speed
             if "direction" in fields:
                 direction = np.arctan(velocity[:, 1]/velocity[:, 0])*360/(2*np.pi) + 270
-                rootgrp.variables["direction"][:, j, i] = direction
+                rootgrp.variables["wind_direction"][:, j, i] = direction
         if "pressure" in fields:
             pressure = get_output_at_plane_and_time(ens, "total_pressure", zplane_center, (0, 0, 1), 0)
             rootgrp.variables["pressure"][:, j, i] = pressure

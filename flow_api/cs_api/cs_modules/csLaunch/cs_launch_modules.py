@@ -13,7 +13,7 @@ import yaml
 from datetime import datetime, timedelta
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 from functools import reduce
-import csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
+import cs_api.cs_modules.csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
 
 def theta2temp(theta,z_or_dz,P0,Pref=1000.,g=9.81,Rair=287.,Cp=1005.):
     """
@@ -223,7 +223,8 @@ class CS_study:
     def __init__(self,farm_notebook_arg_names=None,farm_notebook_arg_values=None, \
                  prec_notebook_arg_names=None,prec_notebook_arg_values=None, \
                  case_dir=None, result_dir=None, wind_energy_system_file=None, \
-                 cs_path=None, salome_path=None, lib_path=None, python_path=None, python_exe=None,\
+                 cs_path=None, salome_path=None, python_env_command=None, python_exe=None,\
+                 salome_env_command=None, cs_env_command=None, \
                  cs_run_folder=None, cs_api_path=None):
 
         #case
@@ -233,17 +234,19 @@ class CS_study:
         self.case_dir = case_dir
         self.result_dir = result_dir
         self.case_name = None
+        #
         self.cs_path = cs_path
         self.salome_path = salome_path
-        self.lib_path = lib_path
-        self.python_path = python_path
+        self.python_env_command = python_env_command
+        self.salome_env_command = salome_env_command
+        self.cs_env_command = cs_env_command
         self.python_exe = python_exe
 
         #HPC config
         self.run_node_number = None
         self.run_ntasks_per_node = None
         self.run_wall_time_hours = 10.0
-        self.prec_wall_time_hours = 6.0
+        self.prec_wall_time_hours = 10.0
         self.run_partition = None
         self.mesh_node_number = None
         self.mesh_ntasks_per_node = None
@@ -297,12 +300,17 @@ class CS_study:
         """
         mesh_nodes=self.mesh_node_number
         mesh_ntasks_per_nodes=self.mesh_ntasks_per_node
+
+        #
         mesh_wall_time=str(timedelta(hours=self.mesh_wall_time_hours))
+        cs_wall_time=str(timedelta(hours=self.run_wall_time_hours))
+        prec_wall_time=str(timedelta(hours=self.prec_wall_time_hours))
+        #
         mesh_partition=self.mesh_partition
         cs_nodes=self.run_node_number
         cs_ntasks_per_nodes=self.run_ntasks_per_node
-        cs_wall_time=str(timedelta(hours=self.run_wall_time_hours))
-        prec_wall_time=str(timedelta(hours=self.prec_wall_time_hours))
+        #
+
         cs_partition=self.run_partition
         wckey=self.wckey
 
@@ -314,18 +322,21 @@ class CS_study:
             #HEADER
             bash_file.write("#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
-                            "#SBATCH --time=00:10:00\n"+ \
-                            "#SBATCH --partition="+mesh_partition+"\n"+ \
-                            "#SBATCH --wckey="+wckey+"\n"+ \
-                            "#SBATCH --output="+log_folder+sep+self.case_name+"_job.out.log\n"+ \
+                            "#SBATCH --time=00:10:00\n")
+
+            if(mesh_partition):
+                bash_file.write("#SBATCH --partition="+mesh_partition+"\n")
+
+            if(wckey):
+                bash_file.write("#SBATCH --wckey="+wckey+"\n")
+
+            bash_file.write("#SBATCH --output="+log_folder+sep+self.case_name+"_job.out.log\n"+ \
                             "#SBATCH --error="+log_folder+sep+self.case_name+"_job.err.log\n"+ \
                             "#SBATCH --job-name="+self.case_name+"_job"+"\n" + \
-                            "\n" + \
-                            "module load Miniforge3"+"\n")
+                            "\n")
         else:
             CS_append='CS_jobids+=":"${CS##* }'
             bash_file=open(bash_file_name,"a")
-
 
         #
         split_mesh_folder, split_mesh_file_name= os.path.split(mesh_file_name)
@@ -336,14 +347,17 @@ class CS_study:
         self.mesh.AD_mesh_cell_size=int(np.min(self.farm.rotor_diameters)/8.0)
         #
         self.mesh.mesh_domain_size = np.round(max(self.farm.farm_size*3.2, self.mesh.AD_mesh_cell_size*600),-2) + 2*self.mesh.damping_length
-
-
         #
         if('start_rad' in self.farm_notebook_arg_names):
             s_id = self.farm_notebook_arg_names.index('start_rad')
             self.farm_notebook_arg_values[s_id]= 0.5*(self.mesh.mesh_domain_size -2.*self.mesh.damping_length)
         #
-        cs_launch_command = self.cs_path +" submit -p setup.xml --case "+self.case_dir+" --notebook-args"
+        #Any python env for cs
+        if(self.cs_env_command):
+            cs_launch_command = self.cs_env_command + " && "
+        else :
+            cs_launch_command = ""
+        cs_launch_command += self.cs_path +" submit -p setup.xml --case "+self.case_dir+" --notebook-args"
         for k in range(len(self.farm_notebook_arg_names)):
             cs_launch_command += " "+self.farm_notebook_arg_names[k]+"="+str(self.farm_notebook_arg_values[k])
         for k in range(len(self.prec_notebook_arg_names)):
@@ -353,17 +367,45 @@ class CS_study:
         cs_launch_command += " --parametric-args='-m ../"+"MESH"+sep+split_mesh_file_name+"'"
 
         if(precursor):
-            precursor_launch_command = self.cs_path +" submit -p setup.xml --case "+"Precursor"+" --notebook-args"
+            #Any python env for cs
+            if(self.cs_env_command):
+                precursor_launch_command = self.cs_env_command + " && "
+            else:
+                precursor_launch_command = ""
+                
+            precursor_launch_command += self.cs_path +" submit -p setup.xml --case "+"Precursor"+" --notebook-args"
             for k in range(len(self.prec_notebook_arg_names)):
                 precursor_launch_command += " "+self.prec_notebook_arg_names[k]+"="+str(self.prec_notebook_arg_values[k])
 
             precursor_launch_command += " --kw-args='--meteo ../../../"+precursor_meteo_file_name+"'"
-            precursor_launch_command += " --id "+ self.result_dir + " --nodes=1 --partition="+cs_partition+" -J prec_"+job_name+" --time="+prec_wall_time+" --ntasks-per-node=1 --wckey="+wckey+" --exclusive"
+            precursor_launch_command += " --id "+ self.result_dir + " --nodes=1"
+
+            if(cs_partition):
+                precursor_launch_command += " --partition="+cs_partition
+
+            precursor_launch_command += " -J prec_"+job_name+" --time="+prec_wall_time+" --ntasks-per-node=1 --exclusive"
+
+            if(wckey):
+                precursor_launch_command += " --wckey="+wckey
 
         if(meteo_file_name!=""):
             cs_launch_command += " --kw-args='--meteo ../../../"+meteo_file_name+"'"
 
-        cs_launch_command += " --id "+ self.result_dir + " --nodes="+str(cs_nodes)+" --partition="+cs_partition+" -J cs_"+job_name+" --time="+cs_wall_time + " --ntasks-per-node="+str(cs_ntasks_per_nodes) + " --wckey="+wckey+" --exclusive"
+        cs_launch_command += " --id "+ self.result_dir + " --exclusive"
+
+        if(cs_nodes):
+            cs_launch_command += " --nodes="+str(cs_nodes)
+
+        if(cs_partition):
+            cs_launch_command += " --partition="+cs_partition
+
+        cs_launch_command += " -J cs_"+job_name+" --time="+cs_wall_time
+
+        if(cs_ntasks_per_nodes):
+            cs_launch_command +=" --ntasks-per-node="+str(cs_ntasks_per_nodes)
+
+        if(wckey):
+            cs_launch_command += " --wckey="+wckey
 
         if(remesh and first_case):
 
@@ -407,16 +449,30 @@ class CS_study:
         if(remesh and first_case):
             bash_file.write("#\n"+"# Run Mesh generation with salome and get its jobid\n"+\
                             "mesh_sbatch_output=$(sbatch <<EOF\n"+\
-                            "#!/bin/bash\n"+\
-                            "#SBATCH --nodes="+str(int(mesh_nodes))+"\n"+\
-                            "#SBATCH --cpus-per-task="+str(int(mesh_ntasks_per_nodes))+"\n"+\
-                            "#SBATCH --time="+mesh_wall_time+"\n"+\
-                            "#SBATCH --partition="+mesh_partition+"\n"+\
-                            "#SBATCH --wckey="+wckey+"\n"+\
-                            "#SBATCH --output="+log_folder+sep+"mesh_"+job_name+".out.log\n"+\
+                            "#!/bin/bash\n")
+            if(mesh_nodes):
+                bash_file.write("#SBATCH --nodes="+str(int(mesh_nodes))+"\n")
+
+            if(mesh_ntasks_per_nodes):
+                bash_file.write("#SBATCH --cpus-per-task="+str(int(mesh_ntasks_per_nodes))+"\n")
+
+            bash_file.write("#SBATCH --time="+mesh_wall_time+"\n")
+
+            if(mesh_partition):
+                bash_file.write("#SBATCH --partition="+mesh_partition+"\n")
+
+            if(wckey):
+                bash_file.write("#SBATCH --wckey="+wckey+"\n")
+
+            bash_file.write("#SBATCH --output="+log_folder+sep+"mesh_"+job_name+".out.log\n"+\
                             "#SBATCH --error="+log_folder+sep+"mesh_"+job_name+".err.log\n"+\
-                            "#SBATCH --job-name=mesh_"+job_name+"\n"+\
-                            salome_launch_command+"\n" + "EOF\n"+")\n" + \
+                            "#SBATCH --job-name=mesh_"+job_name+"\n")
+            
+            #Any python env for salome
+            if(self.salome_env_command):
+                bash_file.write(self.salome_env_command+"\n")
+                
+            bash_file.write(salome_launch_command+"\n" + "EOF\n"+")\n" + \
                             "# Extract the job ID from the output of sbatch\n" + \
                             "mesh_jobid=${mesh_sbatch_output##* }\n" + \
                             "echo 'meshing job' $mesh_jobid\n")
@@ -432,13 +488,23 @@ class CS_study:
                             "#!/bin/bash"+"\n"+\
                             "#SBATCH --nodes=1"+"\n"+\
                             "#SBATCH --cpus-per-task=1"+"\n"+\
-                            "#SBATCH --time=00:10:00"+"\n"+\
-                            "#SBATCH --partition=cn"+"\n"+\
-                            "#SBATCH --wckey="+wckey+"\n"+\
-                            "#SBATCH --output="+log_folder+sep+"meteo_"+job_name+".out.log\n"+ \
+                            "#SBATCH --time=00:10:00"+"\n")
+            if(cs_partition):
+                bash_file.write("#SBATCH --partition="+cs_partition+"\n")
+
+            if(wckey):
+                bash_file.write("#SBATCH --wckey="+wckey+"\n")
+
+            bash_file.write("#SBATCH --output="+log_folder+sep+"meteo_"+job_name+".out.log\n"+ \
                             "#SBATCH --error="+log_folder+sep+"meteo_"+job_name+".err.log\n"+ \
-                            "#SBATCH --job-name=meteo_"+job_name+"\n"+\
-                            self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csMeteo"+sep+"write_meteo_file_from_precursor.py"+ \
+                            "#SBATCH --job-name=meteo_"+job_name+"\n")
+
+            #Any additionnal libraries
+            if(self.python_env_command):
+                bash_file.write(self.python_env_command+"\n")
+
+
+            bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csMeteo"+sep+"write_meteo_file_from_precursor.py"+ \
                             " --resu_folder='Precursor/RESU/"+self.result_dir + \
                             "' --meteo_filename='"+meteo_file_name + "'"+\
                             " --hub_height="+str(self.farm.hub_heights[0]) + \
@@ -470,7 +536,7 @@ class CS_study:
             mkdir(self.output.output_folder)
         os.system("chmod u+rwx "+self.output.output_folder)
 
-        if self.output.zplane_type=="default":
+        if self.output.zplane_type=="default" or self.output.zplane_type=="hub_height":
             self.output.zcoords = reduce(lambda re, x: re+[x] if x not in re else re, self.farm.hub_heights, [])
         elif self.output.zplane_type=="grid":
             self.output.zcoords = []
@@ -506,14 +572,24 @@ class CS_study:
             bash_file=open(self.cs_run_folder + sep + launch_file_name,"w")
             bash_file.write("#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
-                            "#SBATCH --time=00:10:00\n"+ \
-                            "#SBATCH --partition="+partition+"\n"+ \
-                            "#SBATCH --wckey="+wckey+"\n"+ \
-                            "#SBATCH --output="+log_folder+sep+"postpro.out.log\n"+ \
+                            "#SBATCH --time=00:10:00\n")
+            if(partition):
+                bash_file.write("#SBATCH --partition="+partition+"\n")
+
+            if(wckey):
+                bash_file.write("#SBATCH --wckey="+wckey+"\n")
+
+            bash_file.write("#SBATCH --output="+log_folder+sep+"postpro.out.log\n"+ \
                             "#SBATCH --error="+log_folder+sep+"postpro.err.log\n"+ \
                             "#SBATCH --job-name=postpro\n"+ \
                             "#\n")
-            bash_file.write("export LD_LIBRARY_PATH="+self.lib_path+" && export PYTHONPATH="+self.python_path+":$PYTHONPATH && "+self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str)
+
+            #Any additionnal libraries
+            if(self.python_env_command):
+                bash_file.write(self.python_env_command+"\n")
+
+            #postprocessing command
+            bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str)
             bash_file.close()
         else:
             bash_file=open(self.cs_run_folder + sep + launch_file_name,"a")
@@ -521,13 +597,23 @@ class CS_study:
                             "postpro_sbatch=$(sbatch --parsable --dependency=afterok:$CS_jobids <<EOF\n"+\
                             "#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
-                            "#SBATCH --time=00:10:00\n"+ \
-                            "#SBATCH --partition="+partition+"\n"+ \
-                            "#SBATCH --wckey="+wckey+"\n"+ \
-                            "#SBATCH --output="+log_folder+sep+"postpro.out.log\n"+ \
+                            "#SBATCH --time=00:10:00\n")
+            if(partition):
+                bash_file.write("#SBATCH --partition="+partition+"\n")
+
+            if(wckey):
+                bash_file.write("#SBATCH --wckey="+wckey+"\n")
+
+            bash_file.write("#SBATCH --output="+log_folder+sep+"postpro.out.log\n"+ \
                             "#SBATCH --error="+log_folder+sep+"postpro.err.log\n"+ \
-                            "#SBATCH --job-name=postpro\n"+ \
-                            "export LD_LIBRARY_PATH="+self.lib_path+" && export PYTHONPATH="+self.python_path+":$PYTHONPATH && "+self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str + "\n" \
+                            "#SBATCH --job-name=postpro\n")
+
+            #Any additionnal libraries
+            if(self.python_env_command):
+                bash_file.write(self.python_env_command+"\n")
+
+            #postprocessing command
+            bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str + "\n" \
                             "EOF\n"+")\n" + \
                             "# Extract the job ID from the output of sbatch\n" + \
                             "postpro_jobid=${postpro_sbatch##* }\n")
@@ -771,12 +857,12 @@ class CS_study:
                 #==================Capping inversion========================
                 #Activate capping inversion and set default values
                 if('ABL_height' in timeseries_var or 'lapse_rate' in timeseries_var \
-                   or 'dtheta' in timeseries_var or 'dH' in timeseries_var):
+                   or 'capping_inversion_strength' in timeseries_var or 'capping_inversion_thickness' in timeseries_var):
                     self.inflow.capping_inversion = True
                     self.inflow.run_precursor = True
                     self.inflow.ABL_heights = np.zeros((ntimes)) + 1500.
-                    self.inflow.lapse_rates = np.zeros((ntimes)) + 0.002
-                    self.inflow.dtheta_values = np.zeros((ntimes)) + 1.
+                    self.inflow.lapse_rates = np.zeros((ntimes)) + 0.001
+                    self.inflow.dtheta_values = np.zeros((ntimes)) + 2.
                     self.inflow.dH_values = np.zeros((ntimes)) + 300.
 
                 #Replace default with user values if any
@@ -785,9 +871,9 @@ class CS_study:
                 if('lapse_rate' in timeseries_var):
                     self.inflow.lapse_rates = np.array(resource_data['wind_resource']['lapse_rate']['data'])
                 if('dtheta' in timeseries_var):
-                    self.inflow.dtheta_values = np.array(resource_data['wind_resource']['dtheta']['data'])
+                    self.inflow.dtheta_values = np.array(resource_data['wind_resource']['capping_inversion_strength']['data'])
                 if('dH' in timeseries_var):
-                    self.inflow.dH_values = np.array(resource_data['wind_resource']['dH']['data'])
+                    self.inflow.dH_values = np.array(resource_data['wind_resource']['capping_inversion_thickness']['data'])
                 #=========================
 
             if(not(self.inflow.capping_inversion)):
@@ -805,15 +891,17 @@ class CS_study:
                                                       'attributes.analysis.HPC_config.run_node_number')
         self.run_ntasks_per_node = get_value(self.wind_system_data,\
                                                       'attributes.analysis.HPC_config.run_ntasks_per_node')
-        self.run_wall_time_hours = get_value(self.wind_system_data,\
-                                                      'attributes.analysis.HPC_config.run_wall_time_hours')
+        if("run_wall_time_hours" in get_child_keys(self.wind_system_data, branch="attributes.analysis.HPC_config")):
+            self.run_wall_time_hours = get_value(self.wind_system_data,\
+                                                 'attributes.analysis.HPC_config.run_wall_time_hours')
         self.run_partition = get_value(self.wind_system_data,\
                                                       'attributes.analysis.HPC_config.run_partition')
         self.mesh_node_number = get_value(self.wind_system_data,\
                                                       'attributes.analysis.HPC_config.mesh_node_number')
         self.mesh_ntasks_per_node = get_value(self.wind_system_data,\
                                                       'attributes.analysis.HPC_config.mesh_ntasks_per_node')
-        self.mesh_wall_time_hours = get_value(self.wind_system_data,\
+        if("mesh_wall_time_hours" in get_child_keys(self.wind_system_data, branch="attributes.analysis.HPC_config")):
+            self.mesh_wall_time_hours = get_value(self.wind_system_data,\
                                                       'attributes.analysis.HPC_config.mesh_wall_time_hours')
         self.mesh_partition = get_value(self.wind_system_data,\
                                                       'attributes.analysis.HPC_config.mesh_partition')
