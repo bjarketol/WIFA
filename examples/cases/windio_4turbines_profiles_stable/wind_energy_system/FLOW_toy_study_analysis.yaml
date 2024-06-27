@@ -7,18 +7,32 @@ APM_additional_terms:
 wake_tool: "foxes"
 
 #pywake and foxes
-wake_model:
-  name: Bastankhah
-  k: 0.04
+wind_deficit_model:
+  name: Bastankhah2014
+  wake_expansion_coefficient: # k = ka*ti + kb
+    k_a: 0.0
+    k_b: 0.04
+    free_stream_ti: false
   ceps: 0.2
+  use_effective_ws: true
+turbulence_model:
+  name: IEC-TI-2019
+axial_induction_model: 1D
 deflection_model:
-  name: Jimenez
-superposition_model:
-  name: Linear
-rotor_averaging:
-  name: center
-blockage:
   name: None
+superposition_model:
+  ws_superposition: Linear
+  ti_superposition: Quadratic
+blockage_model:
+  name: None
+rotor_averaging:
+  grid: grid
+  n_x_grid_points: 4
+  n_y_grid_points: 4
+  background_averaging: center
+  wake_averaging: grid
+  wind_speed_exponent_for_power: 3
+  wind_speed_exponent_for_ct: 2
 
 #code_saturne
 run_type: "simulate" #"postprocess"
