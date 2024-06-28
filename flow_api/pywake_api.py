@@ -422,7 +422,7 @@ def run_pywake(yamlFile, output_dir='output'):
     if 'turbine_outputs' in system_dat['attributes']['outputs']:
        #print('aep per turbine', list(aep_per_turbine)); hey
        #data['FLOW_simulation_outputs']['AEP_per_turbine'] = [float(value) for value in aep_per_turbine]
-       sim_res_formatted = sim_res[['Power', 'WS_eff']].rename({'Power': 'power', 'WS_eff': 'effective_wind_speed'})
+       sim_res_formatted = sim_res[['Power', 'WS_eff']].rename({'Power': 'power', 'WS_eff': 'effective_wind_speed', 'wt': 'turbine'})
        sim_res_formatted['power'] /= 1e3 # Watts to kW
        sim_res_formatted.to_netcdf(output_dir + os.sep + 'PowerTable.nc')
 
