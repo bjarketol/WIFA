@@ -7,5 +7,5 @@ The FLOW API allows to BLABLA and uses the WindIO schema to format its inputs.
    :caption: Contents:
 
    InputsOutputs
-   Tools	      
-   Functions
+   Tools
+   .. Functions
