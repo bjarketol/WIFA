@@ -1,7 +1,7 @@
 # Prerequisites
 
 salome and code_saturne 8.0
-paths should be defined in : cs_modules/csLaunch/cs_config.py
+paths should be defined in : cs_api/__init__.py
 
 # Installation guidelines for code_saturne and salome_cfd
 ## code_saturne
@@ -23,11 +23,11 @@ Salome can be build over in two ways:
   * stand alone : direct download <https://www.salome-platform.org/?page_id=2430>
   * building the salome_cfd extension over existing code_saturne path : <https://github.com/code-saturne/salome_cfd_extensions>
 
-## video tutorial 
+## video tutorial
 
 There was a video tutorial for version 7.0 (may still be accurate for 8.0) : <https://feaforall.com/installing-salome-cfd-with-code-saturne-7-0-in-2022/>
 
   * 00:00:10 Installing Code Saturne
   * 00:16:08 Installing Salome
   * 00:22:54 Installing Salome CFD Extensions (CFD Study module)
-  * 00:33:57 Handling the Errors you may have (PyQt5, OmniORB, PYTHONPATH) 
+  * 00:33:57 Handling the Errors you may have (PyQt5, OmniORB, PYTHONPATH)

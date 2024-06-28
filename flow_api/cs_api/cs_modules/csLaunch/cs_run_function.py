@@ -1,10 +1,10 @@
-from csLaunch.cs_launch_modules import *
+from cs_api.cs_modules.csLaunch.cs_launch_modules import *
 import os as os
 from os import sep, mkdir, walk
 import numpy as np
-from csLaunch.cs_config import *
 from datetime import datetime
 import shutil
+from cs_api import cs_exe_path, cs_api_path, salome_exe_path, python_scripts_env_command, python_scripts_exe, cs_env_command, salome_env_command
 
 def run_code_saturne(windio_input, test_mode=False):
     """Runner to code_saturne for the FLOW api
@@ -20,15 +20,16 @@ def run_code_saturne(windio_input, test_mode=False):
 
     #TODO: paths from windio or a config file in the api during install
     cs_run_folder="cs_run_" + datetime.now().strftime("%Y%m%d_%H-%M-%S")
-
+    #
     windfarm_study = CS_study(cs_run_folder=cs_run_folder, \
                               case_dir="Farm", \
-                              cs_path=cs_path, \
+                              cs_path=cs_exe_path, \
                               cs_api_path=cs_api_path, \
-                              salome_path=salome_path, \
-                              lib_path=lib_path, \
-                              python_path=python_path, \
-                              python_exe=python_exe)
+                              salome_path=salome_exe_path, \
+                              python_env_command=python_scripts_env_command,\
+                              salome_env_command=salome_env_command,\
+                              cs_env_command=cs_env_command,\
+                              python_exe=python_scripts_exe)
 
     #Creates the temporary folders for the run
     windfarm_study.set_run_env()

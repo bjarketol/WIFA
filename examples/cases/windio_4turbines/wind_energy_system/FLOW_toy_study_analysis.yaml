@@ -41,15 +41,18 @@ cases_run:
   all_occurences: True
 #
 HPC_config:
-  run_node_number: 5
+  run_node_number: 1
   run_ntasks_per_node: 48
   run_wall_time_hours: 6
-  run_partition: "p1"
+  run_partition: ""
   #
-  mesh_node_number: 2
+  mesh_node_number: 1
   mesh_ntasks_per_node: 48
   mesh_wall_time_hours: 1
-  run_partition: "p2"
+  run_partition: ""
+  #
+  wckey: ""
+
 
 mesh:
   remesh: True
