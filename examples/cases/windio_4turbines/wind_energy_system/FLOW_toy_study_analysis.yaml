@@ -28,7 +28,7 @@ rotor_averaging:
   n_x_grid_points: 4
   n_y_grid_points: 4
   background_averaging: center
-  wake_averaging: grid
+  wake_averaging: centre
   wind_speed_exponent_for_power: 3
   wind_speed_exponent_for_ct: 2
 blockage_model:
