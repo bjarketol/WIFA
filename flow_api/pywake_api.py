@@ -25,9 +25,9 @@ from py_wake.rotor_avg_models import RotorCenter, GridRotorAvg, EqGridRotorAvg, 
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 
 
-# Define default values for wake_model parameters
+# Define default values for wind_deficit_model parameters
 DEFAULTS = {
-    'wake_model': {
+    'wind_deficit_model': {
         'name': 'Jensen',
         'k': 0.04,  # Default wake expansion coefficient for Jensen
         'k2': 0.0,  # TI wake expansion modifier
@@ -223,19 +223,19 @@ def run_pywake(yamlFile, output_dir='output'):
     y = farm_dat['layouts']['initial_layout']['coordinates']['y']
     
 
-    wake_model_data = get_with_default(system_dat['attributes']['analysis'], 'wake_model', DEFAULTS)
+    wind_deficit_model_data = get_with_default(system_dat['attributes']['analysis'], 'wind_deficit_model', DEFAULTS)
 
     deficit_args = {}
     deficit_param_mapping = {}
-    if wake_model_data['name'] == 'Jensen':
+    if wind_deficit_model_data['name'] == 'Jensen':
        wakeModel = NOJLocalDeficit
        deficit_param_mapping = {'k': 'k', 'k2': 'k2'}
-    elif wake_model_data['name'] == 'Bastankhah':
+    elif wind_deficit_model_data['name'] == 'Bastankhah2014':
        wakeModel = BastankhahGaussianDeficit
        deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
        #from py_wake.deficit_models.utils import ct2a_mom1d
        #deficit_args['ct2a'] = ct2a_mom1d
-    elif wake_model_data['name'].upper() == 'FUGA':
+    elif wind_deficit_model_data['name'].upper() == 'FUGA':
        wakeModel = FugaDeficit
        from pyfuga import get_luts
        lut = get_luts(folder = 'luts', # Path where all files (intermediate and final) are stored
@@ -254,11 +254,11 @@ def run_pywake(yamlFile, output_dir='output'):
        deficit_args['LUT_path'] = r'luts/LUTs_Zeta0=0.00e+00_8_32_D%.1f_zhub%.1f_zi500_z0=0.00001000_z69.2-72.8_UL_nx2048_ny512_dx44.575_dy11.14375.nc' % (rd, hh)
        #deficit_args['LUT_path'] = 'luts/LUTs_Zeta0=0.00e+00_8_32_D%i_zhub%i_zi500_z0=0.00001000_z70.0_UL_nx2048_ny512_dx20.0_dy5.0.nc' % (rd, hh)
     else:
-       raise Exception('%s wake model not implemented in PyWake' % wake_model_data['name'])
-    for key in wake_model_data.keys():
+       raise Exception('%s wake model not implemented in PyWake' % wind_deficit_model_data['name'])
+    for key in wind_deficit_model_data.keys():
         if key == 'name': continue
         if key in deficit_param_mapping.keys():
-            deficit_args[deficit_param_mapping[key]] = wake_model_data[key]
+            deficit_args[deficit_param_mapping[key]] = wind_deficit_model_data[key]
 
     if 'k2' in deficit_args:
         k = deficit_args.pop('k')
@@ -360,7 +360,7 @@ def run_pywake(yamlFile, output_dir='output'):
     # names -- to be updated according to team consensus
     # (also, TODO: read these in from the input WES file!)
     name = "FLOW tool output"
-    wake_model = "Bastankhah’s Gaussian wake model"
+    wind_deficit_model = "Bastankhah’s Gaussian wake model"
     statistical_description = 'PDF' # "time_series"
     statistical_dimensions = ['wind_direction','wind_velocity']
     
@@ -379,7 +379,7 @@ def run_pywake(yamlFile, output_dir='output'):
       ('FLOW_simulation_config', 
         dict([
           ('tool', 'PyWake'),
-          ('wake_model', wake_model),
+          ('wind_deficit_model', wind_deficit_model),
           #('wind_energy_system', '!include recorded_inputs.yaml')
           ('wind_energy_system', 'INCLUDE_YAML_PLACEHOLDER')
           ])),
