@@ -393,7 +393,7 @@ def flow_io_abl(wind_resource_dat, time_index, zh, dh_max=None, serz=True):
         # Turbulence intensity
         TI = 0.04
         if 'z0' in wind_resource_dat.keys():
-            TI = wind_resource_dat['turbulence_intensity']["data"][time_index]
+            TI = wind_resource_dat['turbulence_intensity']["data"][time_index] / 100.
         # Capping inversion information
         h = 1.5e3
         dh = 100.
