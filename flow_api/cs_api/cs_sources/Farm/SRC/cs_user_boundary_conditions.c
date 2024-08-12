@@ -101,18 +101,11 @@ cs_user_boundary_conditions(cs_domain_t  *domain,
   cs_field_t *f_roughness = cs_field_by_name("boundary_roughness");
   cs_field_t *f_thermal_roughness = cs_field_by_name("boundary_thermal_roughness");
 
-  cs_real_t pref = cs_glob_atmo_constants->ps;
-  cs_real_t rair = cs_glob_fluid_properties->r_pg_cnst;
-  cs_real_t cp0 = cs_glob_fluid_properties->cp0;
-  cs_real_t rscp = rair/cp0;
-  cs_real_t psea = cs_glob_atmo_option->meteo_psea;
-  cs_real_t theta0 = cs_glob_atmo_option->meteo_t0 * pow(pref/psea, rscp);
   cs_real_t dlmo = cs_glob_atmo_option->meteo_dlmo;
 
   cs_lnum_t face_id=0;
-  int var_id = cs_field_get_key_int(CS_F_(t), cs_field_key_id("variable_id")) - 1;
 
-  cs_zone_t *z = cs_boundary_zone_by_name("Sol");
+  const cs_zone_t *z = cs_boundary_zone_by_name("Sol");
 
   if(cs_notebook_parameter_value_by_name("energy")==1) {
     for (cs_lnum_t face_count=0; face_count < z->n_elts; face_count ++) {
@@ -127,7 +120,6 @@ cs_user_boundary_conditions(cs_domain_t  *domain,
       }
     }
   }
-
 }
 
 /*----------------------------------------------------------------------------*/
