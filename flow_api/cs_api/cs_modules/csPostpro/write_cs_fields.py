@@ -172,10 +172,10 @@ for i, casei in enumerate(cases):
 
         if "wind_speed" or ("wind_direction" in fields):
             velocity = get_output_at_plane_and_time(ens, "Velocity", zplane_center, (0, 0, 1), 0)
-            if "speed" in fields:
+            if "wind_speed" in fields:
                 speed = np.sqrt(pow(velocity[:, 0], 2.0) + pow(velocity[:, 1], 2.0))
                 rootgrp.variables["wind_speed"][:, j, i] = speed
-            if "direction" in fields:
+            if "wind_direction" in fields:
                 direction = np.arctan(velocity[:, 1]/velocity[:, 0])*360/(2*np.pi) + 270
                 rootgrp.variables["wind_direction"][:, j, i] = direction
         if "pressure" in fields:
