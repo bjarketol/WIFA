@@ -418,10 +418,15 @@ class CS_study:
             #TODO: make dependent on teta variations for single launches. Keyword to force in windio?
             salome_launch_command = self.salome_path + " -t python3 "+self.cs_api_path+sep+"cs_modules"+sep+"csLaunch"+sep+"generate_salome_mesh.py args:--wind_origin="+str("270.0")+",--disk_mesh_size="+str(self.mesh.AD_mesh_cell_size)+",--domain_size="+str(self.mesh.mesh_domain_size)+",--domain_height="+str(self.mesh.domain_height)+",--output_file='MESH"+sep+split_mesh_file_name+"'"
             #
-            if(turbine_control):
-                salome_launch_command += ",--turbine_control=1.0"
-            else:
-                salome_launch_command += ",--turbine_control=-1.0"
+
+            #TODO : rediscuss mesh orientations w/ more sensitivities
+            #force box mesh
+            salome_launch_command += ",--turbine_control=1.0"
+            #if(turbine_control):
+            #    salome_launch_command += ",--turbine_control=1.0"
+            #else:
+            #    salome_launch_command += ",--turbine_control=-1.0"
+
             #
             if(damping_layer):
                 salome_launch_command += ",--damping_layer=1.0"
