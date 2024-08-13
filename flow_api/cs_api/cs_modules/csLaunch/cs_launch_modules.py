@@ -737,7 +737,10 @@ class CS_study:
                 self.farm.cp_curves.append(cp_curve)
 
         #
-        ct_curve= np.column_stack((turbines_data['performance']['Ct_curve']['Ct_wind_speeds'],turbines_data['performance']['Ct_curve']['Ct_values']))
+        #TODO: verify if clipping to max ct=1. is okay
+        ct_curve= np.column_stack((turbines_data['performance']['Ct_curve']['Ct_wind_speeds'],
+                                   np.clip(turbines_data['performance']['Ct_curve']['Ct_values'],None,1.)))
+        #
         self.farm.ct_curves.append(ct_curve)
         #print(get_value(self.wind_system_data, 'wind_farm.turbines.performance.power_curve.power_values'))
         ########################### INFLOW DATA ###################################
@@ -761,7 +764,11 @@ class CS_study:
                         if (not all(isinstance(run_time, int) for run_time in self.inflow.run_times)):
                             raise ValueError('occurences_list element is not of type int')
 
-            self.inflow.roughness_height = np.array(resource_data['wind_resource']['z0']['data'])
+            
+            if('z0' in timeseries_var):
+                self.inflow.roughness_height = np.array(resource_data['wind_resource']['z0']['data'])
+            else:
+                self.inflow.roughness_height = np.zeros((ntimes)) + 0.0001 #default z0 value
 
             if('lat' in timeseries_var):
                 self.inflow.latitude = np.array(resource_data['wind_resource']['lat']['data'])
