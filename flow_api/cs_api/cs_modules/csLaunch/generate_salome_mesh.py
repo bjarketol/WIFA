@@ -172,8 +172,8 @@ if(args.turbine_control>0):
 else:
   for i in range(nombre_turbines):
     diametre=diameters_array[i]
-    zone_raff1_eolienne = geompy.MakeCylinderRH( ((1.1*diametre)//tm)*tm*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -4*tm/4 ,-(((1.1*diametre)//tm)*tm)/4, 0)
+    zone_raff1_eolienne = geompy.MakeBoxDXDYDZ(4*tm, ((1.1*diametre)//tm)*tm, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -4*tm/4 ,-(((1.1*diametre)//tm)*tm)/4, 0)
     S = geompy.MakeRotation(zone_raff1_eolienne,Vz,angle)
     S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
     zone_raff1_eol.append(S)
