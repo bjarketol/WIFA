@@ -2,7 +2,10 @@
 __pycache__/
 html/
 results/
+output/
 .idea/
+.ipynb_checkpoints/
+
 *.html
 *.pyc
 _*.yaml
