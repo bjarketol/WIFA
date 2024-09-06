@@ -1,5 +1,4 @@
 import numpy as np
-from py_wake import HorizontalGrid
 from collections import OrderedDict
 import warnings
 import pandas as pd
@@ -7,24 +6,9 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import os
 import yaml
+import argparse
 from scipy.interpolate import interp1d
-from py_wake.deficit_models.fuga import FugaDeficit
-from py_wake.site import XRSite
-from py_wake.wind_turbines import WindTurbine
-from py_wake.wind_farm_models import PropagateDownwind, All2AllIterative
-from py_wake.examples.data.hornsrev1 import Hornsrev1Site
-from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
-from py_wake.deflection_models import JimenezWakeDeflection
-from py_wake.deficit_models.noj import NOJLocalDeficit
-from py_wake.deficit_models.gaussian import BastankhahGaussianDeficit
-from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel, CrespoHernandez
-from py_wake import NOJ, BastankhahGaussian
-from py_wake.deficit_models import SelfSimilarityDeficit2020
-from py_wake.superposition_models import LinearSum, SquaredSum
-from py_wake.rotor_avg_models import RotorCenter, GridRotorAvg, EqGridRotorAvg, GQGridRotorAvg, CGIRotorAvg, PolarGridRotorAvg, polar_gauss_quadrature, GaussianOverlapAvgModel
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
-from py_wake.wind_turbines import WindTurbines
-
 
 # Define default values for wind_deficit_model parameters
 DEFAULTS = {
@@ -105,6 +89,23 @@ def weighted_quantile(values, quantiles, sample_weight=None,
     return np.interp(quantiles, weighted_quantiles, values)
 
 def run_pywake(yamlFile, output_dir='output'):
+    
+    from py_wake import HorizontalGrid
+    from py_wake.deficit_models.fuga import FugaDeficit
+    from py_wake.site import XRSite
+    from py_wake.wind_turbines import WindTurbine
+    from py_wake.wind_farm_models import PropagateDownwind, All2AllIterative
+    from py_wake.examples.data.hornsrev1 import Hornsrev1Site
+    from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
+    from py_wake.deflection_models import JimenezWakeDeflection
+    from py_wake.deficit_models.noj import NOJLocalDeficit
+    from py_wake.deficit_models.gaussian import BastankhahGaussianDeficit
+    from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel, CrespoHernandez
+    from py_wake import NOJ, BastankhahGaussian
+    from py_wake.deficit_models import SelfSimilarityDeficit2020
+    from py_wake.superposition_models import LinearSum, SquaredSum
+    from py_wake.rotor_avg_models import RotorCenter, GridRotorAvg, EqGridRotorAvg, GQGridRotorAvg, CGIRotorAvg, PolarGridRotorAvg, polar_gauss_quadrature, GaussianOverlapAvgModel
+    from py_wake.wind_turbines import WindTurbines
 
     system_dat = load_yaml(yamlFile)
 
@@ -611,3 +612,15 @@ y = np.linspace(WFYLB, WFYUB, 100)),
         file.write(yaml_content)
 
     return aep
+
+def run():
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input_yaml", help="The input yaml file")
+    args = parser.parse_args()
+    
+    run_pywake(args.input_yaml)
+    
+if __name__ == "__main__":
+    run()
+    

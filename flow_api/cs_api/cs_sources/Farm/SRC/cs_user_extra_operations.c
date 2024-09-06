@@ -88,6 +88,8 @@ cs_user_extra_operations(cs_domain_t     *domain)
     const cs_mesh_t *m = domain->mesh;
     const cs_mesh_quantities_t *mq = cs_glob_mesh_quantities;
     const cs_lnum_t  n_cells = m->n_cells;
+    const cs_lnum_t  n_cells_ext = domain->mesh->n_cells_with_ghosts;
+    const cs_real_t  *cell_f_vol = mq->cell_vol;
     const cs_real_3_t *cell_cen = (const cs_real_3_t *)mq->cell_cen;
 
     cs_field_t *f_thm = cs_thermal_model_field();

@@ -72,12 +72,9 @@ dom = 0 # (0 pour circulaire et 1 pour rectangulaire)
 #paramètres non utilisateur
 ###########################
 #taille maille bord domaine
-tc = args.domain_size/150.
-
+tc = args.disk_mesh_size*10
 #taille min
 tm = args.disk_mesh_size
-print('domain_size',args.domain_size)
-print('diskmeshsize',tm)
 traff2 = 1.8*tm
 traff3 = 2.5*tm
 traff4 = 3.5*tm
@@ -132,82 +129,80 @@ zone_raff7_pa =[]
 #placement des différentes zones de raffinement et zones sonde
 if(args.turbine_control>0):
  for i in range(nombre_turbines):
-    diametre=diameters_array[i]
-    zone_raff1_eolienne = geompy.MakeBoxDXDYDZ(((1.1*diametre)//tm)*tm, ((1.1*diametre)//tm)*tm, diametre+40)
-    S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -(((1.1*diametre)//tm)*tm)/2 ,-(((1.1*diametre)//tm)*tm)/2, 0)
-    S = geompy.TranslateDXDYDZ(S,  xy_turbines[0,i], xy_turbines[1,i], 0)
-    zone_raff1_eol.append(S)
+  diametre=diameters_array[i]
+  zone_raff1_eolienne = geompy.MakeBoxDXDYDZ(((1.1*diametre)//tm)*tm, ((1.1*diametre)//tm)*tm, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -(((1.1*diametre)//tm)*tm)/2 ,-(((1.1*diametre)//tm)*tm)/2, 0)
+  S = geompy.TranslateDXDYDZ(S,  xy_turbines[0,i], xy_turbines[1,i], 0)
+  zone_raff1_eol.append(S)
 
-    zone_raff2_eolienne  = geompy.MakeCylinderRH(((1.1*diametre)//tm)*tm+4*tm+2*traff2*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff2_eolienne, -(8*tm+2*traff2)/4 , -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/4,0)
-    S = geompy.MakeRotation(zone_raff2_eolienne,Vz,angle)
-    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
-    zone_raff2_eol.append(S)
+  zone_raff2_eolienne = geompy.MakeBoxDXDYDZ(((1.1*diametre)//tm)*tm+4*tm+2*traff2,((1.1*diametre)//tm)*tm+4*tm+2*traff2, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff2_eolienne, -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/2, -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/2,0)
+  S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+  zone_raff2_eol.append(S)
 
-    zone_raff3_eolienne = geompy.MakeCylinderRH(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff3_eolienne, -(12*tm+2*traff2+2*traff3)/4, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/4, 0)
-    S = geompy.MakeRotation(zone_raff3_eolienne,Vz,angle)
-    S = geompy.TranslateDXDYDZ(S,xy_turbines[0,i], xy_turbines[1,i], 0)
-    zone_raff3_eol.append(S)
+  zone_raff3_eolienne = geompy.MakeBoxDXDYDZ(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3, ((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff3_eolienne, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/2, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/2, 0)
+  S = geompy.TranslateDXDYDZ(S,xy_turbines[0,i], xy_turbines[1,i], 0)
+  zone_raff3_eol.append(S)
 
-    zone_raff4_parc = geompy.MakeCylinderRH( 8*diametre*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff4_parc, -8*diametre/4, -8*diametre/4,0)
-    S = geompy.TranslateDXDYDZ(zone_raff4_parc, xy_turbines[0,i], xy_turbines[1,i], 0)
-    zone_raff4_pa.append(S)
+  zone_raff4_parc = geompy.MakeBoxDXDYDZ(8*diametre, 8*diametre, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff4_parc, -8*diametre/2, -8*diametre/2,0)
+  S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+  zone_raff4_pa.append(S)
 
-    zone_raff5_parc = geompy.MakeCylinderRH( 10.5*diametre*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff5_parc, -10.5*diametre/4, -10.5*diametre/4,0)
-    S = geompy.TranslateDXDYDZ(zone_raff5_parc, xy_turbines[0,i], xy_turbines[1,i], 0)
-    zone_raff5_pa.append(S)
+  zone_raff5_parc = geompy.MakeBoxDXDYDZ(10.5*diametre, 10.5*diametre, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff5_parc, -10.5*diametre/2, -10.5*diametre/2,0)
+  S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+  zone_raff5_pa.append(S)
 
-    zone_raff6_parc = geompy.MakeCylinderRH((10+1.5*tc/tm)*diametre*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff6_parc, -(10+1.5*tc/tm)*diametre/4, -(10+1.5*tc/tm)*diametre/4,0)
-    S = geompy.TranslateDXDYDZ(zone_raff6_parc, xy_turbines[0,i], xy_turbines[1,i], 0)
-    zone_raff6_pa.append(S)
+  zone_raff6_parc = geompy.MakeBoxDXDYDZ(15*diametre, 15*diametre, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff6_parc, -15*diametre/2, -15*diametre/2,0)
+  S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+  zone_raff6_pa.append(S)
 
-    zone_raff7_parc = geompy.MakeCylinderRH((10+3*tc/tm)*diametre*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff7_parc, -(10+3*tc/tm)*diametre/4, -(10+3*tc/tm)*diametre/4,0)
-    S = geompy.TranslateDXDYDZ(zone_raff7_parc, xy_turbines[0,i], xy_turbines[1,i], 0)
-    zone_raff7_pa.append(S)
+  zone_raff7_parc = geompy.MakeBoxDXDYDZ(20*diametre, 20*diametre, diametre+40)
+  S = geompy.TranslateDXDYDZ(zone_raff7_parc, -20*diametre/2, -20*diametre/2,0)
+  S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
+  zone_raff7_pa.append(S)
 else:
   for i in range(nombre_turbines):
     diametre=diameters_array[i]
     zone_raff1_eolienne = geompy.MakeBoxDXDYDZ(4*tm, ((1.1*diametre)//tm)*tm, diametre+40)
-    S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -4*tm/4 ,-(((1.1*diametre)//tm)*tm)/4, 0)
-    S = geompy.MakeRotation(zone_raff1_eolienne,Vz,angle)
+    S = geompy.TranslateDXDYDZ(zone_raff1_eolienne, -4*tm/2 ,-(((1.1*diametre)//tm)*tm)/2, 0)
+    S = geompy.MakeRotation(S,Vz,angle)
     S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
     zone_raff1_eol.append(S)
 
-    zone_raff2_eolienne  = geompy.MakeCylinderRH(((1.1*diametre)//tm)*tm+4*tm+2*traff2*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff2_eolienne, -(8*tm+2*traff2)/4 , -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/4,0)
-    S = geompy.MakeRotation(zone_raff2_eolienne,Vz,angle)
+    zone_raff2_eolienne = geompy.MakeBoxDXDYDZ(8*tm+2*traff2,((1.1*diametre)//tm)*tm+4*tm+2*traff2, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff2_eolienne, -(8*tm+2*traff2)/2 , -(((1.1*diametre)//tm)*tm+4*tm+2*traff2)/2,0)
+    S = geompy.MakeRotation(S,Vz,angle)
     S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
     zone_raff2_eol.append(S)
 
-    zone_raff3_eolienne = geompy.MakeCylinderRH(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff3_eolienne, -(12*tm+2*traff2+2*traff3)/4, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/4, 0)
-    S = geompy.MakeRotation(zone_raff3_eolienne,Vz,angle)
+    zone_raff3_eolienne = geompy.MakeBoxDXDYDZ(12*tm+2*traff2+2*traff3, ((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff3_eolienne, -(12*tm+2*traff2+2*traff3)/2, -(((1.1*diametre)//tm)*tm+12*tm+2*traff2+2*traff3)/2, 0)
+    S = geompy.MakeRotation(S,Vz,angle)
     S = geompy.TranslateDXDYDZ(S,xy_turbines[0,i], xy_turbines[1,i], 0)
     zone_raff3_eol.append(S)
 
-    zone_raff4_parc = geompy.MakeCylinderRH( 8*diametre*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff4_parc, -8*diametre/4, -8*diametre/4,0)
-    S = geompy.TranslateDXDYDZ(zone_raff4_parc, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff4_parc = geompy.MakeBoxDXDYDZ(8*diametre, 8*diametre, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff4_parc, -8*diametre/2, -8*diametre/2,0)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
     zone_raff4_pa.append(S)
 
-    zone_raff5_parc = geompy.MakeCylinderRH( 10.5*diametre*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff5_parc, -10.5*diametre/4, -10.5*diametre/4,0)
-    S = geompy.TranslateDXDYDZ(zone_raff5_parc, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff5_parc = geompy.MakeBoxDXDYDZ(10.5*diametre, 10.5*diametre, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff5_parc, -10.5*diametre/2, -10.5*diametre/2,0)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
     zone_raff5_pa.append(S)
 
-    zone_raff6_parc = geompy.MakeCylinderRH((10+1.5*tc/tm)*diametre*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff6_parc, -(10+1.5*tc/tm)*diametre/4, -(10+1.5*tc/tm)*diametre/4,0)
-    S = geompy.TranslateDXDYDZ(zone_raff6_parc, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff6_parc = geompy.MakeBoxDXDYDZ(15*diametre, 15*diametre, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff6_parc, -15*diametre/2, -15*diametre/2,0)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
     zone_raff6_pa.append(S)
 
-    zone_raff7_parc = geompy.MakeCylinderRH((10+3*tc/tm)*diametre*0.5, diametre+40)
-    #S = geompy.TranslateDXDYDZ(zone_raff7_parc, -(10+3*tc/tm)*diametre/4, -(10+3*tc/tm)*diametre/4,0)
-    S = geompy.TranslateDXDYDZ(zone_raff7_parc, xy_turbines[0,i], xy_turbines[1,i], 0)
+    zone_raff7_parc = geompy.MakeBoxDXDYDZ(20*diametre, 20*diametre, diametre+40)
+    S = geompy.TranslateDXDYDZ(zone_raff7_parc, -20*diametre/2, -20*diametre/2,0)
+    S = geompy.TranslateDXDYDZ(S, xy_turbines[0,i], xy_turbines[1,i], 0)
     zone_raff7_pa.append(S)
 
 raff1_list=[]

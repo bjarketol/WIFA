@@ -13,7 +13,7 @@ import yaml
 from datetime import datetime, timedelta
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 from functools import reduce
-import cs_api.cs_modules.csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
+import flow_api.cs_api.cs_modules.csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
 
 def theta2temp(theta,z_or_dz,P0,Pref=1000.,g=9.81,Rair=287.,Cp=1005.):
     """
@@ -215,7 +215,6 @@ class CS_mesh:
         self.domain_height = 1000.0
         self.mesh_domain_size = 50000.0
         self.AD_mesh_cell_size = 10.0
-        self.AD_mesh_disk_to_cell_ratio = 8.0
         #
         self.remesh = True
         self.mesh_file_name = "mesh.med"
@@ -223,7 +222,7 @@ class CS_mesh:
 class CS_study:
     def __init__(self,farm_notebook_arg_names=None,farm_notebook_arg_values=None, \
                  prec_notebook_arg_names=None,prec_notebook_arg_values=None, \
-                 case_dir=None, result_dir=None, postprocess_only=False, wind_energy_system_file=None, \
+                 case_dir=None, result_dir=None, wind_energy_system_file=None, \
                  cs_path=None, salome_path=None, python_env_command=None, python_exe=None,\
                  salome_env_command=None, cs_env_command=None, \
                  cs_run_folder=None, cs_api_path=None):
@@ -234,7 +233,6 @@ class CS_study:
         #
         self.case_dir = case_dir
         self.result_dir = result_dir
-        self.postprocess_only = postprocess_only
         self.case_name = None
         #
         self.cs_path = cs_path
@@ -346,7 +344,7 @@ class CS_study:
             #TODO : raise exception if mesh_file does not exist
             os.system("cp -r " + mesh_file_name+ " " + self.cs_run_folder+sep+"MESH"+sep+".")
         #
-        self.mesh.AD_mesh_cell_size=int(np.min(self.farm.rotor_diameters)/self.mesh.AD_mesh_disk_to_cell_ratio)
+        self.mesh.AD_mesh_cell_size=int(np.min(self.farm.rotor_diameters)/8.0)
         #
         self.mesh.mesh_domain_size = np.round(max(self.farm.farm_size*3.2, self.mesh.AD_mesh_cell_size*600),-2) + 2*self.mesh.damping_length
         #
@@ -418,15 +416,10 @@ class CS_study:
             #TODO: make dependent on teta variations for single launches. Keyword to force in windio?
             salome_launch_command = self.salome_path + " -t python3 "+self.cs_api_path+sep+"cs_modules"+sep+"csLaunch"+sep+"generate_salome_mesh.py args:--wind_origin="+str("270.0")+",--disk_mesh_size="+str(self.mesh.AD_mesh_cell_size)+",--domain_size="+str(self.mesh.mesh_domain_size)+",--domain_height="+str(self.mesh.domain_height)+",--output_file='MESH"+sep+split_mesh_file_name+"'"
             #
-
-            #TODO : rediscuss mesh orientations w/ more sensitivities
-            #force box mesh
-            salome_launch_command += ",--turbine_control=1.0"
-            #if(turbine_control):
-            #    salome_launch_command += ",--turbine_control=1.0"
-            #else:
-            #    salome_launch_command += ",--turbine_control=-1.0"
-
+            if(turbine_control):
+                salome_launch_command += ",--turbine_control=1.0"
+            else:
+                salome_launch_command += ",--turbine_control=-1.0"
             #
             if(damping_layer):
                 salome_launch_command += ",--damping_layer=1.0"
@@ -742,10 +735,7 @@ class CS_study:
                 self.farm.cp_curves.append(cp_curve)
 
         #
-        #TODO: verify if clipping to max ct=1. is okay
-        ct_curve= np.column_stack((turbines_data['performance']['Ct_curve']['Ct_wind_speeds'],
-                                   np.clip(turbines_data['performance']['Ct_curve']['Ct_values'],None,1.)))
-        #
+        ct_curve= np.column_stack((turbines_data['performance']['Ct_curve']['Ct_wind_speeds'],turbines_data['performance']['Ct_curve']['Ct_values']))
         self.farm.ct_curves.append(ct_curve)
         #print(get_value(self.wind_system_data, 'wind_farm.turbines.performance.power_curve.power_values'))
         ########################### INFLOW DATA ###################################
@@ -769,11 +759,7 @@ class CS_study:
                         if (not all(isinstance(run_time, int) for run_time in self.inflow.run_times)):
                             raise ValueError('occurences_list element is not of type int')
 
-            
-            if('z0' in timeseries_var):
-                self.inflow.roughness_height = np.array(resource_data['wind_resource']['z0']['data'])
-            else:
-                self.inflow.roughness_height = np.zeros((ntimes)) + 0.0001 #default z0 value
+            self.inflow.roughness_height = np.array(resource_data['wind_resource']['z0']['data'])
 
             if('lat' in timeseries_var):
                 self.inflow.latitude = np.array(resource_data['wind_resource']['lat']['data'])
@@ -884,9 +870,9 @@ class CS_study:
                     self.inflow.ABL_heights = np.array(resource_data['wind_resource']['ABL_height']['data'])
                 if('lapse_rate' in timeseries_var):
                     self.inflow.lapse_rates = np.array(resource_data['wind_resource']['lapse_rate']['data'])
-                if('capping_inversion_strength' in timeseries_var):
+                if('dtheta' in timeseries_var):
                     self.inflow.dtheta_values = np.array(resource_data['wind_resource']['capping_inversion_strength']['data'])
-                if('capping_inversion_thickness' in timeseries_var):
+                if('dH' in timeseries_var):
                     self.inflow.dH_values = np.array(resource_data['wind_resource']['capping_inversion_thickness']['data'])
                 #=========================
 

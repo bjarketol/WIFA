@@ -6,25 +6,25 @@ import matplotlib.pyplot as plt
 import mpmath
 import warnings
 import xarray as xr
-
-# Atmospheric state setup
-from wayve.abl.abl import ABL
-from wayve.abl.abl_tools import Cg_cubic, alpha_cubic
-from wayve.abl import ci_methods
-
-# General APM setup
-from wayve.apm import APM
-from wayve.grid.grid import Stat2Dgrid
-from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.pressure_based import PressureBased
-from wayve.forcing.wind_farms.wake_model_coupling.wake_models.lanzilao_merging import UniDirectional
-from wayve.forcing.wind_farms.wind_farm import WindFarm, Turbine
-from wayve.forcing.apm_forcing import ForcingComposite
-from wayve.momentum_flux_parametrizations import FrictionCoefficients
-from wayve.pressure.gravity_waves.gravity_waves import Uniform
-from wayve.solvers import FixedPointIteration
-
+import argparse
 
 def run_wayve(yamlFile):
+
+    # Atmospheric state setup
+    from wayve.abl.abl import ABL
+    from wayve.abl.abl_tools import Cg_cubic, alpha_cubic
+    from wayve.abl import ci_methods
+
+    # General APM setup
+    from wayve.apm import APM
+    from wayve.grid.grid import Stat2Dgrid
+    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.pressure_based import PressureBased
+    from wayve.forcing.wind_farms.wake_model_coupling.wake_models.lanzilao_merging import UniDirectional
+    from wayve.forcing.wind_farms.wind_farm import WindFarm, Turbine
+    from wayve.forcing.apm_forcing import ForcingComposite
+    from wayve.momentum_flux_parametrizations import FrictionCoefficients
+    from wayve.pressure.gravity_waves.gravity_waves import Uniform
+    from wayve.solvers import FixedPointIteration
 
     ######################
     # construct APM grid
@@ -487,13 +487,14 @@ def flow_io_abl(wind_resource_dat, time_index, zh, dh_max=None, serz=True):
                inv_bottom=inv_bottom, inv_top=inv_top)
 
 
-if __name__ == '__main__':
-    # Basic run using local file, for local testing #
-    # Get given file location
-    import argparse
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('-file', dest='file')
-    args = arg_parser.parse_args()
-    # Run wayve with given file
-    run_wayve(args.file)
+def run():
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input_yaml", help="The input yaml file")
+    args = parser.parse_args()
+    
+    run_wayve(args.input_yaml)
+
+if __name__ == '__main__':
+    run()
+    
