@@ -67,6 +67,7 @@ dev = [
     "jupyter",
     "ncplot",
     "nctoolkit",
+    "cartopy",
 ]
 
 [project.urls]
