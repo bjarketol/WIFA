@@ -187,7 +187,7 @@ cs_user_parameters(cs_domain_t *domain)
 
   /* Warning, meteo file does not overwrite reference values... */
   cs_fluid_properties_t *phys_pro = cs_get_glob_fluid_properties();
-  //cs_real_t rair = phys_pro->r_pg_cnst;
+  cs_real_t rair = phys_pro->r_pg_cnst;
   /* Reference fluid properties set from meteo values */
   phys_pro->p0 = cs_glob_atmo_option->meteo_psea;
   //phys_pro->t0 = cs_glob_atmo_option->meteo_t0; /* ref temp T0 */
