@@ -1,6 +1,0 @@
-[console_scripts]
-flow_api = flow_api.main_api:run
-flow_api_foxes = flow_api.foxes_api:run
-flow_api_pywake = flow_api.pywake_api:run
-flow_api_saturne = flow_api.cs_api.cs_modules.csLaunch.cs_run_function:run
-flow_api_wayve = flow_api.wayve_api:run
