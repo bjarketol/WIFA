@@ -4,6 +4,7 @@ html/
 results/
 output/
 .idea/
+*.egg-info/
 .ipynb_checkpoints/
 
 *.html
@@ -12,4 +13,3 @@ _*.yaml
 *foxes*states*.nc
 *states*foxes*.nc
 centreline*foxes*.nc
-
