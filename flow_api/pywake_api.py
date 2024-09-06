@@ -23,11 +23,13 @@ from py_wake.deficit_models import SelfSimilarityDeficit2020
 from py_wake.superposition_models import LinearSum, SquaredSum
 from py_wake.rotor_avg_models import RotorCenter, GridRotorAvg, EqGridRotorAvg, GQGridRotorAvg, CGIRotorAvg, PolarGridRotorAvg, polar_gauss_quadrature, GaussianOverlapAvgModel
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
+from py_wake.wind_turbines import WindTurbines
 
 
 # Define default values for wind_deficit_model parameters
 DEFAULTS = {
-    'wind_deficit_model': {
+    'wake_model': {
+    #'wind_deficit_model': {
         'name': 'Jensen',
         'k': 0.04,  # Default wake expansion coefficient for Jensen
         'k2': 0.0,  # TI wake expansion modifier
@@ -106,31 +108,52 @@ def run_pywake(yamlFile, output_dir='output'):
 
     system_dat = load_yaml(yamlFile)
 
+    # check for multiple turbines?
+
     # define turbine
     farm_dat = system_dat['wind_farm']
-    hh = farm_dat['turbines']['hub_height']
-    rd = farm_dat['turbines']['rotor_diameter']
-    if 'Cp_curve' in farm_dat['turbines']['performance']:
-       cp = farm_dat['turbines']['performance']['Cp_curve']['Cp_values']
-       cp_ws = farm_dat['turbines']['performance']['Cp_curve']['Cp_wind_speeds']
-       power_curve_type = 'cp'
-    elif 'power_curve' in farm_dat['turbines']['performance']:
-       cp_ws = farm_dat['turbines']['performance']['power_curve']['power_wind_speeds']
-       pows = farm_dat['turbines']['performance']['power_curve']['power_values']
-       power_curve_type = 'power'
-    else: raise Exception('Bad Power Curve')
-    ct = farm_dat['turbines']['performance']['Ct_curve']['Ct_values']
-    ct_ws = farm_dat['turbines']['performance']['Ct_curve']['Ct_wind_speeds']
-    speeds = np.linspace(np.min([cp_ws, ct_ws]), np.max([cp_ws, ct_ws]), 10000)
-    cts_int = np.interp(speeds, ct_ws, ct)
-    if power_curve_type == 'power':
-       powers = np.interp(speeds, cp_ws, pows)
+    if 'turbines' in farm_dat:
+       turbine_dats = [farm_dat['turbines']]
+       type_names = '0'
     else:
-       cps_int = np.interp(speeds, cp_ws, cp)
-       powers =  0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi
-    turbine = WindTurbine(name=farm_dat['turbines']['name'], diameter=rd, hub_height=hh, 
-                          powerCtFunction=PowerCtTabular(speeds, powers, power_unit='W', ct=cts_int))
+       turbine_dats = [farm_dat['turbine_types'][key] for key in farm_dat['turbine_types']]
+       type_names = list(farm_dat['turbine_types'].keys())
 
+    turbines = []
+    hub_heights = {}
+    for turbine_dat, key in zip(turbine_dats, type_names):
+        hh = turbine_dat['hub_height']
+        rd = turbine_dat['rotor_diameter']
+        hub_heights[key] = hh
+        if 'Cp_curve' in turbine_dat['performance']:
+           cp = turbine_dat['performance']['Cp_curve']['Cp_values']
+           cp_ws = turbine_dat['performance']['Cp_curve']['Cp_wind_speeds']
+           power_curve_type = 'cp'
+        elif 'power_curve' in turbine_dat['performance']:
+           cp_ws = turbine_dat['performance']['power_curve']['power_wind_speeds']
+           pows = turbine_dat['performance']['power_curve']['power_values']
+           power_curve_type = 'power'
+        else: raise Exception('Bad Power Curve')
+        ct = turbine_dat['performance']['Ct_curve']['Ct_values']
+        ct_ws = turbine_dat['performance']['Ct_curve']['Ct_wind_speeds']
+        speeds = np.linspace(np.min([cp_ws, ct_ws]), np.max([cp_ws, ct_ws]), 10000)
+        cts_int = np.interp(speeds, ct_ws, ct)
+        if power_curve_type == 'power':
+           powers = np.interp(speeds, cp_ws, pows)
+        else:
+           cps_int = np.interp(speeds, cp_ws, cp)
+           powers =  0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi
+
+        this_turbine = WindTurbine(name=turbine_dat['name'], diameter=rd, hub_height=hh, 
+                              powerCtFunction=PowerCtTabular(speeds, powers, power_unit='W', ct=cts_int))
+        turbines.append(this_turbine)
+
+    if len(turbines) == 1:
+        turbine = this_turbine
+        turbine_types = 0
+    else:
+        turbine = WindTurbines.from_WindTurbine_lst(turbines)
+        turbine_types = farm_dat['layouts'][0]['turbine_types']
 
    #farm = 'examples/plant/plant_wind_farm/IEA37_case_study_3_wind_farm.yaml'
    #with open(farm, "r") as stream:
@@ -150,6 +173,14 @@ def run_pywake(yamlFile, output_dir='output'):
     WFXUB = np.max(system_dat['site']['boundaries']['polygons'][0]['x'])
     WFYLB = np.min(system_dat['site']['boundaries']['polygons'][1]['y'])
     WFYUB = np.max(system_dat['site']['boundaries']['polygons'][1]['y'])
+
+    # get x and y positions
+    if type(farm_dat['layouts']) == list:
+       x = farm_dat['layouts'][0]['coordinates']['x']
+       y = farm_dat['layouts'][0]['coordinates']['y']
+    else:
+       x = farm_dat['layouts']['coordinates']['x']
+       y = farm_dat['layouts']['coordinates']['y']
     
     ##################
     # construct site
@@ -164,18 +195,65 @@ def run_pywake(yamlFile, output_dir='output'):
            heights = None
        ws = resource_dat['wind_resource']['wind_speed']['data']
        wd = resource_dat['wind_resource']['wind_direction']['data']
-       print(np.array(ws).shape, np.array(heights).shape)
-       if heights:
-          ws = interp1d(heights, ws, axis=1)(hh)
-          wd = interp1d(heights, wd, axis=1)(hh)
-       assert(len(times) == len(ws))
-       assert(len(wd) == len(ws))
-       site = Hornsrev1Site()
+
+       if len(hub_heights) > 1:
+           speeds = []
+           dirs = []
+           for tt in turbine_types:
+               hh = hub_heights[tt]
+               if heights:
+                  try:
+                     ws_int = interp1d(heights, ws, axis=1)(hh)
+                     wd_int = interp1d(heights, wd, axis=1)(hh)
+                  except ValueError:
+                     ws_int = interp1d(heights, np.array(ws).T, axis=1)(hh)
+                     wd_int = interp1d(heights, np.array(wd).T, axis=1)(hh)
+               else:
+                  ws_int = ws
+                  wd_int = wd
+               speeds.append(ws_int)
+               dirs.append(wd_int)
+           ws = ws_int
+           wd = wd_int
+       else:
+           print(np.array(ws).shape, np.array(heights).shape)
+           if heights:
+              try:
+                 ws = interp1d(heights, ws, axis=1)(hh)
+                 wd = interp1d(heights, wd, axis=1)(hh)
+              except ValueError:
+                 ws = interp1d(heights, np.array(ws).T, axis=1)(hh)
+                 wd = interp1d(heights, np.array(wd).T, axis=1)(hh)
+           assert(len(times) == len(ws))
+           assert(len(wd) == len(ws))
+           site = Hornsrev1Site()
        if 'turbulence_intensity' not in resource_dat['wind_resource']:
           TI = 0.02
        else:
-          TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
-          if heights: TI = interp1d(heights, TI, axis=1)(hh)
+           TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
+           if len(hub_heights) > 1:
+               TIs = []
+               for tt in turbine_types:
+                   hh = hub_heights[tt]
+                   if heights:
+                      try:
+                         ti_int = interp1d(heights, TI, axis=1)(hh)
+                      except ValueError:
+                         ti_int = interp1d(heights, np.array(TI).T, axis=1)(hh)
+                   else:
+                      ti_int = TI
+                   TIs.append(ti_int)
+               TI = ti_int
+               site = XRSite(xr.Dataset(data_vars={
+                             'WS': (['i', 'time'], np.array(speeds)),
+                             'WD': (['i', 'time'], np.array(dirs)),
+                             'TI': (['i', 'time'], np.array(TIs)),
+                             'P': 1},
+                      coords={'i': np.arange(len(x)),
+                              'time': np.arange(len(times))}))
+           else:
+               if heights: TI = interp1d(heights, TI, axis=1)(hh)
+       
        #ite = XRSite(xr.Dataset(
        # data_vars={'P': (('time'), np.ones(len(ws)) / len(speeds)), },
        # coords={'time': range(len(times)),
@@ -218,12 +296,9 @@ def run_pywake(yamlFile, output_dir='output'):
 
 
 
-    # get x and y positions
-    x = farm_dat['layouts']['initial_layout']['coordinates']['x']
-    y = farm_dat['layouts']['initial_layout']['coordinates']['y']
     
 
-    wind_deficit_model_data = get_with_default(system_dat['attributes']['analysis'], 'wind_deficit_model', DEFAULTS)
+    wind_deficit_model_data = get_with_default(system_dat['attributes']['analysis'], 'wake_model', DEFAULTS)
 
     deficit_args = {}
     deficit_param_mapping = {}
@@ -263,7 +338,7 @@ def run_pywake(yamlFile, output_dir='output'):
     if 'k2' in deficit_args:
         k = deficit_args.pop('k')
         k2 = deficit_args.pop('k2')
-        deficit_args['a'] = [k, k2]
+        deficit_args['a'] = [k2, k]
 
     # Continuing from the previous example...
     
@@ -341,11 +416,12 @@ def run_pywake(yamlFile, output_dir='output'):
                            )
     #noj = NOJ(site, turbine, turbulenceModel=None)
 #    sim_res = noj(x, y)
-    sim_res = windFarmModel(x, y, time=timeseries, ws=ws, wd=wd, TI=TI, yaw=0, tilt=0)
+    #sim_res = windFarmModel(x, y, type=turbine_types, time=timeseries, ws=ws, wd=wd, TI=0, yaw=0, tilt=0)
+    sim_res = windFarmModel(x, y, type=turbine_types, time=timeseries, ws=ws, wd=wd, TI=TI, yaw=0, tilt=0)
     aep = sim_res.aep(normalize_probabilities=not timeseries).sum()
     print('aep is ', aep, 'GWh')
     #print('aep is ', sim_res.aep().sum(), 'GWh')
-    print('(%.2f capcacity factor)' % ( aep / (len(x) * turbine.power(10000) * 8760 / 1e9)))
+    #print('(%.2f capcacity factor)' % ( aep / (len(x) * turbine.power(10000) * 8760 / 1e9)))
 
 
     ######################
@@ -423,7 +499,7 @@ def run_pywake(yamlFile, output_dir='output'):
        #print('aep per turbine', list(aep_per_turbine)); hey
        #data['FLOW_simulation_outputs']['AEP_per_turbine'] = [float(value) for value in aep_per_turbine]
        sim_res_formatted = sim_res[['Power', 'WS_eff']].rename({'Power': 'power', 'WS_eff': 'effective_wind_speed', 'wt': 'turbine'})
-       sim_res_formatted['power'] /= 1e3 # Watts to kW
+       sim_res_formatted['power'] 
        sim_res_formatted.to_netcdf(output_dir + os.sep + 'PowerTable.nc')
 
     print(sim_res)
