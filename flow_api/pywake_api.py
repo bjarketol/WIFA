@@ -12,7 +12,7 @@ from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 
 # Define default values for wind_deficit_model parameters
 DEFAULTS = {
-    'wake_model': {
+    'wind_deficit_model': {
     #'wind_deficit_model': {
         'name': 'Jensen',
         'k': 0.04,  # Default wake expansion coefficient for Jensen
@@ -299,7 +299,7 @@ def run_pywake(yamlFile, output_dir='output'):
 
     
 
-    wind_deficit_model_data = get_with_default(system_dat['attributes']['analysis'], 'wake_model', DEFAULTS)
+    wind_deficit_model_data = get_with_default(system_dat['attributes']['analysis'], 'wind_deficit_model', DEFAULTS)
 
     deficit_args = {}
     deficit_param_mapping = {}
