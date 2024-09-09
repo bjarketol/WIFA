@@ -4,7 +4,7 @@ def run_foxes(input_yaml):
     
     from foxes.input.windio import read_windio
 
-    wio_runner = read_windio(input_yaml, verbosity=1)
+    wio_runner = read_windio(input_yaml, verbosity=3)
 
     with wio_runner as runner:
         runner.run()
