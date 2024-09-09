@@ -2,7 +2,7 @@
 wind_deficit_model:
   name: Bastankhah2014
   wake_expansion_coefficient: # k = ka*ti + kb
-    k_a: 0.0
+    k_a: 0.00
     k_b: 0.04
     free_stream_ti: false
   ceps: 0.2
@@ -22,7 +22,7 @@ rotor_averaging:
   n_x_grid_points: 4
   n_y_grid_points: 4
   background_averaging: center
-  wake_averaging: centre
+  wake_averaging: auto
   wind_speed_exponent_for_power: 3
   wind_speed_exponent_for_ct: 2
 
