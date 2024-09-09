@@ -4,7 +4,7 @@ wind_farm: !include ../plant_wind_farm/FLOW_toy_study_wind_farm.yaml
 attributes:
   flow_model:
     name: wayve
-  analysis: !include FLOW_toy_study_analysis.yaml
+  analysis: !include analysis.yaml
 
   outputs:
     output_folder: "results"
@@ -13,7 +13,7 @@ attributes:
         output_variables: ['power', 'rotor_effective_velocity'] 
     #
     flow_field:
-      report: True
+      report: False
       flow_nc_filename: flow_field.nc
       cases_run:
         all_occurences: False
