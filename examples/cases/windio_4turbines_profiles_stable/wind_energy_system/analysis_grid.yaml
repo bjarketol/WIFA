@@ -9,7 +9,7 @@ wind_deficit_model:
   use_effective_ws: true
 turbulence_model:
   name: IEC-TI-2019
-axial_induction_model: 1D
+axial_induction_model: Madsen
 deflection_model:
   name: None
 superposition_model:
@@ -23,8 +23,8 @@ rotor_averaging:
   n_y_grid_points: 7
   background_averaging: grid
   wake_averaging: grid
-  wind_speed_exponent_for_power: 3
-  wind_speed_exponent_for_ct: 2
+  wind_speed_exponent_for_power: 1
+  wind_speed_exponent_for_ct: 1
 
 #wayve
 layers_description:
