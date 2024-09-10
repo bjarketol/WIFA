@@ -6,6 +6,7 @@ output/
 .idea/
 *.egg-info/
 .ipynb_checkpoints/
+*.egg-info/
 
 *.html
 *.pyc
