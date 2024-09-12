@@ -1,11 +1,3 @@
-#wayve
-layers_description:
-  farm_layer_height: 150
-  number_of_layers: 10
-APM_additional_terms:
-  term_list: None
-wake_tool: "foxes"
-
 #pywake and foxes
 wind_deficit_model:
   name: Bastankhah2014
@@ -33,6 +25,14 @@ rotor_averaging:
   wind_speed_exponent_for_ct: 2
 blockage_model:
   name: None
+
+#wayve
+layers_description:
+  farm_layer_height: 150
+  number_of_layers: 10
+APM_additional_terms:
+  term_list: None
+wake_tool: "foxes"
 
 #code_saturne
 run_type: "simulate" #"postprocess"
