@@ -11,12 +11,27 @@ wake_model:
   name: Bastankhah2014
   k: 0.04
   ceps: 0.2
+<<<<<<< Updated upstream:examples/cases/AWAKEN/examples/cases/AWAKEN/wind_energy_system/analysis.yaml
+=======
+  use_effective_ws: true
+axial_induction_model: Madsen
+>>>>>>> Stashed changes:examples/cases/AWAKEN/wind_energy_system/analysis.yaml
 deflection_model:
   name: Jimenez
 superposition_model:
   name: Linear
 rotor_averaging:
+<<<<<<< Updated upstream:examples/cases/AWAKEN/examples/cases/AWAKEN/wind_energy_system/analysis.yaml
   name: center
+=======
+  grid: grid
+  n_x_grid_points: 5
+  n_y_grid_points: 5
+  background_averaging: centre
+  wake_averaging: centre
+  wind_speed_exponent_for_power: 1
+  wind_speed_exponent_for_ct: 1
+>>>>>>> Stashed changes:examples/cases/AWAKEN/wind_energy_system/analysis.yaml
 blockage:
   name: None
 
