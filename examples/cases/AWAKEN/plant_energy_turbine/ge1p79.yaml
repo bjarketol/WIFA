@@ -23,4 +23,4 @@ performance:
 cutin_wind_speed: 3.0
 cutout_wind_speed: 25.0
 hub_height: 80.0
-rotor_diameter: 103.0
+rotor_diameter: 100.0 #103.0
