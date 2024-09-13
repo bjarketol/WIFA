@@ -7,23 +7,23 @@ APM_additional_terms:
 wake_tool: "foxes"
 
 #pywake and foxes
-wake_model:
+wind_deficit_model:
   name: Bastankhah2014
-  k: 0.04
+  wake_expansion_coefficient: # k = ka*ti + kb
+    k_a: 0.0
+    k_b: 0.04
+    free_stream_ti: false
   ceps: 0.2
-<<<<<<< Updated upstream:examples/cases/AWAKEN/examples/cases/AWAKEN/wind_energy_system/analysis.yaml
-=======
   use_effective_ws: true
 axial_induction_model: Madsen
->>>>>>> Stashed changes:examples/cases/AWAKEN/wind_energy_system/analysis.yaml
 deflection_model:
-  name: Jimenez
+  name: None
+turbulence_model:
+  name: CrespoHernandez
 superposition_model:
-  name: Linear
+  ws_superposition: Linear
+  ti_superposition: Quadratic
 rotor_averaging:
-<<<<<<< Updated upstream:examples/cases/AWAKEN/examples/cases/AWAKEN/wind_energy_system/analysis.yaml
-  name: center
-=======
   grid: grid
   n_x_grid_points: 5
   n_y_grid_points: 5
@@ -31,7 +31,6 @@ rotor_averaging:
   wake_averaging: centre
   wind_speed_exponent_for_power: 1
   wind_speed_exponent_for_ct: 1
->>>>>>> Stashed changes:examples/cases/AWAKEN/wind_energy_system/analysis.yaml
 blockage:
   name: None
 
