@@ -45,6 +45,7 @@ def get_with_default(data, key, defaults):
     If the value is a dictionary, apply the same process recursively.
     """
     if key not in data:
+        print("WARNING: Using default value for ", key)
         return defaults[key]
     elif isinstance(data[key], dict):
         # For nested dictionaries, ensure all subkeys are checked for defaults
@@ -145,8 +146,16 @@ def run_pywake(yamlFile, output_dir='output'):
            cps_int = np.interp(speeds, cp_ws, cp)
            powers =  0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi
 
+        if 'cutin_wind_speed' in turbine_dat['performance']:
+           cutin = turbine_dat['performance']['cutin_wind_speed']
+        else:
+           cutin = 0
+        if 'cutout_wind_speed' in turbine_dat['performance']:
+           cutout = turbine_dat['performance']['cutout_wind_speed']
+        else:
+           cutout = None
         this_turbine = WindTurbine(name=turbine_dat['name'], diameter=rd, hub_height=hh, 
-                              powerCtFunction=PowerCtTabular(speeds, powers, power_unit='W', ct=cts_int))
+                              powerCtFunction=PowerCtTabular(speeds, powers, power_unit='W', ct=cts_int), ws_cutin=cutin, ws_cutout=cutout)
         turbines.append(this_turbine)
 
     if len(turbines) == 1:
@@ -303,6 +312,7 @@ def run_pywake(yamlFile, output_dir='output'):
 
     deficit_args = {}
     deficit_param_mapping = {}
+    print('Running deficit ', wind_deficit_model_data)
     if wind_deficit_model_data['name'] == 'Jensen':
        wakeModel = NOJLocalDeficit
        deficit_param_mapping = {'k': 'k', 'k2': 'k2'}
@@ -404,6 +414,7 @@ def run_pywake(yamlFile, output_dir='output'):
     else: 
        solver = PropagateDownwind
 
+    print('Running ', wakeModel, deficit_args)
     windFarmModel = solver(
                            site,
                            turbine,
@@ -513,8 +524,8 @@ def run_pywake(yamlFile, output_dir='output'):
        flow_map = sim_res.flow_map(
                             x = np.linspace(WFXLB, WFXUB, 100),
                             y = np.linspace(WFYLB, WFYUB, 100),
-                            wd=system_dat['attributes']['analysis']['outputs']['flow_field']['directions'],
-                            ws=system_dat['attributes']['analysis']['outputs']['flow_field']['speeds'],)
+                            wd=system_dat['attributes']['outputs']['flow_field']['directions'],
+                            ws=system_dat['attributes']['outputs']['flow_field']['speeds'],)
 
        # remove unwanted data
        flow_map = flow_map.drop_vars(['WD', 'WS', 'TI', 'P'])
