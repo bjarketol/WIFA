@@ -209,15 +209,17 @@ def run_pywake(yamlFile, output_dir='output'):
        if len(hub_heights) > 1:
            speeds = []
            dirs = []
-           for tt in turbine_types:
-               hh = hub_heights[tt]
+           seen = []
+           for hh in sorted(np.append(list(hub_heights.values()), system_dat['attributes']['outputs']['flow_field']['z_planes']['z_sampling'])):
+               if hh in seen: continue
+               seen.append(hh)
                if heights:
                   try:
-                     ws_int = interp1d(heights, ws, axis=1)(hh)
-                     wd_int = interp1d(heights, wd, axis=1)(hh)
+                     ws_int = interp1d(heights, ws, axis=1, fill_value="extrapolate")(hh)
+                     wd_int = interp1d(heights, wd, axis=1, fill_value="extrapolate")(hh)
                   except ValueError:
-                     ws_int = interp1d(heights, np.array(ws).T, axis=1)(hh)
-                     wd_int = interp1d(heights, np.array(wd).T, axis=1)(hh)
+                     ws_int = interp1d(heights, np.array(ws).T, axis=1, fill_value="extrapolate")(hh)
+                     wd_int = interp1d(heights, np.array(wd).T, axis=1, fill_value="extrapolate")(hh)
                else:
                   ws_int = ws
                   wd_int = wd
@@ -229,11 +231,11 @@ def run_pywake(yamlFile, output_dir='output'):
            print(np.array(ws).shape, np.array(heights).shape)
            if heights:
               try:
-                 ws = interp1d(heights, ws, axis=1)(hh)
-                 wd = interp1d(heights, wd, axis=1)(hh)
+                 ws = interp1d(heights, ws, axis=1, fill_value="extrapolate")(hh)
+                 wd = interp1d(heights, wd, axis=1, fill_value="extrapolate")(hh)
               except ValueError:
-                 ws = interp1d(heights, np.array(ws).T, axis=1)(hh)
-                 wd = interp1d(heights, np.array(wd).T, axis=1)(hh)
+                 ws = interp1d(heights, np.array(ws).T, axis=1, fill_value="extrapolate")(hh)
+                 wd = interp1d(heights, np.array(wd).T, axis=1, fill_value="extrapolate")(hh)
            assert(len(times) == len(ws))
            assert(len(wd) == len(ws))
            site = Hornsrev1Site()
@@ -243,23 +245,26 @@ def run_pywake(yamlFile, output_dir='output'):
            TI =  resource_dat['wind_resource']['turbulence_intensity']['data']
            if len(hub_heights) > 1:
                TIs = []
-               for tt in turbine_types:
-                   hh = hub_heights[tt]
+               seen = []
+               for hh in sorted(np.append(list(hub_heights.values()), system_dat['attributes']['outputs']['flow_field']['z_planes']['z_sampling'])):
+                   #hh = hub_heights[tt]
                    if heights:
+                      if hh in seen: continue
+                      seen.append(hh)
                       try:
-                         ti_int = interp1d(heights, TI, axis=1)(hh)
+                         ti_int = interp1d(heights, TI, axis=1, fill_value="extrapolate")(hh)
                       except ValueError:
-                         ti_int = interp1d(heights, np.array(TI).T, axis=1)(hh)
+                         ti_int = interp1d(heights, np.array(TI).T, axis=1, fill_value="extrapolate")(hh)
                    else:
                       ti_int = TI
                    TIs.append(ti_int)
                TI = ti_int
                site = XRSite(xr.Dataset(data_vars={
-                             'WS': (['i', 'time'], np.array(speeds)),
-                             'WD': (['i', 'time'], np.array(dirs)),
-                             'TI': (['i', 'time'], np.array(TIs)),
+                             'WS': (['h', 'time'], np.array(speeds)),
+                             'WD': (['h', 'time'], np.array(dirs)),
+                             'TI': (['h', 'time'], np.array(TIs)),
                              'P': 1},
-                      coords={'i': np.arange(len(x)),
+                      coords={'h': seen,
                               'time': np.arange(len(times))}))
            else:
                if heights: TI = interp1d(heights, TI, axis=1)(hh)
@@ -521,11 +526,11 @@ def run_pywake(yamlFile, output_dir='output'):
     if 'flow_field' in system_dat['attributes']['outputs'] and not timeseries:
 
        # compute flow map for specified directions (wd) and speeds (ws)
-       flow_map = sim_res.flow_map(
+       flow_map = sim_res.flow_box(
                             x = np.linspace(WFXLB, WFXUB, 100),
                             y = np.linspace(WFYLB, WFYUB, 100),
-                            wd=system_dat['attributes']['outputs']['flow_field']['directions'],
-                            ws=system_dat['attributes']['outputs']['flow_field']['speeds'],)
+                            h = system_dat['attributes']['outputs']['z_planes']['z_sampling'],
+                            time = sim_res.time)
 
        # remove unwanted data
        flow_map = flow_map.drop_vars(['WD', 'WS', 'TI', 'P'])
@@ -543,10 +548,16 @@ def run_pywake(yamlFile, output_dir='output'):
     elif 'flow_field' in system_dat['attributes']['outputs'] and timeseries:
        #time_to_plot = system_dat['attributes']['outputs']['flow_field']['time'][0]
        #print('TIMES ', time_to_plot)
-       flow_map = sim_res.flow_map(HorizontalGrid(x = np.linspace(WFXLB, WFXUB, 100),
-y = np.linspace(WFYLB, WFYUB, 100)),
-                            wd=wd,
-                            ws=ws)
+       print(system_dat['attributes']['outputs']['flow_field']['z_planes']['z_sampling'])
+       flow_map = sim_res.flow_box(
+                            x = np.linspace(WFXLB, WFXUB, 100),
+                            y = np.linspace(WFYLB, WFYUB, 100),
+                            h = system_dat['attributes']['outputs']['flow_field']['z_planes']['z_sampling'],
+                            time = sim_res.time.values)
+       #flow_map = sim_res.flow_map(HorizontalGrid(x = np.linspace(WFXLB, WFXUB, 100),
+#y = np.linspace(WFYLB, WFYUB, 100)))
+                            #wd=wd,
+                            #ws=ws)
      # power table    
     #if 'power_table' in system_dat['attributes']['analysis']['outputs']:
     #   # todo: more in depth stuff here, include loads
