@@ -100,7 +100,7 @@ def run_pywake(yamlFile, output_dir='output'):
     from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
     from py_wake.deflection_models import JimenezWakeDeflection
     from py_wake.deficit_models.noj import NOJLocalDeficit
-    from py_wake.deficit_models.gaussian import BastankhahGaussianDeficit
+    from py_wake.deficit_models.gaussian import BastankhahGaussianDeficit, TurboGaussianDeficit
     from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel, CrespoHernandez
     from py_wake import NOJ, BastankhahGaussian
     from py_wake.deficit_models import SelfSimilarityDeficit2020
@@ -183,6 +183,14 @@ def run_pywake(yamlFile, output_dir='output'):
     WFXUB = np.max(system_dat['site']['boundaries']['polygons'][0]['x'])
     WFYLB = np.min(system_dat['site']['boundaries']['polygons'][1]['y'])
     WFYUB = np.max(system_dat['site']['boundaries']['polygons'][1]['y'])
+    if 'xlb' in system_dat['attributes']['outputs']['flow_field']:
+       WFXLB = system_dat['attributes']['outputs']['flow_field']['xlb']
+    if 'xub' in system_dat['attributes']['outputs']['flow_field']:
+       WFXUB = system_dat['attributes']['outputs']['flow_field']['xub']
+    if 'ylb' in system_dat['attributes']['outputs']['flow_field']:
+       WFYLB = system_dat['attributes']['outputs']['flow_field']['ylb']
+    if 'yub' in system_dat['attributes']['outputs']['flow_field']:
+       WFYUB = system_dat['attributes']['outputs']['flow_field']['yub']
 
     # get x and y positions
     if type(farm_dat['layouts']) == list:
@@ -317,6 +325,7 @@ def run_pywake(yamlFile, output_dir='output'):
 
     deficit_args = {}
     deficit_param_mapping = {}
+    wake_deficit_key = None
     print('Running deficit ', wind_deficit_model_data)
     if wind_deficit_model_data['name'] == 'Jensen':
        wakeModel = NOJLocalDeficit
@@ -326,6 +335,9 @@ def run_pywake(yamlFile, output_dir='output'):
        deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
        #from py_wake.deficit_models.utils import ct2a_mom1d
        #deficit_args['ct2a'] = ct2a_mom1d
+    elif wind_deficit_model_data['name'] == 'TurboPark':
+       wakeModel = TurboGaussianDeficit
+       #wake_deficit_key = 'WS_jlk'
     elif wind_deficit_model_data['name'].upper() == 'FUGA':
        wakeModel = FugaDeficit
        from pyfuga import get_luts
@@ -355,6 +367,8 @@ def run_pywake(yamlFile, output_dir='output'):
         k = deficit_args.pop('k')
         k2 = deficit_args.pop('k2')
         deficit_args['a'] = [k2, k]
+
+    print('deficit args ', deficit_args)
 
     # Continuing from the previous example...
     
@@ -397,6 +411,7 @@ def run_pywake(yamlFile, output_dir='output'):
     
     # Map the rotor averaging model
     if rotor_averaging_data['name'].lower() == 'center':
+        print("Using Center Average")
         rotorAveraging = RotorCenter()
     elif rotor_averaging_data['name'].lower() == 'avg_deficit':
         rotorAveraging = GridRotorAvg()
@@ -420,12 +435,16 @@ def run_pywake(yamlFile, output_dir='output'):
        solver = PropagateDownwind
 
     print('Running ', wakeModel, deficit_args)
+    deficit_model = wakeModel(
+                              rotorAvgModel=rotorAveraging,
+                              groundModel=None, **deficit_args)
+    if wake_deficit_key:
+       deficit_model.WS_key = wake_deficit_key
+       
     windFarmModel = solver(
                            site,
                            turbine,
-                           wake_deficitModel=wakeModel(
-                              rotorAvgModel=rotorAveraging,
-                              groundModel=None, **deficit_args),
+                           wake_deficitModel=deficit_model,
                            superpositionModel=superpositionModel,
                            deflectionModel=deflectionModel,
                            turbulenceModel=turbulenceModel,
@@ -527,8 +546,8 @@ def run_pywake(yamlFile, output_dir='output'):
 
        # compute flow map for specified directions (wd) and speeds (ws)
        flow_map = sim_res.flow_box(
-                            x = np.linspace(WFXLB, WFXUB, 100),
-                            y = np.linspace(WFYLB, WFYUB, 100),
+                            x = np.linspace(WFXLB, WFXUB, 400),
+                            y = np.linspace(WFYLB, WFYUB, 400),
                             h = system_dat['attributes']['outputs']['z_planes']['z_sampling'],
                             time = sim_res.time)
 
@@ -549,6 +568,7 @@ def run_pywake(yamlFile, output_dir='output'):
        #time_to_plot = system_dat['attributes']['outputs']['flow_field']['time'][0]
        #print('TIMES ', time_to_plot)
        print(system_dat['attributes']['outputs']['flow_field']['z_planes']['z_sampling'])
+       print("Flow box bounds: ", WFXLB, WFXUB, WFYLB, WFYUB)
        flow_map = sim_res.flow_box(
                             x = np.linspace(WFXLB, WFXUB, 100),
                             y = np.linspace(WFYLB, WFYUB, 100),
