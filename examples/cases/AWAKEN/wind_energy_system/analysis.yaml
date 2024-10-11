@@ -8,7 +8,8 @@ wake_tool: "foxes"
 
 #pywake and foxes
 wind_deficit_model:
-  name: Bastankhah2014
+  name: SuperGaussian
+  #name: Bastankhah2014
   wake_expansion_coefficient: # k = ka*ti + kb
     k_a: 0.0
     k_b: 0.04
@@ -32,7 +33,7 @@ rotor_averaging:
   wind_speed_exponent_for_power: 1
   wind_speed_exponent_for_ct: 1
 blockage:
-  name: None
+  name: SelfSimilarityDeficit2020
 
 #code_saturne
 run_type: "simulate" #"postprocess"
