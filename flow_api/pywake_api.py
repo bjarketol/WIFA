@@ -15,8 +15,8 @@ DEFAULTS = {
     'wind_deficit_model': {
     #'wind_deficit_model': {
         'name': 'Jensen',
-        'k': 0.04,  # Default wake expansion coefficient for Jensen
-        'k2': 0.0,  # TI wake expansion modifier
+        #'k': 0.04,  # Default wake expansion coefficient for Jensen
+        #'k2': 0.0,  # TI wake expansion modifier
     },
     'deflection_model': {
         'name': 'Jimenez',
@@ -100,7 +100,7 @@ def run_pywake(yamlFile, output_dir='output'):
     from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
     from py_wake.deflection_models import JimenezWakeDeflection
     from py_wake.deficit_models.noj import NOJLocalDeficit
-    from py_wake.deficit_models.gaussian import BastankhahGaussianDeficit, TurboGaussianDeficit
+    from py_wake.deficit_models.gaussian import BastankhahGaussianDeficit, TurboGaussianDeficit, BlondelSuperGaussianDeficit2020
     from py_wake.turbulence_models import STF2005TurbulenceModel, STF2017TurbulenceModel, CrespoHernandez
     from py_wake import NOJ, BastankhahGaussian
     from py_wake.deficit_models import SelfSimilarityDeficit2020
@@ -260,9 +260,9 @@ def run_pywake(yamlFile, output_dir='output'):
                       if hh in seen: continue
                       seen.append(hh)
                       try:
-                         ti_int = interp1d(heights, TI, axis=1, fill_value="extrapolate")(hh)
+                         ti_int = np.maximum(interp1d(heights, TI, axis=1, fill_value="extrapolate")(hh), 2e-2)
                       except ValueError:
-                         ti_int = interp1d(heights, np.array(TI).T, axis=1, fill_value="extrapolate")(hh)
+                         ti_int = np.maximum(interp1d(heights, np.array(TI).T, axis=1, fill_value="extrapolate")(hh), 2e-2)
                    else:
                       ti_int = TI
                    TIs.append(ti_int)
@@ -335,6 +335,9 @@ def run_pywake(yamlFile, output_dir='output'):
        deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
        #from py_wake.deficit_models.utils import ct2a_mom1d
        #deficit_args['ct2a'] = ct2a_mom1d
+    elif wind_deficit_model_data['name'] == 'SuperGaussian':
+       wakeModel = BlondelSuperGaussianDeficit2020
+       #deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
     elif wind_deficit_model_data['name'] == 'TurboPark':
        wakeModel = TurboGaussianDeficit
        #wake_deficit_key = 'WS_jlk'
