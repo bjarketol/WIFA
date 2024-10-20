@@ -16,7 +16,7 @@ test_flow_api:
     - cd windIO
     - pip install -e .
     - cd ..
-    - pip install git+https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake.git@v2.6.2
+    - pip install git+https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake.git@v2.6.5
     - pip install -e .
     - py.test --durations=0 flow_api/tests/
   except:
