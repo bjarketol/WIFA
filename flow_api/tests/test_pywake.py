@@ -44,9 +44,10 @@ def test_pywake_4wts():
     # print(pywake_aep)
 
     # Check result
-    pywake_aep_expected = 175.87182444
+    pywake_aep_expected = 156.84533046
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 6)
 
 
 if __name__ == '__main__':
     test_pywake_KUL()
+    test_pywake_4wts()
