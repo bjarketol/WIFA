@@ -19,7 +19,8 @@ attributes:
         all_occurences: True
       output_variables: ['wind_speed', 'wind_direction']
       z_planes:
-        z_sampling: "hub_height"
+        z_sampling: 119
+        #z_sampling: "hub_height"
         xy_sampling: "default"
     #
     statistics:
