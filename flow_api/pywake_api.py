@@ -183,13 +183,14 @@ def run_pywake(yamlFile, output_dir='output'):
     WFXUB = np.max(system_dat['site']['boundaries']['polygons'][0]['x'])
     WFYLB = np.min(system_dat['site']['boundaries']['polygons'][1]['y'])
     WFYUB = np.max(system_dat['site']['boundaries']['polygons'][1]['y'])
-    if 'xlb' in system_dat['attributes']['outputs']['flow_field']:
+    checkk = 'flow_field' in system_dat['attributes']['outputs']
+    if checkk and 'xlb' in system_dat['attributes']['outputs']['flow_field']:
        WFXLB = system_dat['attributes']['outputs']['flow_field']['xlb']
-    if 'xub' in system_dat['attributes']['outputs']['flow_field']:
+    if checkk and 'xub' in system_dat['attributes']['outputs']['flow_field']:
        WFXUB = system_dat['attributes']['outputs']['flow_field']['xub']
-    if 'ylb' in system_dat['attributes']['outputs']['flow_field']:
+    if checkk and 'ylb' in system_dat['attributes']['outputs']['flow_field']:
        WFYLB = system_dat['attributes']['outputs']['flow_field']['ylb']
-    if 'yub' in system_dat['attributes']['outputs']['flow_field']:
+    if checkk and 'yub' in system_dat['attributes']['outputs']['flow_field']:
        WFYUB = system_dat['attributes']['outputs']['flow_field']['yub']
 
     # get x and y positions
@@ -332,7 +333,11 @@ def run_pywake(yamlFile, output_dir='output'):
        deficit_param_mapping = {'k': 'k', 'k2': 'k2'}
     elif wind_deficit_model_data['name'] == 'Bastankhah2014':
        wakeModel = BastankhahGaussianDeficit
-       deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
+       if 'k' in system_dat['attributes']['analysis']['wind_deficit_model']:
+          deficit_args['k'] = system_dat['attributes']['analysis']['wind_deficit_model']['k']
+       if 'ceps' in system_dat['attributes']['analysis']['wind_deficit_model']:
+          deficit_args['ceps'] = system_dat['attributes']['analysis']['wind_deficit_model']['ceps']
+       #deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
        #from py_wake.deficit_models.utils import ct2a_mom1d
        #deficit_args['ct2a'] = ct2a_mom1d
     elif wind_deficit_model_data['name'] == 'SuperGaussian':
