@@ -5,25 +5,21 @@ import numpy as np
 from datetime import datetime
 import shutil
 from flow_api.cs_api import cs_exe_path, cs_api_path, salome_exe_path, python_scripts_env_command, python_scripts_exe, cs_env_command, salome_env_command
-import argparse
 
-def run_code_saturne(windio_input, test_mode=False):
+def initialize_cs_case_from_windio(windio_input):
     """Runner to code_saturne for the FLOW api
 
     Parameters:
     windio_input (str): main windio file path
 
     """
-
-    #TODO: get that from windio
-    postprocess_only=False
-
-
+    
     #TODO: paths from windio or a config file in the api during install
     cs_run_folder="cs_run_" + datetime.now().strftime("%Y%m%d_%H-%M-%S")
     #
     windfarm_study = CS_study(cs_run_folder=cs_run_folder, \
                               case_dir="Farm", \
+                              postprocess_only = False, #TODO: get that from windio
                               cs_path=cs_exe_path, \
                               cs_api_path=cs_api_path, \
                               salome_path=salome_exe_path, \
@@ -38,6 +34,15 @@ def run_code_saturne(windio_input, test_mode=False):
     #Example 1 : get data from windio files
     windfarm_study.set_windio(windio_input)
     windfarm_study.get_windio_data()
+    return windfarm_study
+
+def run_cs_windfarm_study(windfarm_study, test_mode=False):
+    """Run the wind farm study
+
+    Parameters:
+    windfarm_study (class): main CS_study object from params
+
+    """
 
     #TODO: get case_name from windio
     windfarm_study.case_name = "wf"
@@ -113,12 +118,12 @@ def run_code_saturne(windio_input, test_mode=False):
     mesh_file_name= windfarm_study.mesh.mesh_file_name
 
     #Run
-    if postprocess_only:
+    if windfarm_study.postprocess_only:
         windfarm_study.set_notebook_param_from_dictionary(farm_notebook_parameters,\
                                                           prec_notebook_parameters)
         launch_file_name="postprocess.sh"
-        windfarm_study.postprocess(standalone=True,launch_file_name=cs_run_folder+sep+"postprocess.sh", log_folder="logs")
-        os.system("cd "+ cs_run_folder + " ; sbatch "+ launch_file_name)
+        windfarm_study.postprocess(standalone=True,launch_file_name=windfarm_study.cs_run_folder+sep+"postprocess.sh", log_folder="logs")
+        os.system("cd "+ windfarm_study.cs_run_folder + " ; sbatch "+ launch_file_name)
     else:
         launch_file_name = "launch_farm.sh"
         #===================Time loop====================
@@ -128,7 +133,7 @@ def run_code_saturne(windio_input, test_mode=False):
             windfarm_study.inflow.time_iter=j
             #=============Set code_saturne parameters================
             #modify parameter values
-            prec_notebook_parameters['z0']=np.round(windfarm_study.inflow.roughness_height[j],4)
+            prec_notebook_parameters['z0']=np.round(windfarm_study.inflow.roughness_height[j],6)
             prec_notebook_parameters['lat']=windfarm_study.inflow.latitude[j]
             #
             if(windfarm_study.inflow.data_type == "timeseries_hub"):
@@ -228,7 +233,6 @@ def run_code_saturne(windio_input, test_mode=False):
             #mesh_file_name = "mesh_"+case_name_id+".med"
             job_name = windfarm_study.case_name+"_"+str(j+1)
             #
-            wckey="P12BH:EFLOW"
             if(j==windfarm_study.inflow.run_times[0]):
                 first_case=True
             else:
@@ -245,9 +249,20 @@ def run_code_saturne(windio_input, test_mode=False):
 
         windfarm_study.postprocess(launch_file_name=launch_file_name, log_folder="logs")
         # sys.exit()
-        os.system("cd "+ cs_run_folder + " ; sbatch "+ launch_file_name)
+        os.system("cd "+ windfarm_study.cs_run_folder + " ; sbatch "+ launch_file_name)
         #=================================================
 
+    
+def run_code_saturne(windio_input, test_mode=False):    
+    """Runner to code_saturne for the FLOW api
+
+    Parameters:
+    windio_input (str): main windio file path
+
+    """
+    windfarm_study = initialize_cs_case_from_windio(windio_input)
+    run_cs_windfarm_study(windfarm_study, test_mode=test_mode)
+    
 def validate_yaml_code_saturne(windio_input):
     """Validation of the windio content for code_saturne
     - Temperature profile
@@ -268,7 +283,7 @@ def run():
     parser.add_argument("input_yaml", help="The input yaml file")
     args = parser.parse_args()
     
-    run_code_saturne(args.input_yaml)
+    run_code_saturne(args.input_yaml, test_mode=False)
 
 if __name__ == '__main__':
     run()
