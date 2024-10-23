@@ -215,6 +215,7 @@ class CS_mesh:
         self.domain_height = 1000.0
         self.mesh_domain_size = 50000.0
         self.AD_mesh_cell_size = 10.0
+        self.AD_mesh_disk_to_cell_ratio = 8.0
         #
         self.remesh = True
         self.mesh_file_name = "mesh.med"
@@ -222,7 +223,7 @@ class CS_mesh:
 class CS_study:
     def __init__(self,farm_notebook_arg_names=None,farm_notebook_arg_values=None, \
                  prec_notebook_arg_names=None,prec_notebook_arg_values=None, \
-                 case_dir=None, result_dir=None, wind_energy_system_file=None, \
+                 case_dir=None, result_dir=None, postprocess_only=False, wind_energy_system_file=None, \
                  cs_path=None, salome_path=None, python_env_command=None, python_exe=None,\
                  salome_env_command=None, cs_env_command=None, \
                  cs_run_folder=None, cs_api_path=None):
@@ -233,6 +234,7 @@ class CS_study:
         #
         self.case_dir = case_dir
         self.result_dir = result_dir
+        self.postprocess_only = postprocess_only
         self.case_name = None
         #
         self.cs_path = cs_path
@@ -344,7 +346,7 @@ class CS_study:
             #TODO : raise exception if mesh_file does not exist
             os.system("cp -r " + mesh_file_name+ " " + self.cs_run_folder+sep+"MESH"+sep+".")
         #
-        self.mesh.AD_mesh_cell_size=int(np.min(self.farm.rotor_diameters)/8.0)
+        self.mesh.AD_mesh_cell_size=int(np.min(self.farm.rotor_diameters)/self.mesh.AD_mesh_disk_to_cell_ratio)
         #
         self.mesh.mesh_domain_size = np.round(max(self.farm.farm_size*3.2, self.mesh.AD_mesh_cell_size*600),-2) + 2*self.mesh.damping_length
         #
@@ -372,7 +374,7 @@ class CS_study:
                 precursor_launch_command = self.cs_env_command + " && "
             else:
                 precursor_launch_command = ""
-                
+
             precursor_launch_command += self.cs_path +" submit -p setup.xml --case "+"Precursor"+" --notebook-args"
             for k in range(len(self.prec_notebook_arg_names)):
                 precursor_launch_command += " "+self.prec_notebook_arg_names[k]+"="+str(self.prec_notebook_arg_values[k])
@@ -416,10 +418,15 @@ class CS_study:
             #TODO: make dependent on teta variations for single launches. Keyword to force in windio?
             salome_launch_command = self.salome_path + " -t python3 "+self.cs_api_path+sep+"cs_modules"+sep+"csLaunch"+sep+"generate_salome_mesh.py args:--wind_origin="+str("270.0")+",--disk_mesh_size="+str(self.mesh.AD_mesh_cell_size)+",--domain_size="+str(self.mesh.mesh_domain_size)+",--domain_height="+str(self.mesh.domain_height)+",--output_file='MESH"+sep+split_mesh_file_name+"'"
             #
-            if(turbine_control):
-                salome_launch_command += ",--turbine_control=1.0"
-            else:
-                salome_launch_command += ",--turbine_control=-1.0"
+
+            #TODO : rediscuss mesh orientations w/ more sensitivities
+            #force box mesh
+            salome_launch_command += ",--turbine_control=1.0"
+            #if(turbine_control):
+            #    salome_launch_command += ",--turbine_control=1.0"
+            #else:
+            #    salome_launch_command += ",--turbine_control=-1.0"
+
             #
             if(damping_layer):
                 salome_launch_command += ",--damping_layer=1.0"
@@ -467,11 +474,11 @@ class CS_study:
             bash_file.write("#SBATCH --output="+log_folder+sep+"mesh_"+job_name+".out.log\n"+\
                             "#SBATCH --error="+log_folder+sep+"mesh_"+job_name+".err.log\n"+\
                             "#SBATCH --job-name=mesh_"+job_name+"\n")
-            
+
             #Any python env for salome
             if(self.salome_env_command):
                 bash_file.write(self.salome_env_command+"\n")
-                
+
             bash_file.write(salome_launch_command+"\n" + "EOF\n"+")\n" + \
                             "# Extract the job ID from the output of sbatch\n" + \
                             "mesh_jobid=${mesh_sbatch_output##* }\n" + \
@@ -678,15 +685,15 @@ class CS_study:
         center_farm=True
 
         #Turbine coordinates
-        turbine_number = len(get_value(self.wind_system_data,'wind_farm.layouts.initial_layout.coordinates.x'))
+        turbine_number = len(get_value(self.wind_system_data,'wind_farm.layouts.coordinates.x'))
 
         #Turbines information. TODO : multiple hub_heights and diameters
         self.farm.rotor_diameters = np.zeros((turbine_number)) + get_value(self.wind_system_data,'wind_farm.turbines.rotor_diameter')
         self.farm.hub_heights =  np.zeros((turbine_number)) + get_value(self.wind_system_data,'wind_farm.turbines.hub_height')
 
         rotor_center_xy_coordinates = np.zeros((2,turbine_number))
-        rotor_center_xy_coordinates[0,:]=get_value(self.wind_system_data,'wind_farm.layouts.initial_layout.coordinates.x')
-        rotor_center_xy_coordinates[1,:]=get_value(self.wind_system_data,'wind_farm.layouts.initial_layout.coordinates.y')
+        rotor_center_xy_coordinates[0,:]=get_value(self.wind_system_data,'wind_farm.layouts.coordinates.x')
+        rotor_center_xy_coordinates[1,:]=get_value(self.wind_system_data,'wind_farm.layouts.coordinates.y')
         if(center_farm):
             rotor_mean_x=np.mean(rotor_center_xy_coordinates[0,:])
             rotor_center_xy_coordinates[0,:]-=rotor_mean_x
@@ -759,7 +766,11 @@ class CS_study:
                         if (not all(isinstance(run_time, int) for run_time in self.inflow.run_times)):
                             raise ValueError('occurences_list element is not of type int')
 
-            self.inflow.roughness_height = np.array(resource_data['wind_resource']['z0']['data'])
+
+            if('z0' in timeseries_var):
+                self.inflow.roughness_height = np.array(resource_data['wind_resource']['z0']['data'])
+            else:
+                self.inflow.roughness_height = np.zeros((ntimes)) + 0.0001 #default z0 value
 
             if('lat' in timeseries_var):
                 self.inflow.latitude = np.array(resource_data['wind_resource']['lat']['data'])
@@ -870,9 +881,9 @@ class CS_study:
                     self.inflow.ABL_heights = np.array(resource_data['wind_resource']['ABL_height']['data'])
                 if('lapse_rate' in timeseries_var):
                     self.inflow.lapse_rates = np.array(resource_data['wind_resource']['lapse_rate']['data'])
-                if('dtheta' in timeseries_var):
+                if('capping_inversion_strength' in timeseries_var):
                     self.inflow.dtheta_values = np.array(resource_data['wind_resource']['capping_inversion_strength']['data'])
-                if('dH' in timeseries_var):
+                if('capping_inversion_thickness' in timeseries_var):
                     self.inflow.dH_values = np.array(resource_data['wind_resource']['capping_inversion_thickness']['data'])
                 #=========================
 

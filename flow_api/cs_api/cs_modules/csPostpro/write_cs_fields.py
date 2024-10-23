@@ -99,21 +99,23 @@ for j, casei in enumerate(cases):
         # Read the first line
         first_line = file.readline()
         total_power.append(float(first_line.split(' ')[-1]))
+        second_line = file.readlines()[0]
+        var_name = second_line.replace(' ', '').replace('\n', '').split(',')
     power_file_table = np.genfromtxt(power_file, delimiter=',', skip_header=2)
-    x_coords.append(power_file_table[:, 1] - np.mean(power_file_table[:, 1]))
-    y_coords.append(power_file_table[:, 2] - np.mean(power_file_table[:, 2]))
-    z_hub.append(power_file_table[:, 3])
-    diameters.append(power_file_table[:, 4])
-    ux.append(power_file_table[:, 6])
-    uy.append(power_file_table[:, 7])
-    uz.append(power_file_table[:, 8])
-    u.append(power_file_table[:, 9])
-    u_hub.append(power_file_table[:, 10])
-    dir_table.append(power_file_table[:, 11])
-    ctstar.append(power_file_table[:, 13])
-    cpstar.append(power_file_table[:, 14])
-    thrust.append(power_file_table[:, 15])
-    power_table_cpstar.append(power_file_table[:, 16])
+    x_coords.append(power_file_table[:, var_name.index('xhub')] - np.mean(power_file_table[:, var_name.index('xhub')]))
+    y_coords.append(power_file_table[:, var_name.index('yhub')] - np.mean(power_file_table[:, var_name.index('yhub')]))
+    z_hub.append(power_file_table[:, var_name.index('zhub')])
+    diameters.append(power_file_table[:, var_name.index('turbine_diameter')])
+    ux.append(power_file_table[:, var_name.index('ux')])
+    uy.append(power_file_table[:, var_name.index('uy')])
+    uz.append(power_file_table[:, var_name.index('uz')])
+    u.append(power_file_table[:, var_name.index('u')])
+    u_hub.append(power_file_table[:, var_name.index('u_hub')])
+    dir_table.append(power_file_table[:, var_name.index('dir')])
+    ctstar.append(power_file_table[:, var_name.index('ct*')])
+    cpstar.append(power_file_table[:, var_name.index('cp*')])
+    thrust.append(power_file_table[:, var_name.index('thrust')])
+    power_table_cpstar.append(power_file_table[:, var_name.index('power_cpstar')])
 
     #total_power_file[:, j] = total_power[0]
     #pos_file[:, 0, j] = x_coords[0]
@@ -172,10 +174,10 @@ for i, casei in enumerate(cases):
 
         if "wind_speed" or ("wind_direction" in fields):
             velocity = get_output_at_plane_and_time(ens, "Velocity", zplane_center, (0, 0, 1), 0)
-            if "speed" in fields:
+            if "wind_speed" in fields:
                 speed = np.sqrt(pow(velocity[:, 0], 2.0) + pow(velocity[:, 1], 2.0))
                 rootgrp.variables["wind_speed"][:, j, i] = speed
-            if "direction" in fields:
+            if "wind_direction" in fields:
                 direction = np.arctan(velocity[:, 1]/velocity[:, 0])*360/(2*np.pi) + 270
                 rootgrp.variables["wind_direction"][:, j, i] = direction
         if "pressure" in fields:
