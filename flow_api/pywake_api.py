@@ -333,6 +333,8 @@ def run_pywake(yamlFile, output_dir='output'):
        deficit_param_mapping = {'k': 'k', 'k2': 'k2'}
     elif wind_deficit_model_data['name'] == 'Bastankhah2014':
        wakeModel = BastankhahGaussianDeficit
+       if 'k_b' in system_dat['attributes']['analysis']['wind_deficit_model']:
+          deficit_args['k'] = system_dat['attributes']['analysis']['wind_deficit_model']['k_b']
        if 'k' in system_dat['attributes']['analysis']['wind_deficit_model']:
           deficit_args['k'] = system_dat['attributes']['analysis']['wind_deficit_model']['k']
        if 'ceps' in system_dat['attributes']['analysis']['wind_deficit_model']:
