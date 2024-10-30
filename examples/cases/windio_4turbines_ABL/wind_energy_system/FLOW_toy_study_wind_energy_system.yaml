@@ -13,7 +13,7 @@ attributes:
         output_variables: ['power', 'rotor_effective_velocity'] #'frequency'
     #
     flow_field:
-      report: True
+      report: False
       flow_nc_filename: flow_field.nc
       cases_run:
         all_occurences: True
