@@ -3,10 +3,12 @@ __pycache__/
 html/
 results/
 output/
+output_*/
 .idea/
 *.egg-info/
 .ipynb_checkpoints/
 *.egg-info/
+.pytest*/
 
 *.html
 *.pyc
