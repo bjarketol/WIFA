@@ -43,8 +43,6 @@
  *----------------------------------------------------------------------------*/
 
 #include "cs_headers.h"
-#include "gdal.h"
-#include "cpl_conv.h"
 
 /*----------------------------------------------------------------------------*/
 
@@ -107,17 +105,15 @@ cs_user_boundary_conditions(cs_domain_t  *domain,
 
   const cs_zone_t *z = cs_boundary_zone_by_name("Sol");
 
-  if(cs_notebook_parameter_value_by_name("energy")==1) {
-    for (cs_lnum_t face_count=0; face_count < z->n_elts; face_count ++) {
-      face_id=z->elt_ids[face_count];
-      f_roughness->val[face_id]=cs_glob_atmo_option->meteo_z0;
-      /* /\* How to treat thermal rugosity is still uncertain *\/ */
-      f_thermal_roughness->val[face_id]=cs_glob_atmo_option->meteo_z0;
-      if (dlmo>0)
-      {
-        CS_F_(t)->bc_coeffs->icodcl[face_id] = 6;
-        CS_F_(t)->bc_coeffs->rcodcl1[face_id] = cs_glob_atmo_option->meteo_t0;
-      }
+  for (cs_lnum_t face_count=0; face_count < z->n_elts; face_count ++) {
+    face_id=z->elt_ids[face_count];
+    f_roughness->val[face_id]=cs_glob_atmo_option->meteo_z0;
+    /* /\* How to treat thermal rugosity is still uncertain *\/ */
+    f_thermal_roughness->val[face_id]=cs_glob_atmo_option->meteo_z0;
+    if (dlmo>0)
+    {
+      CS_F_(t)->bc_coeffs->icodcl[face_id] = 6;
+      CS_F_(t)->bc_coeffs->rcodcl1[face_id] = cs_glob_atmo_option->meteo_t0;
     }
   }
 }

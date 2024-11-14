@@ -48,7 +48,7 @@
  *----------------------------------------------------------------------------*/
 
 #include "cs_headers.h"
-
+#include "cs_wind_farm.h"
 /*----------------------------------------------------------------------------*/
 
 BEGIN_C_DECLS
@@ -113,8 +113,36 @@ cs_user_extra_operations(cs_domain_t     *domain)
       }
     }
   }
+
+  cs_time_step_t *ts = cs_get_glob_time_step();
+
+  // Writing output file for wind farm
+  cs_lnum_t WTntprint=cs_notebook_parameter_value_by_name("WTntprint");
+    if (cs_glob_rank_id <= 0){
+      if ((ts->nt_cur%WTntprint) == 0){
+        cs_wind_farm_write();
+      }
+    }
 }
 
 /*----------------------------------------------------------------------------*/
 
+/*----------------------------------------------------------------------------*/
+/*!
+ * \brief This function is called at the end of the calculation.
+ *
+ * It has a very general purpose, although it is recommended to handle
+ * mainly postprocessing or data-extraction type operations.
+ *
+ * \param[in, out]  domain   pointer to a cs_domain_t structure
+ */
+/*----------------------------------------------------------------------------*/
+
+void
+cs_user_extra_operations_finalize(cs_domain_t     *domain)
+{
+  CS_UNUSED(domain);
+  cs_wind_farm *wind_farm = cs_wind_farm_free(cs_glob_wind_farm);
+}
+/*----------------------------------------------------------------------------*/
 END_C_DECLS
