@@ -79,13 +79,12 @@ def define_domain_parameters(domain):
     """
     Define domain execution parameters.
     """
-    
-    # Path for cronos librairies
-    # Don't forget to change if used on gaia or another cluster 
-    domain.compile_cflags = "-I/software/rd/saturne/usr/include/gdal"
+
+    # Path for librairies
+    domain.compile_cflags = None
     domain.compile_cxxflags = None
     domain.compile_fcflags = None
-    domain.compile_libs = "-lgdal -lproj"
+    domain.compile_libs = None
 
     if domain.kw_args:
         options = process_command_line(domain.kw_args)
