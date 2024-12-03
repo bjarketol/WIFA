@@ -8,6 +8,8 @@ test_flow_api:
   stage: 
     test
   script:
+    - apt-get update && apt-get install -y git-lfs
+    - git lfs install
     - pip install --upgrade pip
     # Does not work
     # - pip install git+https://github.com/kilojoules/windIO@master
