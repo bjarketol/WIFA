@@ -4,6 +4,7 @@ from flow_api.tests import test_path, windIO_path
 import os
 import yaml
 import sys
+from pathlib import Path
 from py_wake.examples.data.hornsrev1 import Hornsrev1Site
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 #sys.path.append(windIO.__path__[0])
@@ -42,7 +43,7 @@ def test_pywake_KUL():
 
     # compute AEP (next step is to return a richer set of outputs)
     output_dir_name = 'output_pywake_4wts'
-    output_dir_name.mkdir(parents=True, exist_ok=True)
+    Path(output_dir_name).mkdir(parents=True, exist_ok=True)
     pywake_aep = run_pywake(yaml_input, output_dir=output_dir_name)
     # print(pywake_aep)
 
@@ -60,7 +61,7 @@ def test_pywake_4wts():
 
     # compute AEP (next step is to return a richer set of outputs)
     output_dir_name = 'output_pywake_4wts'
-    output_dir_name.mkdir(parents=True, exist_ok=True)
+    Path(output_dir_name).mkdir(parents=True, exist_ok=True)
     pywake_aep = run_pywake(yaml_input, output_dir=output_dir_name)
     # print(pywake_aep)
 
