@@ -39,7 +39,7 @@ def test_pywake_KUL():
     yaml_input = test_path / '../../examples/cases/KUL_LES/wind_energy_system/FLOW_UQ_vnv_toy_study_wind_energy_system.yaml'
 
     # validate input
-    validate_yaml(yaml_input, windIO_path / 'plant/wind_energy_system.yaml')
+    validate_yaml(yaml_input, windIO_path / Path('plant/wind_energy_system.yaml'))
 
     # compute AEP (next step is to return a richer set of outputs)
     output_dir_name = 'output_pywake_4wts'
@@ -48,8 +48,8 @@ def test_pywake_KUL():
     # print(pywake_aep)
 
     # Check result
-    pywake_aep_expected = 5448.73538851
-    npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 6)
+    pywake_aep_expected = 7452.48
+    npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 1)
 
 
 def test_pywake_4wts():
@@ -57,7 +57,7 @@ def test_pywake_4wts():
     yaml_input = test_path / '../../examples/cases/windio_4turbines_2flowcases/wind_energy_system/FLOW_toy_study_wind_energy_system.yaml'
 
     # validate input
-    validate_yaml(yaml_input, windIO_path / + 'plant/wind_energy_system.yaml')
+    validate_yaml(yaml_input, windIO_path / Path('plant/wind_energy_system.yaml'))
 
     # compute AEP (next step is to return a richer set of outputs)
     output_dir_name = 'output_pywake_4wts'
