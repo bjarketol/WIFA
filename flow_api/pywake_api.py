@@ -28,7 +28,7 @@ DEFAULTS = {
         'c2': 1.0,  # Default STF C2 value
     },
     'superposition_model': {
-        'name': 'Linear',
+        'ws_superposition': 'Linear',
     },
     'rotor_averaging': {
         'name': 'Center',
@@ -331,12 +331,12 @@ def run_pywake(yamlFile, output_dir='output'):
     if wind_deficit_model_data['name'] == 'Jensen':
        wakeModel = NOJLocalDeficit
        deficit_param_mapping = {'k': 'k', 'k2': 'k2'}
-    elif wind_deficit_model_data['name'] == 'Bastankhah2014':
+    elif wind_deficit_model_data['name'].lower() == 'bastankhah2014':
        wakeModel = BastankhahGaussianDeficit
-       if 'k_b' in system_dat['attributes']['analysis']['wind_deficit_model']:
-          deficit_args['k'] = system_dat['attributes']['analysis']['wind_deficit_model']['k_b']
-       if 'k' in system_dat['attributes']['analysis']['wind_deficit_model']:
-          deficit_args['k'] = system_dat['attributes']['analysis']['wind_deficit_model']['k']
+       if 'k_b' in system_dat['attributes']['analysis']['wind_deficit_model']['wake_expansion_coefficient']:
+          deficit_args['k'] = system_dat['attributes']['analysis']['wind_deficit_model']['wake_expansion_coefficient']['k_b']
+       elif 'k' in system_dat['attributes']['analysis']['wind_deficit_model']['wake_expansion_coefficient']:
+          deficit_args['k'] = system_dat['attributes']['analysis']['wind_deficit_model']['wake_expansion_coefficient']['k']
        if 'ceps' in system_dat['attributes']['analysis']['wind_deficit_model']:
           deficit_args['ceps'] = system_dat['attributes']['analysis']['wind_deficit_model']['ceps']
        #deficit_param_mapping = {'k': 'k', 'ceps': 'ceps'}
@@ -412,9 +412,9 @@ def run_pywake(yamlFile, output_dir='output'):
         raise Exception('%s turbulence model not implemented' % turbulence_model_data['name'])
     
     # Map the superposition model
-    if superposition_model_data['name'].lower() == 'linear':
+    if superposition_model_data['ws_superposition'].lower() == 'linear':
         superpositionModel = LinearSum()
-    elif superposition_model_data['name'].lower() == 'squared':
+    elif superposition_model_data['ws_superposition'].lower() == 'squared':
         superpositionModel = SquaredSum()
     else:
         raise Exception('%s superposition model not implemented' % superposition_model_data['name'])
