@@ -65,6 +65,14 @@ def run_foxes(
     )
 
 def run():
+    """
+    Command line tool for running foxes from windio yaml file input.
+
+    Examples
+    --------
+    >>> flow_api_foxes input.yaml
+
+    """
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
