@@ -38,9 +38,6 @@ wake_tool: "foxes"
 # saturne
 run_type: "simulate" #"postprocess"
 #
-cases_run:
-  all_occurences: True
-#
 HPC_config:
   run_node_number: 5
   run_ntasks_per_node: 48
