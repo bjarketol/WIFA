@@ -4,7 +4,7 @@ wind_farm: !include ../plant_wind_farm/FLOW_toy_study_wind_farm.yaml
 attributes:
   flow_model:
     name: foxes
-  analysis: !include FLOW_toy_study_analysis.yaml
+  analysis: !include analysis.yaml
 
   outputs:
     output_folder: "results"
