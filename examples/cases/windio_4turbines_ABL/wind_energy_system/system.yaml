@@ -6,26 +6,25 @@ attributes:
     name: wayve
   analysis: !include analysis.yaml
 
-  outputs:
+  model_outputs_specification:
     output_folder: "results"
+    #
+    cases_run:
+      all_occurences: False
+      subset: [0, 2, 5]
+    #
     turbine_outputs:
-        turbine_nc_filename: 'turbine_data.nc' # dimension = states, turbine
-        output_variables: ['power', 'rotor_effective_velocity'] #'frequency'
+      turbine_nc_filename: 'turbine_data.nc' # dimension = states, turbine
+      output_variables: ['power', 'rotor_effective_velocity'] #'frequency'
     #
     flow_field:
-      report: False
+      report: True
       flow_nc_filename: flow_field.nc
-      cases_run:
-        all_occurences: True
       output_variables: ['wind_speed', 'wind_direction']
       z_planes:
-        z_sampling: "hub_height"
-        xy_sampling: "default"
-    #
-    statistics:
-      stats_filename: None
-      AEP: False
-      AEP_per_turbine: False
-      power_percentiles:
-        report: False
-        percentiles: None
+        z_sampling: "hub_heights"
+        xy_sampling: "grid"
+        x_bounds: [-1000, 5000]
+        y_bounds: [-1000, 1000]
+        dx: 150
+        dy: 150

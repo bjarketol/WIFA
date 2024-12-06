@@ -6,34 +6,26 @@ attributes:
     name: pyWake
   analysis: !include analysis.yaml
 
-  outputs:
+  model_outputs_specification:
     output_folder: "results"
+    #
+    cases_run:
+      all_occurences: False
+      subset: [0, 2, 5]
+    #
     turbine_outputs:
-        turbine_nc_filename: 'turbine_data.nc' # dimension = states, turbine
-        output_variables: ['power', 'rotor_effective_velocity'] #'frequency'
+      turbine_nc_filename: 'turbine_data.nc' # dimension = states, turbine
+      output_variables: ['power', 'rotor_effective_velocity'] #'frequency'
     #
     flow_field:
-      report: False
+      report: True
       flow_nc_filename: flow_field.nc
-      cases_run:
-        all_occurences: True
       output_variables: ['wind_speed', 'wind_direction']
-      xlb: 642928
-      xub: 646866
-      ylb: 4028177
-      yub: 4033131
       z_planes:
-        #z_sampling: [40,  50,  60,  70,  80,  90, 100, 110, 120, 130, 140, 150, 160, 170,
-        #180, 190, 200, 210, 220, 230, 240, 250, 260, 270, 280, 290, 300, 310,
-        #320, 330, 340, 350, 360, 370, 380, 390, 400]
-        z_sampling: [27, 59, 90, 122, 154, 217, 281, 344]
-    #    xy_sampling: "default"
-    #
-    statistics:
-      stats_filename: None
-      AEP: False
-      AEP_per_turbine: False
-      power_percentiles:
-        report: False
-        percentiles: None
-      
+        z_sampling: "plane_list"
+        z_list: [27, 59, 90, 122, 154, 217, 281, 344]
+        xy_sampling: "grid"
+        x_bounds: [642928, 646866]
+        y_bounds: [4028177, 4033131]
+        Nx: 100
+        Ny: 100
