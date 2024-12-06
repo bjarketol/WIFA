@@ -1,0 +1,11 @@
+name: FLOW UQ vnv study on toy problem, 4 WT Wind Farm
+layouts:
+    -   coordinates:
+            x: [0, 1248.1, 2496.2, 3744.3]
+            y: [0, 0, 0, 0]
+        turbine_types: [1, 2, 2, 3]
+
+turbine_types:
+   1: !include ../plant_energy_turbine/IEA_10MW_turbine.yaml
+   2: !include ../plant_energy_turbine/IEA_15MW_turbine.yaml
+   3: !include ../plant_energy_turbine/IEA_22MW_turbine.yaml
