@@ -10,7 +10,7 @@ def test_foxes_KUL():
 
     output_dir_name = Path('output_test_foxes')
     output_dir_name.mkdir(parents=True, exist_ok=True)
-    run_foxes(yaml_input, output_dir=output_dir_name, engine_pars={"engine_type": "threads"})
+    run_foxes(yaml_input, output_dir=output_dir_name)
 
 def test_foxes_4wts():
     yaml_input = test_path / '../../examples/cases/windio_4turbines/wind_energy_system/system.yaml'
@@ -18,7 +18,7 @@ def test_foxes_4wts():
 
     output_dir_name = Path('output_test_foxes')
     output_dir_name.mkdir(parents=True, exist_ok=True)
-    run_foxes(yaml_input, output_dir=output_dir_name, engine_pars={"engine_type": "threads"})
+    run_foxes(yaml_input, output_dir=output_dir_name)
 
 def test_foxes_4wts2():
     yaml_input = test_path / '../../examples/cases/windio_4turbines_2flowcases/wind_energy_system/system.yaml'
@@ -26,7 +26,7 @@ def test_foxes_4wts2():
 
     output_dir_name = Path('output_test_foxes')
     output_dir_name.mkdir(parents=True, exist_ok=True)
-    run_foxes(yaml_input, output_dir=output_dir_name, engine_pars={"engine_type": "threads"})
+    run_foxes(yaml_input, output_dir=output_dir_name)
     
 def test_foxes_abl():
     yaml_input = test_path / '../../examples/cases/windio_4turbines_ABL/wind_energy_system/system.yaml'
@@ -34,7 +34,7 @@ def test_foxes_abl():
 
     output_dir_name = Path('output_test_foxes')
     output_dir_name.mkdir(parents=True, exist_ok=True)
-    run_foxes(yaml_input, output_dir=output_dir_name, engine_pars={"engine_type": "threads"})
+    run_foxes(yaml_input, output_dir=output_dir_name)
     
 def test_foxes_abl_stable():
     yaml_input = test_path / '../../examples/cases/windio_4turbines_ABL_stable/wind_energy_system/system.yaml'
@@ -42,7 +42,7 @@ def test_foxes_abl_stable():
 
     output_dir_name = Path('output_test_foxes')
     output_dir_name.mkdir(parents=True, exist_ok=True)
-    run_foxes(yaml_input, output_dir=output_dir_name, engine_pars={"engine_type": "threads"})
+    run_foxes(yaml_input, output_dir=output_dir_name)
   
 def test_foxes_profiles():
     yaml_input = test_path / '../../examples/cases/windio_4turbines_profiles_stable/wind_energy_system/system.yaml'
@@ -50,7 +50,7 @@ def test_foxes_profiles():
 
     output_dir_name = Path('output_test_foxes')
     output_dir_name.mkdir(parents=True, exist_ok=True)
-    run_foxes(yaml_input, output_dir=output_dir_name, engine_pars={"engine_type": "threads"})
+    run_foxes(yaml_input, output_dir=output_dir_name)
 
     
 if __name__ == "__main__":

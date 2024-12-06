@@ -6,6 +6,10 @@ def run_foxes(
         input_yaml,
         input_dir=None, 
         output_dir=None, 
+        engine="default",
+        n_procs=None,
+        chunksize_states=None,
+        chunksize_points=None,
         verbosity=1, 
         **kwargs,
     ):
@@ -22,8 +26,18 @@ def run_foxes(
         cwd, otherwise to the file containing directory
     output_dir: str, optional
         The output base directory, defaults to cwd
+    engine: str
+        The foxes engine choice
+    n_procs; int, optional
+        The number of processes to be used
+    chunksize_states: int, optional
+        The size of a states chunk
+    chunksize_points: int, optional
+        The size of a points chunk
     verbosity: int
         The verbosity level, 0 = silent
+    kwargs: dict, optional
+        Additional parameters for foxes.input.yaml.run_dict
     
     Returns
     -------
@@ -53,11 +67,28 @@ def run_foxes(
     if output_dir is not None:
         odir = output_dir
 
+    if (
+        engine is not None
+        or n_procs is not None
+        or chunksize_states is not None
+        or chunksize_points is not None
+    ):
+        epars = dict(
+            engine_type=engine,
+            n_procs=n_procs,
+            chunk_size_states=chunksize_states,
+            chunk_size_points=chunksize_points,
+            verbosity=verbosity,
+        )
+    else:
+        epars = None
+
     return run_dict(
         idict,
         algo=algo,
         input_dir=idir,
         output_dir=odir,
+        engine_pars=epars,
         verbosity=verbosity,
         **kwargs,
     )
@@ -125,26 +156,13 @@ def run():
     )
     args = parser.parse_args()
 
-    if (
-        args.engine is not None
-        or args.n_procs is not None
-        or args.chunksize_states is not None
-        or args.chunksize_points is not None
-    ):
-        epars = dict(
-            engine_type=args.engine,
-            n_procs=args.n_procs,
-            chunk_size_states=args.chunksize_states,
-            chunk_size_points=args.chunksize_points,
-            verbosity=args.verbosity,
-        )
-    else:
-        epars = None
-
     run_foxes(
         input_yaml=args.input_yaml,
         output_dir=args.output_dir, 
-        engine_pars=epars,
+        engine=args.engine,
+        n_procs=args.n_procs,
+        chunksize_states=args.chunksize_states,
+        chunksize_points=args.chunksize_points,
         verbosity=args.verbosity, 
     )
 
