@@ -36,7 +36,7 @@ def two_turbine_site():
 
 def test_pywake_KUL():
 
-    yaml_input = test_path / '../../examples/cases/KUL_LES/wind_energy_system/FLOW_UQ_vnv_toy_study_wind_energy_system.yaml'
+    yaml_input = test_path / '../../examples/cases/KUL_LES/wind_energy_system/system.yaml'
 
     # validate input
     validate_yaml(yaml_input, windIO_path / Path('plant/wind_energy_system.yaml'))
@@ -54,7 +54,7 @@ def test_pywake_KUL():
 
 def test_pywake_4wts():
 
-    yaml_input = test_path / '../../examples/cases/windio_4turbines_2flowcases/wind_energy_system/FLOW_toy_study_wind_energy_system.yaml'
+    yaml_input = test_path / '../../examples/cases/windio_4turbines_2flowcases/wind_energy_system/system.yaml'
 
     # validate input
     validate_yaml(yaml_input, windIO_path / Path('plant/wind_energy_system.yaml'))

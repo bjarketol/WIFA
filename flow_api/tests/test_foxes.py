@@ -7,7 +7,7 @@ from flow_api.tests import test_path, windIO_path
 
 def test_foxes_KUL():
 
-    yaml_input = test_path / '../../examples/cases/KUL_LES/wind_energy_system/FLOW_UQ_vnv_toy_study_wind_energy_system.yaml'
+    yaml_input = test_path / '../../examples/cases/KUL_LES/wind_energy_system/system.yaml'
 
     # validate input
     validate_yaml(yaml_input, windIO_path / 'plant/wind_energy_system.yaml')
@@ -33,7 +33,7 @@ def test_foxes_4wts():
 
 def test_foxes_4wts2():
 
-    yaml_input = test_path / '../../examples/cases/windio_4turbines_2flowcases/wind_energy_system/FLOW_toy_study_wind_energy_system.yaml'
+    yaml_input = test_path / '../../examples/cases/windio_4turbines_2flowcases/wind_energy_system/system.yaml'
 
     # validate input
     validate_yaml(yaml_input, windIO_path / 'plant/wind_energy_system.yaml')
@@ -46,7 +46,7 @@ def test_foxes_4wts2():
     
 def test_foxes_abl():
 
-    yaml_input = test_path / '../../examples/cases/windio_4turbines_ABL/wind_energy_system/FLOW_toy_study_wind_energy_system.yaml'
+    yaml_input = test_path / '../../examples/cases/windio_4turbines_ABL/wind_energy_system/system.yaml'
 
     # validate input
     validate_yaml(yaml_input, windIO_path / 'plant/wind_energy_system.yaml')
@@ -60,7 +60,7 @@ def test_foxes_abl():
     
 def test_foxes_abl_stable():
 
-    yaml_input = test_path / '../../examples/cases/windio_4turbines_ABL_stable/wind_energy_system/FLOW_toy_study_wind_energy_system.yaml'
+    yaml_input = test_path / '../../examples/cases/windio_4turbines_ABL_stable/wind_energy_system/system.yaml'
     
     # validate input
     validate_yaml(yaml_input, windIO_path / 'plant/wind_energy_system.yaml')
