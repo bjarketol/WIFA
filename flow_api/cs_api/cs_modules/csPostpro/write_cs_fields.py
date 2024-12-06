@@ -2,7 +2,7 @@ from netCDF4 import Dataset
 import sys
 from os import path, sep
 import numpy as np
-import flow_api.cs_api.cs_modules.csPostpro.cs_postprocess_utils as cs_pp
+import cs_api.cs_modules.csPostpro.cs_postprocess_utils as cs_pp
 
 
 def get_output_at_plane_and_time(ens, output_varname, origin, normal,
@@ -64,7 +64,7 @@ time = rootgrp.createDimension("time", len(cases))
 #ux_file = rootgrp.createVariable("ux", "f8", ("turbines", "time",))
 #uy_file = rootgrp.createVariable("uy", "f8", ("turbines", "time",))
 #uz_file = rootgrp.createVariable("uz", "f8", ("turbines", "time",))
-u_file = rootgrp.createVariable("effective_wind_speed", "f8", ("turbine", "time",))
+u_file = rootgrp.createVariable("rotor_effective_velocity", "f8", ("turbine", "time",))
 #u_hub_file = rootgrp.createVariable("u_hub", "f8", ("turbines", "time",))
 dir_file = rootgrp.createVariable("wind_direction", "f8", ("turbine", "time",))
 #ctstar_file = rootgrp.createVariable("ctstar", "f8", ("turbines", "time",))

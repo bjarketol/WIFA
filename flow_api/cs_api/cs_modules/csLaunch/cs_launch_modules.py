@@ -13,7 +13,7 @@ import yaml
 from datetime import datetime, timedelta
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 from functools import reduce
-import flow_api.cs_api.cs_modules.csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
+import cs_api.cs_modules.csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
 
 def theta2temp(theta,z_or_dz,P0,Pref=1000.,g=9.81,Rair=287.,Cp=1005.):
     """
@@ -324,7 +324,7 @@ class CS_study:
             #HEADER
             bash_file.write("#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
-                            "#SBATCH --time=00:10:00\n")
+                            "#SBATCH --time=00:30:00\n")
 
             if(mesh_partition):
                 bash_file.write("#SBATCH --partition="+mesh_partition+"\n")
@@ -579,7 +579,7 @@ class CS_study:
             bash_file=open(self.cs_run_folder + sep + launch_file_name,"w")
             bash_file.write("#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
-                            "#SBATCH --time=00:10:00\n")
+                            "#SBATCH --time=00:30:00\n")
             if(partition):
                 bash_file.write("#SBATCH --partition="+partition+"\n")
 
@@ -604,7 +604,7 @@ class CS_study:
                             "postpro_sbatch=$(sbatch --parsable --dependency=afterok:$CS_jobids <<EOF\n"+\
                             "#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
-                            "#SBATCH --time=00:10:00\n")
+                            "#SBATCH --time=00:30:00\n")
             if(partition):
                 bash_file.write("#SBATCH --partition="+partition+"\n")
 
@@ -680,26 +680,78 @@ class CS_study:
         ####################### LAYOUT and TURBINE DATA ############################
         #
         farm_layout_data = self.wind_system_data['wind_farm']
-        turbines_data = farm_layout_data['turbines']
 
         center_farm=True
 
         #Turbine coordinates
-        turbine_number = len(get_value(self.wind_system_data,'wind_farm.layouts.coordinates.x'))
-
-        #Turbines information. TODO : multiple hub_heights and diameters
-        self.farm.rotor_diameters = np.zeros((turbine_number)) + get_value(self.wind_system_data,'wind_farm.turbines.rotor_diameter')
-        self.farm.hub_heights =  np.zeros((turbine_number)) + get_value(self.wind_system_data,'wind_farm.turbines.hub_height')
+        if type(farm_layout_data['layouts']) == list:
+            layout_x_coordinates = farm_layout_data['layouts'][0]['coordinates']['x']
+            layout_y_coordinates = farm_layout_data['layouts'][0]['coordinates']['y']
+            turbine_number = len(layout_x_coordinates)
+            if('turbines' in farm_layout_data):
+                layout_turbine_types = ['WT1']*turbine_number
+                turbine_type_names = ['WT1']
+                turbine_type_numbering = {}
+                turbine_type_numbering['WT1']=1
+            else:
+                layout_turbine_types = farm_layout_data['layouts'][0]['turbine_types']
+                turbine_type_names = list(farm_layout_data['turbine_types'].keys())
+                turbine_type_numbering = {}
+                i=1
+                for WT_name in turbine_type_names:
+                    turbine_type_numbering[WT_name]=i
+                    i+=1
+        else:
+            layout_x_coordinates = farm_layout_data['layouts']['coordinates']['x']
+            layout_y_coordinates = farm_layout_data['layouts']['coordinates']['y']
+            turbine_number = len(layout_x_coordinates)
+            if('turbines' in farm_layout_data):
+                layout_turbine_types = ['WT1']*turbine_number
+                turbine_type_names = ['WT1']
+                turbine_type_numbering = {}
+                turbine_type_numbering['WT1']=1
+            else:
+                layout_turbine_types = farm_layout_data['layouts']['turbine_types']
+                turbine_type_names = list(farm_layout_data['turbine_types'].keys())
+                turbine_type_numbering = {}
+                i=1
+                for WT_name in turbine_type_names:
+                    turbine_type_numbering[WT_name]=i
+                    i+=1
 
         rotor_center_xy_coordinates = np.zeros((2,turbine_number))
-        rotor_center_xy_coordinates[0,:]=get_value(self.wind_system_data,'wind_farm.layouts.coordinates.x')
-        rotor_center_xy_coordinates[1,:]=get_value(self.wind_system_data,'wind_farm.layouts.coordinates.y')
+        rotor_center_xy_coordinates[0,:]=layout_x_coordinates
+        rotor_center_xy_coordinates[1,:]=layout_y_coordinates
         if(center_farm):
             rotor_mean_x=np.mean(rotor_center_xy_coordinates[0,:])
             rotor_center_xy_coordinates[0,:]-=rotor_mean_x
             #
             rotor_mean_y=np.mean(rotor_center_xy_coordinates[1,:])
             rotor_center_xy_coordinates[1,:]-=rotor_mean_y
+
+
+        self.farm.turbine_types = np.zeros((turbine_number))
+        for i in range(turbine_number):
+            WT_name = layout_turbine_types[i]
+            self.farm.turbine_types[i] = turbine_type_numbering[WT_name]
+
+        #Turbines information: multiple hub_heights and diameters
+        if('turbines' in farm_layout_data):
+            turbines_data = farm_layout_data['turbines']
+        else:
+            turbines_data = farm_layout_data['turbine_types']
+
+        #
+        if('turbines' in farm_layout_data):
+            self.farm.rotor_diameters = np.zeros((turbine_number)) + turbines_data['rotor_diameter']
+            self.farm.hub_heights =  np.zeros((turbine_number)) + turbines_data['hub_height']
+        else:
+            self.farm.rotor_diameters = np.zeros((turbine_number))
+            self.farm.hub_heights =  np.zeros((turbine_number))
+            for i in range(turbine_number):
+                WT_name = layout_turbine_types[i]
+                self.farm.hub_heights[i] = turbines_data[WT_name]['hub_height']
+                self.farm.rotor_diameters[i] = turbines_data[WT_name]['rotor_diameter']
 
         farm_xyz = np.zeros((turbine_number,3))
         farm_xyz[:,0] = rotor_center_xy_coordinates[0,:]
@@ -709,42 +761,51 @@ class CS_study:
         self.farm.farm_size = np.sqrt((np.max(farm_xyz[:,0])-np.min(farm_xyz[:,0]))**2+(np.max(farm_xyz[:,1])-np.min(farm_xyz[:,1]))**2) + np.max(self.farm.rotor_diameters)
         self.farm.turbine_coordinates_xyz = farm_xyz
         #
-        self.farm.turbine_types = np.zeros((turbine_number))
-        self.farm.turbine_types[:] = 1.0 #TODO: multiple turbine_types
-        #
         self.farm.turbine_info = np.zeros((farm_xyz.shape[0],5))
         self.farm.turbine_info[:,:3] = farm_xyz
         self.farm.turbine_info[:,3] = self.farm.rotor_diameters
-        self.farm.turbine_info[:,4] = self.farm.turbine_types
+        for i in range(turbine_number):
+            self.farm.turbine_info[:,4] = self.farm.turbine_types
 
-        #TODO: dev if multiple turbine modes / physical conditions in windIO
+        #Multiple turbine modes
+        #Dev TODO : multiple physical conditions for performance curves in windIO
         self.farm.ct_curves = []
         self.farm.cp_curves = []
         self.power_curves = []
-        performance_info_list = get_child_keys(self.wind_system_data, branch="wind_farm.turbines.performance")
-        if('Cp_curve' in performance_info_list):
-            cp_curve= np.column_stack((turbines_data['performance']['Cp_curve']['Cp_wind_speeds'],turbines_data['performance']['Cp_curve']['Cp_values']))
-            self.farm.cp_curves.append(cp_curve)
-        if('power_curve' in performance_info_list):
-            power_curve= np.column_stack((turbines_data['performance']['power_curve']['power_wind_speeds'],turbines_data['performance']['power_curve']['power_values']))
-            self.power_curves.append(power_curve)
-            #
-            standard_rho=1.225
-            for j in range(len(self.power_curves)):
-                cp_curve = np.zeros((len(self.power_curves[j]),2))
-                cp_curve[:,0] = self.power_curves[j][:,0] #U0
-                for i in range(cp_curve.shape[0]):
-                    if(cp_curve[i,0]==0):
-                        cp_curve[i,1] = 0
-                    else:
-                        cp_curve[i,1] = (self.power_curves[j][i,1])/(0.5*standard_rho*(np.pi*((self.farm.rotor_diameters[j]/2.)**2))*(cp_curve[i,0]**3)) #cp
-
-                self.farm.cp_curves.append(cp_curve)
-
         #
-        ct_curve= np.column_stack((turbines_data['performance']['Ct_curve']['Ct_wind_speeds'],turbines_data['performance']['Ct_curve']['Ct_values']))
-        self.farm.ct_curves.append(ct_curve)
-        #print(get_value(self.wind_system_data, 'wind_farm.turbines.performance.power_curve.power_values'))
+        for WT_name in turbine_type_names:
+            if('turbines' in farm_layout_data):
+                performance_info_list = turbines_data['performance']
+            else:
+                performance_info_list = turbines_data[WT_name]['performance']
+            #
+            if('Cp_curve' in performance_info_list):
+                cp_curve= np.column_stack((performance_info_list['Cp_curve']['Cp_wind_speeds'],performance_info_list['Cp_curve']['Cp_values']))
+                self.farm.cp_curves.append(cp_curve)
+            if('power_curve' in performance_info_list):
+                power_curve= np.column_stack((performance_info_list['power_curve']['power_wind_speeds'],performance_info_list['power_curve']['power_values']))
+                self.power_curves.append(power_curve)
+                #
+                standard_rho=1.225
+                for j in range(len(self.power_curves)):
+                    cp_curve = np.zeros((len(self.power_curves[j]),2))
+                    cp_curve[:,0] = self.power_curves[j][:,0] #U0
+                    for i in range(cp_curve.shape[0]):
+                        if(cp_curve[i,0]==0):
+                            cp_curve[i,1] = 0
+                        else:
+                            cp_curve[i,1] = (self.power_curves[j][i,1])/(0.5*standard_rho*(np.pi*((self.farm.rotor_diameters[j]/2.)**2))*(cp_curve[i,0]**3)) #cp
+
+                    self.farm.cp_curves.append(cp_curve)
+
+            #
+            #TODO: verify if clipping to max ct=1. is okay
+            ct_curve= np.column_stack((performance_info_list['Ct_curve']['Ct_wind_speeds'],
+                                       np.clip(performance_info_list['Ct_curve']['Ct_values'],None,1.)))
+            #
+            self.farm.ct_curves.append(ct_curve)
+            #print(get_value(self.wind_system_data, 'wind_farm.turbines.performance.power_curve.power_values'))
+
         ########################### INFLOW DATA ###################################
 
         site_data = self.wind_system_data['site']
