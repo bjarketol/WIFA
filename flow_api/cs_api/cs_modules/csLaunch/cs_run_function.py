@@ -1,10 +1,10 @@
-from .cs_launch_modules import *
+from cs_api.cs_modules.csLaunch.cs_launch_modules import *
 import os as os
 from os import sep, mkdir, walk
 import numpy as np
 from datetime import datetime
 import shutil
-from flow_api.cs_api import cs_exe_path, cs_api_path, salome_exe_path, python_scripts_env_command, python_scripts_exe, cs_env_command, salome_env_command
+from cs_api import cs_exe_path, cs_api_path, salome_exe_path, python_scripts_env_command, python_scripts_exe, cs_env_command, salome_env_command
 
 def initialize_cs_case_from_windio(windio_input, output_dir):
     """Runner to code_saturne for the FLOW api
@@ -31,9 +31,6 @@ def initialize_cs_case_from_windio(windio_input, output_dir):
                               cs_env_command=cs_env_command,\
                               python_exe=python_scripts_exe)
 
-    #Creates the temporary folders for the run
-    windfarm_study.set_run_env()
-
     #Example 1 : get data from windio files
     windfarm_study.set_windio(windio_input)
     windfarm_study.get_windio_data()
@@ -46,6 +43,9 @@ def run_cs_windfarm_study(windfarm_study, test_mode=False):
     windfarm_study (class): main CS_study object from params
 
     """
+
+    #Creates the temporary folders for the run
+    windfarm_study.set_run_env()
 
     #TODO: get case_name from windio
     windfarm_study.case_name = "wf"
