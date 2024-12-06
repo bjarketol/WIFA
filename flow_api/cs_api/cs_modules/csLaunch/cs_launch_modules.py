@@ -920,7 +920,7 @@ class CS_study:
                                                       'attributes.analysis.HPC_config.wckey')
 
         ####################### OUTPUT DATA CONFIG ##########################
-        self.output.output_folder = get_value(self.wind_system_data,\
+        self.output.output_folder = self.cs_run_folder + get_value(self.wind_system_data,\
                                                       'attributes.outputs.output_folder')
         self.output.outputs_nc_filename = get_value(self.wind_system_data,\
                                                       'attributes.outputs.turbine_outputs.turbine_nc_filename')
