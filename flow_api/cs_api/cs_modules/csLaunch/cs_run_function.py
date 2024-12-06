@@ -6,16 +6,19 @@ from datetime import datetime
 import shutil
 from flow_api.cs_api import cs_exe_path, cs_api_path, salome_exe_path, python_scripts_env_command, python_scripts_exe, cs_env_command, salome_env_command
 
-def initialize_cs_case_from_windio(windio_input):
+def initialize_cs_case_from_windio(windio_input, output_dir):
     """Runner to code_saturne for the FLOW api
 
     Parameters:
     windio_input (str): main windio file path
 
     """
-    
+
     #TODO: paths from windio or a config file in the api during install
-    cs_run_folder="cs_run_" + datetime.now().strftime("%Y%m%d_%H-%M-%S")
+    if output_dir is None:
+        cs_run_folder="cs_run_" + datetime.now().strftime("%Y%m%d_%H-%M-%S")
+    else:
+        cs_run_folder = output_dir
     #
     windfarm_study = CS_study(cs_run_folder=cs_run_folder, \
                               case_dir="Farm", \
@@ -252,17 +255,17 @@ def run_cs_windfarm_study(windfarm_study, test_mode=False):
         os.system("cd "+ windfarm_study.cs_run_folder + " ; sbatch "+ launch_file_name)
         #=================================================
 
-    
-def run_code_saturne(windio_input, test_mode=False):    
+
+def run_code_saturne(windio_input, test_mode=False, output_dir=None):
     """Runner to code_saturne for the FLOW api
 
     Parameters:
     windio_input (str): main windio file path
 
     """
-    windfarm_study = initialize_cs_case_from_windio(windio_input)
+    windfarm_study = initialize_cs_case_from_windio(windio_input, output_dir)
     run_cs_windfarm_study(windfarm_study, test_mode=test_mode)
-    
+
 def validate_yaml_code_saturne(windio_input):
     """Validation of the windio content for code_saturne
     - Temperature profile
@@ -282,9 +285,9 @@ def run():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_yaml", help="The input yaml file")
     args = parser.parse_args()
-    
-    run_code_saturne(args.input_yaml, test_mode=False)
+
+    run_code_saturne(args.input_yaml, test_mode=False, output_dir=None)
 
 if __name__ == '__main__':
     run()
-    
+
