@@ -5,7 +5,7 @@ stages:
   - deploy
 
 test_flow_api:
-  stage: 
+  stage:
     test
   script:
     - apt-get update && apt-get install -y git-lfs
@@ -17,7 +17,7 @@ test_flow_api:
     - pip install git+https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake.git@v2.6.5
     - pip install git+https://github.com/FraunhoferIWES/foxes@eu_flow#egg=foxes
     - pip install -e .
-    - git clone https://github.com/kilojoules/windIO.git
+    - git clone https://github.com/EUFLOW/windIO.git
     - cd windIO
     - pip install -e .
     - cd ..
