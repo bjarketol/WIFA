@@ -13,7 +13,7 @@ import yaml
 from datetime import datetime, timedelta
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 from functools import reduce
-import cs_api.cs_modules.csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
+import flow_api.cs_api.cs_modules.csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
 
 def theta2temp(theta,z_or_dz,P0,Pref=1000.,g=9.81,Rair=287.,Cp=1005.):
     """
@@ -981,7 +981,7 @@ class CS_study:
                                                       'attributes.analysis.HPC_config.wckey')
 
         ####################### OUTPUT DATA CONFIG ##########################
-        self.output.output_folder = self.cs_run_folder + get_value(self.wind_system_data,\
+        self.output.output_folder = self.cs_run_folder + "/" + get_value(self.wind_system_data,\
                                                       'attributes.outputs.output_folder')
         self.output.outputs_nc_filename = get_value(self.wind_system_data,\
                                                       'attributes.outputs.turbine_outputs.turbine_nc_filename')
