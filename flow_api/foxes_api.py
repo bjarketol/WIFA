@@ -48,16 +48,14 @@ def run_foxes(
         wio = load_yaml(input_yaml)
         idir = Path(input_yaml).parent
 
-    idict, states, farm, mbook, odir = read_windio(wio, verbosity=verbosity)
+    idict, algo, odir = read_windio(wio, verbosity=verbosity)
 
     if output_dir is not None:
         odir = output_dir
 
     return run_dict(
         idict,
-        farm=farm,
-        states=states,
-        mbook=mbook,
+        algo=algo,
         input_dir=idir,
         output_dir=odir,
         verbosity=verbosity,
