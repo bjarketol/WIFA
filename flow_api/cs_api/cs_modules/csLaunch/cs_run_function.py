@@ -1,10 +1,10 @@
-from cs_api.cs_modules.csLaunch.cs_launch_modules import *
+from flow_api.cs_api.cs_modules.csLaunch.cs_launch_modules import *
 import os as os
 from os import sep, mkdir, walk
 import numpy as np
 from datetime import datetime
 import shutil
-from cs_api import cs_exe_path, cs_api_path, salome_exe_path, python_scripts_env_command, python_scripts_exe, cs_env_command, salome_env_command
+from flow_api.cs_api import cs_exe_path, cs_api_path, salome_exe_path, python_scripts_env_command, python_scripts_exe, cs_env_command, salome_env_command
 
 def initialize_cs_case_from_windio(windio_input, output_dir):
     """Runner to code_saturne for the FLOW api
