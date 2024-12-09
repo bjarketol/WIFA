@@ -15,8 +15,7 @@ test_flow_api:
     # - pip install git+https://github.com/kilojoules/windIO@master
     # So we install windIO with git clone instead
     - pip install git+https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake.git@v2.6.5
-    - pip install git+https://github.com/FraunhoferIWES/foxes@585e6e81432ac281bb9c4459fa199ffc79f68e59#egg=foxes
-    #- pip install git+https://github.com/FraunhoferIWES/foxes@eu_flow#egg=foxes
+    - pip install git+https://github.com/FraunhoferIWES/foxes@eu_flow#egg=foxes
     - pip install -e .
     - git clone https://github.com/kilojoules/windIO.git
     - cd windIO
