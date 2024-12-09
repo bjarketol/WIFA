@@ -5,7 +5,7 @@ stages:
   - deploy
 
 test_flow_api:
-  stage: 
+  stage:
     test
   script:
     - apt-get update && apt-get install -y git-lfs
