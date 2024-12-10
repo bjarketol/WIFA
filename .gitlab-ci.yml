@@ -11,15 +11,7 @@ test_flow_api:
     - apt-get update && apt-get install -y git-lfs
     - git lfs install
     - pip install --upgrade pip
-    # Does not work
-    # - pip install git+https://github.com/kilojoules/windIO@master
-    # So we install windIO with git clone instead
-    - pip install git+https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake.git@v2.6.5
-    - pip install git+https://github.com/FraunhoferIWES/foxes@eu_flow#egg=foxes
-    - pip install -e .
-    - git clone https://github.com/EUFLOW/windIO.git
-    - cd windIO
-    - pip install -e .
+    - pip install .[test] # this also installs py_wake, foxes, wayve, windIO, pytest
     - cd ..
     - py.test --durations=0 tests/
   except:

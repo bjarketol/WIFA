@@ -42,21 +42,13 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "matplotlib",
-    "numpy",
-    "pandas",
-    "xarray",
-    "scipy",
-    "netcdf4",
-    "mpmath",
-    "windio>=1",
+    "windIO @ git+https://github.com/EUFLOW/windIO@master",
+    "py_wake @ git+https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake.git@v2.6.5",
+    "foxes @ git+https://github.com/FraunhoferIWES/foxes@eu_flow",
+    "wayve @ git+https://gitlab.kuleuven.be/TFSO-software/wayve@main",
 ]
 
 [project.optional-dependencies]
-tools = [
-    "foxes",
-    "py_wake",
-]
 test = [
     "flake8", 
     "pytest",
