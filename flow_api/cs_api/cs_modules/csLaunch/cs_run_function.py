@@ -22,7 +22,6 @@ def initialize_cs_case_from_windio(windio_input, output_dir):
     #
     windfarm_study = CS_study(cs_run_folder=cs_run_folder, \
                               case_dir="Farm", \
-                              postprocess_only = False, #TODO: get that from windio
                               cs_path=cs_exe_path, \
                               cs_api_path=cs_api_path, \
                               salome_path=salome_exe_path, \
