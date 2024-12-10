@@ -2,6 +2,7 @@ from flow_api.foxes_api import run_foxes
 from windIO.utils.yml_utils import validate_yaml
 from pathlib import Path
 from windIO import __path__ as wiop
+import pytest
 import os
 test_path = Path(os.path.dirname(__file__))
 windIO_path = Path(wiop[0])
