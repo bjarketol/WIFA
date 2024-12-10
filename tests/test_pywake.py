@@ -21,7 +21,7 @@ from py_wake.rotor_avg_models import RotorCenter
 # - set up two turbines case
 #    - test vertical profile options: new file(s)?
 
-@pytest.mark.skip(reason="skipping until PyWake supports subsets of flow cases"0
+@pytest.mark.skip(reason="skipping until PyWake supports subsets of flow cases")
 def two_turbine_site():
     x = [0, 1248.1, 2496.2, 3744.3]
     y = [0, 0, 0, 0]
