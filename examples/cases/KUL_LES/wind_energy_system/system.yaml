@@ -18,6 +18,7 @@ attributes:
     #
     flow_field:
       report: True
+      output_variables: ['wind_speed']
       z_planes:
         z_sampling: "hub_heights"
         xy_sampling: "grid"
