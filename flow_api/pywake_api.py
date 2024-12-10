@@ -183,15 +183,15 @@ def run_pywake(yamlFile, output_dir='output'):
     WFXUB = np.max(system_dat['site']['boundaries']['polygons'][0]['x'])
     WFYLB = np.min(system_dat['site']['boundaries']['polygons'][1]['y'])
     WFYUB = np.max(system_dat['site']['boundaries']['polygons'][1]['y'])
-    checkk = 'flow_field' in system_dat['attributes']['outputs']
-    if checkk and 'xlb' in system_dat['attributes']['outputs']['flow_field']:
-       WFXLB = system_dat['attributes']['outputs']['flow_field']['xlb']
-    if checkk and 'xub' in system_dat['attributes']['outputs']['flow_field']:
-       WFXUB = system_dat['attributes']['outputs']['flow_field']['xub']
-    if checkk and 'ylb' in system_dat['attributes']['outputs']['flow_field']:
-       WFYLB = system_dat['attributes']['outputs']['flow_field']['ylb']
-    if checkk and 'yub' in system_dat['attributes']['outputs']['flow_field']:
-       WFYUB = system_dat['attributes']['outputs']['flow_field']['yub']
+    checkk = 'flow_field' in system_dat['attributes']['model_outputs_specification']
+    if checkk and 'xlb' in system_dat['attributes']['model_outputs_specification']['flow_field']:
+       WFXLB = system_dat['attributes']['model_outputs_specification']['flow_field']['xlb']
+    if checkk and 'xub' in system_dat['attributes']['model_outputs_specification']['flow_field']:
+       WFXUB = system_dat['attributes']['model_outputs_specification']['flow_field']['xub']
+    if checkk and 'ylb' in system_dat['attributes']['model_outputs_specification']['flow_field']:
+       WFYLB = system_dat['attributes']['model_outputs_specification']['flow_field']['ylb']
+    if checkk and 'yub' in system_dat['attributes']['model_outputs_specification']['flow_field']:
+       WFYUB = system_dat['attributes']['model_outputs_specification']['flow_field']['yub']
 
     # get x and y positions
     if type(farm_dat['layouts']) == list:
@@ -219,7 +219,11 @@ def run_pywake(yamlFile, output_dir='output'):
            speeds = []
            dirs = []
            seen = []
-           for hh in sorted(np.append(list(hub_heights.values()), system_dat['attributes']['outputs']['flow_field']['z_planes']['z_sampling'])):
+           if 'z_planes' in system_dat['attributes']['model_outputs_specification']['flow_field']:
+               additional_heights = system_dat['attributes']['model_outputs_specification']['flow_field']['z_planes']['z_list']
+           else:
+               additional_heights = []
+           for hh in sorted(np.append(list(hub_heights.values()), additional_heights)):
                if hh in seen: continue
                seen.append(hh)
                if heights:
@@ -255,7 +259,7 @@ def run_pywake(yamlFile, output_dir='output'):
            if len(hub_heights) > 1:
                TIs = []
                seen = []
-               for hh in sorted(np.append(list(hub_heights.values()), system_dat['attributes']['outputs']['flow_field']['z_planes']['z_sampling'])):
+               for hh in sorted(np.append(list(hub_heights.values()), system_dat['attributes']['model_outputs_specification']['flow_field']['z_planes']['z_list'])):
                    #hh = hub_heights[tt]
                    if heights:
                       if hh in seen: continue
@@ -312,8 +316,8 @@ def run_pywake(yamlFile, output_dir='output'):
        site = XRSite(ds=xr.Dataset(data_vars={'P': (['wd', 'ws'], P)}, coords = {'ws': ws, 'wd': wd, 'TI': resource_dat['wind_resource']['turbulence_intensity']['data']}))
        TI = resource_dat['wind_resource']['turbulence_intensity']['data']
 
-    #if 'name' in system_dat['attributes']['analysis']['outputs']:
-    #   output_dir = system_dat['attributes']['analysis']['outputs']['name']
+    #if 'name' in system_dat['attributes']['analysis']['model_outputs_specification']:
+    #   output_dir = system_dat['attributes']['analysis']['model_outputs_specification']['name']
     #   if not os.path.exists(output_dir):
     #      os.makedirs(output_dir)
 
@@ -519,8 +523,8 @@ def run_pywake(yamlFile, output_dir='output'):
       ]))
       ])
 
-    if 'AEP' in system_dat['attributes']['outputs']:
-       data['FLOW_simulation_outputs']['AEP'] = float(aep)
+    #if 'AEP' in system_dat['attributes']['outputs']:
+    #   data['FLOW_simulation_outputs']['AEP'] = float(aep)
     
     #if 'power_percentiles' in system_dat['attributes']['analysis']['outputs']:
     # if system_dat['attributes']['analysis']['outputs']['power_percentiles']['report']:
@@ -541,7 +545,7 @@ def run_pywake(yamlFile, output_dir='output'):
     #   data['FLOW_simulation_outputs']['computed_percentiles'] = system_dat['attributes']['analysis']['outputs']['power_percentiles']['percentiles']
     #   data['FLOW_simulation_outputs']['power_percentiles'] = power_percentiles
     
-    if 'turbine_outputs' in system_dat['attributes']['outputs']:
+    if 'turbine_outputs' in system_dat['attributes']['model_outputs_specification']:
        #print('aep per turbine', list(aep_per_turbine)); hey
        #data['FLOW_simulation_outputs']['AEP_per_turbine'] = [float(value) for value in aep_per_turbine]
        sim_res_formatted = sim_res[['Power', 'WS_eff']].rename({'Power': 'power', 'WS_eff': 'effective_wind_speed', 'wt': 'turbine'})
@@ -552,37 +556,38 @@ def run_pywake(yamlFile, output_dir='output'):
 
     # flow field handling
     flow_map = None
-    if 'flow_field' in system_dat['attributes']['outputs'] and not timeseries:
+    if 'flow_field' in system_dat['attributes']['model_outputs_specification'] and not timeseries:
 
        # compute flow map for specified directions (wd) and speeds (ws)
        flow_map = sim_res.flow_box(
                             x = np.linspace(WFXLB, WFXUB, 400),
                             y = np.linspace(WFYLB, WFYUB, 400),
-                            h = system_dat['attributes']['outputs']['z_planes']['z_sampling'],
+                            h = system_dat['attributes']['model_outputs_specification']['z_planes']['z_list'],
                             time = sim_res.time)
 
        # remove unwanted data
        flow_map = flow_map.drop_vars(['WD', 'WS', 'TI', 'P'])
 
        # raise warning if user requests data we can not provide
-       if any(element not in ['velocity_u', 'turbulence_intensity'] for element in system_dat['attributes']['analysis']['outputs']['flow_field']['output_variables']):
+       if any(element not in ['velocity_u', 'turbulence_intensity'] for element in system_dat['attributes']['analysis']['model_outputs_specification']['flow_field']['output_variables']):
           warnings.warn('PyWake can only output velocity_u and turbulence_intensity')
 
        # remove TI or WS if they are not requested
-       if 'turbulence_intensity' not in system_dat['attributes']['analysis']['outputs']['flow_field']['output_variables']:
+       if 'turbulence_intensity' not in system_dat['attributes']['analysis']['model_outputs_specification']['flow_field']['output_variables']:
           flow_map = flow_map.drop_vars(['TI_eff'], inplace=True)
-       if 'velocity_u' not in system_dat['attributes']['analysis']['outputs']['flow_field']['output_variables']:
+       if 'velocity_u' not in system_dat['attributes']['analysis']['model_outputs_specification']['flow_field']['output_variables']:
           flow_map = flow_map.drop_vars(['WS_eff'], inplace=True)
 
-    elif 'flow_field' in system_dat['attributes']['outputs'] and timeseries:
+    elif 'flow_field' in system_dat['attributes']['model_outputs_specification'] and timeseries:
        #time_to_plot = system_dat['attributes']['outputs']['flow_field']['time'][0]
        #print('TIMES ', time_to_plot)
-       print(system_dat['attributes']['outputs']['flow_field']['z_planes']['z_sampling'])
-       print("Flow box bounds: ", WFXLB, WFXUB, WFYLB, WFYUB)
-       flow_map = sim_res.flow_box(
+       #print(system_dat['attributes']['model_outputs_specification']['flow_field']['z_planes']['z_list'])
+       #print("Flow box bounds: ", WFXLB, WFXUB, WFYLB, WFYUB)
+       if system_dat['attributes']['model_outputs_specification']['flow_field']['report'] is not False:
+           flow_map = sim_res.flow_box(
                             x = np.linspace(WFXLB, WFXUB, 100),
                             y = np.linspace(WFYLB, WFYUB, 100),
-                            h = system_dat['attributes']['outputs']['flow_field']['z_planes']['z_sampling'],
+                            h = system_dat['attributes']['model_outputs_specification']['flow_field']['z_planes']['z_list'],
                             time = sim_res.time.values)
        #flow_map = sim_res.flow_map(HorizontalGrid(x = np.linspace(WFXLB, WFXUB, 100),
 #y = np.linspace(WFYLB, WFYUB, 100)))
@@ -600,7 +605,7 @@ def run_pywake(yamlFile, output_dir='output'):
 
        # record data
        data['FLOW_simulation_outputs']['wind_output_file'] = 'FarmFlow.nc'
-       data['FLOW_simulation_outputs']['wind_output_variables'] = system_dat['attributes']['outputs']['flow_field']['output_variables']
+       data['FLOW_simulation_outputs']['wind_output_variables'] = system_dat['attributes']['model_outputs_specification']['flow_field']['output_variables']
 
     # Write out the YAML data
     output_yaml_nam = output_dir + os.sep + 'output.yaml'
