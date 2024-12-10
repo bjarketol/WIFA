@@ -220,7 +220,9 @@ def run_pywake(yamlFile, output_dir='output'):
            dirs = []
            seen = []
            if 'z_planes' in system_dat['attributes']['model_outputs_specification']['flow_field']:
-               additional_heights = system_dat['attributes']['model_outputs_specification']['flow_field']['z_planes']['z_list']
+               z_planes = system_dat['attributes']['model_outputs_specification']['flow_field']
+               if z_planes is not 'hub_heights': 
+                   additional_heights = system_dat['attributes']['model_outputs_specification']['flow_field']['z_planes']['z_list']
            else:
                additional_heights = []
            for hh in sorted(np.append(list(hub_heights.values()), additional_heights)):
@@ -558,11 +560,14 @@ def run_pywake(yamlFile, output_dir='output'):
     flow_map = None
     if 'flow_field' in system_dat['attributes']['model_outputs_specification'] and not timeseries:
 
+       #z_planes = system_dat['attributes']['model_outputs_specification']['flow_field']
+       #sorted(np.append(list(hub_heights.values()), additional_heights))
+       #if 'x_bounds' in  z_planes
        # compute flow map for specified directions (wd) and speeds (ws)
        flow_map = sim_res.flow_box(
                             x = np.linspace(WFXLB, WFXUB, 400),
                             y = np.linspace(WFYLB, WFYUB, 400),
-                            h = system_dat['attributes']['model_outputs_specification']['z_planes']['z_list'],
+                            h = additional_heights,
                             time = sim_res.time)
 
        # remove unwanted data
@@ -584,10 +589,15 @@ def run_pywake(yamlFile, output_dir='output'):
        #print(system_dat['attributes']['model_outputs_specification']['flow_field']['z_planes']['z_list'])
        #print("Flow box bounds: ", WFXLB, WFXUB, WFYLB, WFYUB)
        if system_dat['attributes']['model_outputs_specification']['flow_field']['report'] is not False:
+           z_planes = system_dat['attributes']['model_outputs_specification']['flow_field']
+           if 'z_list' in z_planes:
+               additional_heights = z_planes['z_list']
+           else:
+               additional_heights = sorted(list(hub_heights.values()))
            flow_map = sim_res.flow_box(
                             x = np.linspace(WFXLB, WFXUB, 100),
                             y = np.linspace(WFYLB, WFYUB, 100),
-                            h = system_dat['attributes']['model_outputs_specification']['flow_field']['z_planes']['z_list'],
+                            h = additional_heights,
                             time = sim_res.time.values)
        #flow_map = sim_res.flow_map(HorizontalGrid(x = np.linspace(WFXLB, WFXUB, 100),
 #y = np.linspace(WFYLB, WFYUB, 100)))
@@ -605,7 +615,7 @@ def run_pywake(yamlFile, output_dir='output'):
 
        # record data
        data['FLOW_simulation_outputs']['wind_output_file'] = 'FarmFlow.nc'
-       data['FLOW_simulation_outputs']['wind_output_variables'] = system_dat['attributes']['model_outputs_specification']['flow_field']['output_variables']
+       data['FLOW_simulation_outputs']['flow_field'] = system_dat['attributes']['model_outputs_specification']['flow_field']
 
     # Write out the YAML data
     output_yaml_nam = output_dir + os.sep + 'output.yaml'
