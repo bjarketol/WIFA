@@ -1010,7 +1010,7 @@ class CS_study:
                 print("WARNING : code_saturne does not support grid interpolation. Flow field will be stored on original grid")
                 self.output.x_bounds=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.x_bounds')
                 self.output.y_bounds=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.y_bounds')
-                #try:
+
                 self.output.dx=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.dx')
                 self.output.dy=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.dy')
                 Nx = get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.Nx')
