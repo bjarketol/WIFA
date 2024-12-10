@@ -11,7 +11,7 @@ test_flow_api:
     - apt-get update && apt-get install -y git-lfs
     - git lfs install
     - pip install --upgrade pip
-    - pip install .[test] # this also installs py_wake, foxes, wayve, windIO, pytest
+    - pip install -e .[test] # this also installs py_wake, foxes, wayve, windIO, pytest
     - cd ..
     - py.test --durations=0 tests/
   except:
