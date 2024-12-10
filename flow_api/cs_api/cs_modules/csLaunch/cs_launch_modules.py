@@ -223,7 +223,7 @@ class CS_mesh:
 class CS_study:
     def __init__(self,farm_notebook_arg_names=None,farm_notebook_arg_values=None, \
                  prec_notebook_arg_names=None,prec_notebook_arg_values=None, \
-                 case_dir=None, result_dir=None, postprocess_only=False, wind_energy_system_file=None, \
+                 case_dir=None, result_dir=None, wind_energy_system_file=None, \
                  cs_path=None, salome_path=None, python_env_command=None, python_exe=None,\
                  salome_env_command=None, cs_env_command=None, \
                  cs_run_folder=None, cs_api_path=None):
@@ -234,7 +234,7 @@ class CS_study:
         #
         self.case_dir = case_dir
         self.result_dir = result_dir
-        self.postprocess_only = postprocess_only
+        self.postprocess_only = False
         self.case_name = None
         #
         self.cs_path = cs_path
@@ -543,20 +543,6 @@ class CS_study:
             mkdir(self.output.output_folder)
         os.system("chmod u+rwx "+self.output.output_folder)
 
-        if self.output.zplane_type=="default" or self.output.zplane_type=="hub_height":
-            self.output.zcoords = reduce(lambda re, x: re+[x] if x not in re else re, self.farm.hub_heights, [])
-        elif self.output.zplane_type=="grid":
-            self.output.zcoords = []
-            dz=(self.output.zmax-self.output.zmin)/(self.output.znumber-1)
-            for nzi in range(self.output.znumber):
-                self.output.zcoords.append(np.round(self.output.zmin + nzi*dz,1))
-        postprocess_heights_file = open(self.output.output_folder+"/postprocessing_heights.csv", "w")
-        delimiter = ","
-        for zcoord in self.output.zcoords[:-1]:
-            postprocess_heights_file.write(str(zcoord)+delimiter)
-        postprocess_heights_file.write(str(self.output.zcoords[-1]))
-        postprocess_heights_file.close()
-
         postprocess_cases_file = open(self.output.output_folder+"/postprocessing_cases.csv", "w")
         delimiter = ","
         for j in range(len(self.output.run_times)-1):
@@ -567,16 +553,24 @@ class CS_study:
         postprocess_cases_file.write(str(case))
         postprocess_cases_file.close()
 
-        postprocess_fields_file = open(self.output.output_folder+"/postprocessing_fields.csv", "w")
-        delimiter = ","
-        for field in self.output.field_output_variables[:-1]:
-            postprocess_fields_file.write(field+delimiter)
-        postprocess_fields_file.write(self.output.field_output_variables[-1])
-        postprocess_cases_file.close()
+        if self.output.write_fields:
+            postprocess_heights_file = open(self.output.output_folder+"/postprocessing_heights.csv", "w")
+            delimiter = ","
+            for zcoord in self.output.zcoords[:-1]:
+                postprocess_heights_file.write(str(zcoord)+delimiter)
+            postprocess_heights_file.write(str(self.output.zcoords[-1]))
+            postprocess_heights_file.close()
+
+            postprocess_fields_file = open(self.output.output_folder+"/postprocessing_fields.csv", "w")
+            delimiter = ","
+            for field in self.output.field_output_variables[:-1]:
+                postprocess_fields_file.write(field+delimiter)
+            postprocess_fields_file.write(self.output.field_output_variables[-1])
+            postprocess_cases_file.close()
 
         #
         if(standalone):
-            bash_file=open(self.cs_run_folder + sep + launch_file_name,"w")
+            bash_file=open(launch_file_name,"w")
             bash_file.write("#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
                             "#SBATCH --time=00:30:00\n")
@@ -596,7 +590,9 @@ class CS_study:
                 bash_file.write(self.python_env_command+"\n")
 
             #postprocessing command
-            bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str)
+            if self.output.write_fields:
+                bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.case_name+" "+self.case_dir+"\n")
+            bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_turbine_data.py ../"+self.output.output_folder+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str)
             bash_file.close()
         else:
             bash_file=open(self.cs_run_folder + sep + launch_file_name,"a")
@@ -620,7 +616,9 @@ class CS_study:
                 bash_file.write(self.python_env_command+"\n")
 
             #postprocessing command
-            bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str + "\n" \
+            if self.output.write_fields:
+                bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.case_name+" "+self.case_dir+"\n")
+            bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_turbine_data.py ../"+self.output.output_folder+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str+"\n" \
                             "EOF\n"+")\n" + \
                             "# Extract the job ID from the output of sbatch\n" + \
                             "postpro_jobid=${postpro_sbatch##* }\n")
@@ -818,11 +816,11 @@ class CS_study:
 
             #TODO: check if we should replace by input from the flow_api in case of binned
             self.inflow.run_times = np.arange(ntimes) #default
-            if("cases_run" in get_child_keys(self.wind_system_data, branch="attributes.analysis")):
-                if("all_occurences" in get_child_keys(self.wind_system_data, branch="attributes.analysis.cases_run")):
-                    all_occurences = get_value(self.wind_system_data,'attributes.analysis.cases_run.all_occurences')
+            if("cases_run" in get_child_keys(self.wind_system_data, branch="attributes.model_outputs_specification")):
+                if("all_occurences" in get_child_keys(self.wind_system_data, branch="attributes.model_outputs_specification.cases_run")):
+                    all_occurences = get_value(self.wind_system_data,'attributes.model_outputs_specification.cases_run.all_occurences')
                     if(not(all_occurences)):
-                        self.inflow.run_times = get_value(self.wind_system_data,'attributes.analysis.cases_run.occurences_list')
+                        self.inflow.run_times = get_value(self.wind_system_data,'attributes.model_outputs_specification.cases_run.subset')
                         self.inflow.times = self.inflow.times[self.inflow.run_times]
                         if (not all(isinstance(run_time, int) for run_time in self.inflow.run_times)):
                             raise ValueError('occurences_list element is not of type int')
@@ -981,41 +979,42 @@ class CS_study:
                                                       'attributes.analysis.HPC_config.wckey')
 
         ####################### OUTPUT DATA CONFIG ##########################
-        self.output.output_folder = self.cs_run_folder + "/" + get_value(self.wind_system_data,\
-                                                      'attributes.outputs.output_folder')
+        if get_value(self.wind_system_data, 'attributes.analysis.run_type')=="postprocess":
+            self.postprocess_only = True
+
+        self.output.output_folder = self.cs_run_folder + '/' + get_value(self.wind_system_data,\
+                                                      'attributes.model_outputs_specification.output_folder')
         self.output.outputs_nc_filename = get_value(self.wind_system_data,\
-                                                      'attributes.outputs.turbine_outputs.turbine_nc_filename')
+                                                      'attributes.model_outputs_specification.turbine_outputs.turbine_nc_filename')
         self.output.turbine_output_variables = get_value(self.wind_system_data,\
-                                                      'attributes.outputs.turbine_outputs.output_variables')
+                                                      'attributes.model_outputs_specification.turbine_outputs.output_variables')
 
 
         self.output.write_fields = get_value(self.wind_system_data,\
-                                                      'attributes.outputs.flow_field.report')
+                                                      'attributes.model_outputs_specification.flow_field.report')
         if(self.output.write_fields):
             self.output.field_nc_filename = get_value(self.wind_system_data,\
-                                                      'attributes.outputs.flow_field.flow_nc_filename')
+                                                      'attributes.model_outputs_specification.flow_field.flow_nc_filename')
             #
             self.output.field_output_variables = get_value(self.wind_system_data,\
-                                                      'attributes.outputs.flow_field.output_variables')
+                                                      'attributes.model_outputs_specification.flow_field.output_variables')
             #
-            self.output.zplane_type=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.z_sampling')
-            if(self.output.zplane_type == "grid"):
-                self.output.zmin=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.z_bounds')[0]
-                self.output.zmax=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.z_bounds')[1]
-                self.output.znumber=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.z_number')
-            elif(self.output.zplane_type == "fixed"):
-                self.output.zcoords=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.z_list')
-            #
-            self.output.xy_sampling_type=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.xy_sampling')
-            if(self.output.xy_sampling_type == "bounded"):
-                self.output.x_bounds=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.x_bounds')
-                self.output.y_bounds=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.y_bounds')
-                self.output.dx=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.dx')
-                self.output.dy=get_value(self.wind_system_data,'attributes.outputs.flow_field.z_planes.dy')
+            self.output.zplane_type=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.z_sampling')
+            if(self.output.zplane_type == "plane_list"):
+                self.output.zcoords = get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.z_list')
+            elif self.output.zplane_type=="hub_heights":
+                self.output.zcoords = reduce(lambda re, x: re+[x] if x not in re else re, self.farm.hub_heights, [])
 
-            ##TODO: process cases where output.run_times are different from inflow.run_times
-            self.output.times = self.inflow.times #default
-            self.output.run_times = self.inflow.run_times #default
+            self.output.xy_sampling_type=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.xy_sampling')
+            if(self.output.xy_sampling_type == "grid"):
+                print("WARNING : code_saturne does not support grid interpolation. Flow field will be stored on original grid")
+                self.output.x_bounds=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.x_bounds')
+                self.output.y_bounds=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.y_bounds')
+                self.output.dx=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.dx')
+                self.output.dy=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.dy')
+
+        self.output.times = self.inflow.times #default
+        self.output.run_times = self.inflow.run_times #default
         ########################### CS CONFIG INPUTS ###################################
         self.mesh.remesh = True
         if("remesh" in get_child_keys(self.wind_system_data, branch="attributes.analysis.mesh")):
