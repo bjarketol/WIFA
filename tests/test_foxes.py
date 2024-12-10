@@ -2,6 +2,7 @@ from flow_api.foxes_api import run_foxes
 from windIO.utils.yml_utils import validate_yaml
 from pathlib import Path
 from windIO import __path__ as wiop
+import pytest
 import os
 test_path = Path(os.path.dirname(__file__))
 windIO_path = Path(wiop[0])
@@ -18,10 +19,12 @@ def test_foxes_KUL():
     wes_dir = test_path / '../examples/cases/KUL_LES/wind_energy_system/'
     _run_foxes(wes_dir)
 
+@pytest.mark.skip(reason="We need to skip the no xy grid case")
 def test_foxes_4wts():
     wes_dir = test_path / '../examples/cases/windio_4turbines/wind_energy_system/'
     _run_foxes(wes_dir)
 
+@pytest.mark.skip(reason="This case was deleted")
 def test_foxes_4wts2():
     wes_dir = test_path / '../examples/cases/windio_4turbines_2flowcases/wind_energy_system/'
     _run_foxes(wes_dir)
