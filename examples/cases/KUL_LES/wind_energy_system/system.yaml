@@ -4,7 +4,7 @@ wind_farm: !include ../plant_wind_farm/FLOW_UQ_vnv_toy_study_wind_farm.yaml
 attributes:
   flow_model:
     name: wayve
-  analysis: !include analysis.yaml
+  analysis: !include analysis_PB.yaml
 
   model_outputs_specification:
     output_folder: "results"

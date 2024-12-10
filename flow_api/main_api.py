@@ -48,7 +48,15 @@ def run_api(yaml_input):
         foxes_aep = run_foxes(yaml_input)
         
     elif model_name.lower() == 'wayve':
-        run_wayve(yaml_input)
+
+        # Output directory
+        # yaml_input_no_ext = os.path.splitext(yaml_input)[0]  # Remove the file extension
+        # output_dir_name = 'output_wayve' + yaml_input_no_ext.replace(os.sep, '_')  # Replace directory separators
+        output_dir_name = yaml_dat['attributes']['model_outputs_specification']['output_folder']
+        if not os.path.exists(output_dir_name):
+            os.makedirs(output_dir_name)
+
+        run_wayve(yaml_input, output_dir_name)
         
     elif model_name.lower() == 'codesaturne':
         run_code_saturne(yaml_input, test_mode=True)
