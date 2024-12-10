@@ -19,6 +19,7 @@ attributes:
     flow_field:
       report: True
       output_variables: ['wind_speed']
+      flow_nc_filename: flow_field.nc
       z_planes:
         z_sampling: "hub_heights"
         xy_sampling: "grid"
