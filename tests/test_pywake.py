@@ -14,6 +14,7 @@ from py_wake.examples.data.dtu10mw._dtu10mw import DTU10MW
 from py_wake.deficit_models.gaussian import BastankhahGaussian
 from py_wake.superposition_models import LinearSum
 from py_wake.rotor_avg_models import RotorCenter
+import pytest
 
 
 # todo
@@ -55,6 +56,7 @@ def test_pywake_KUL():
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 1)
 
 
+@pytest.mark.skip(reason="skipping until PyWake supports subsets of flow cases")
 def test_pywake_4wts():
 
     yaml_input = test_path / '../examples/cases/windio_4turbines_2flowcases/wind_energy_system/system.yaml'

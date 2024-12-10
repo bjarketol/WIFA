@@ -14,14 +14,14 @@ deflection_model:
   name: None
 superposition_model:
   ws_superposition: Linear
-  ti_superposition: Quadratic
+  ti_superposition: Squared
 blockage_model:
   name: None
 rotor_averaging:
   grid: grid
   n_x_grid_points: 7
   n_y_grid_points: 7
-  background_averaging: centre
+  background_averaging: center
   wake_averaging: grid
   wind_speed_exponent_for_power: 1
   wind_speed_exponent_for_ct: 1
