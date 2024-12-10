@@ -33,7 +33,7 @@ DEFAULTS = {
     'rotor_averaging': {
         'name': 'Center',
     },
-    'blockage': {
+    'blockage_model': {
         'name': None,
         'ss_alpha': 0.8888888888888888
     }
@@ -390,7 +390,7 @@ def run_pywake(yamlFile, output_dir='output'):
     turbulence_model_data = get_with_default(system_dat['attributes']['analysis'], 'turbulence_model', DEFAULTS)
     superposition_model_data = get_with_default(system_dat['attributes']['analysis'], 'superposition_model', DEFAULTS)
     rotor_averaging_data = get_with_default(system_dat['attributes']['analysis'], 'rotor_averaging', DEFAULTS)
-    blockage_data = get_with_default(system_dat['attributes']['analysis'], 'blockage', DEFAULTS)
+    blockage_data = get_with_default(system_dat['attributes']['analysis'], 'blockage_model', DEFAULTS)
     
     # Map the deflection model
     if deflection_model_data['name'].lower() == 'none':

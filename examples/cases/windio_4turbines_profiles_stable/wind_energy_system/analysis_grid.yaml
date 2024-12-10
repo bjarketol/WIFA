@@ -14,7 +14,7 @@ deflection_model:
   name: None
 superposition_model:
   ws_superposition: Linear
-  ti_superposition: Quadratic
+  ti_superposition: Squared
 blockage_model:
   name: None
 rotor_averaging:
