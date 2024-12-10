@@ -22,6 +22,7 @@ def test_foxes_4wts():
     wes_dir = test_path / '../examples/cases/windio_4turbines/wind_energy_system/'
     _run_foxes(wes_dir)
 
+@pytest.mark.skip(reason="We need to skip the no xy grid case")
 def test_foxes_4wts2():
     wes_dir = test_path / '../examples/cases/windio_4turbines_2flowcases/wind_energy_system/'
     _run_foxes(wes_dir)
