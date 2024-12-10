@@ -23,4 +23,4 @@ attributes:
       output_variables: ['wind_speed', 'wind_direction']
       z_planes:
         z_sampling: "hub_heights"
-        xy_sampling: "default"
+        xy_sampling: "original_grid"
