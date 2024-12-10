@@ -21,7 +21,7 @@ test_flow_api:
     - cd windIO
     - pip install -e .
     - cd ..
-    - py.test --durations=0 flow_api/tests/
+    - py.test --durations=0 tests/
   except:
     - /^test_doc.*/
 
