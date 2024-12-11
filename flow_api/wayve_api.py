@@ -21,7 +21,10 @@ def run_wayve(yamlFile, output_dir='output', debug_mode=False):
     # Read out yaml file
     #####################
     # Yaml loading
-    system_dat = load_yaml(yamlFile)
+    if isinstance(yamlFile, dict):
+        system_dat = yamlFile
+    else:
+        system_dat = load_yaml(yamlFile)
     # WindIO components
     farm_dat = system_dat['wind_farm']
     resource_dat = system_dat['site']['energy_resource']
