@@ -506,7 +506,14 @@ def wf_setup(farm_dat, analysis_dat, L_filter=1.e3):
         if ('momentum_entrainment' in apm_terms_dat and
                 apm_terms_dat['momentum_entrainment']['mfp_type'] == "constant_flux"
                 and wind_farm.area > 0.):
-            mfp = ConstantFlux(wind_farm)
+            mfp_dat = apm_terms_dat['momentum_entrainment']
+            a_tau = 0.12
+            if 'a_mfp' in mfp_dat["apm_mfp_settings"]:
+                a_tau = mfp_dat["apm_mfp_settings"]['a_mfp']
+            d_tau = 27.8
+            if 'd_mfp' in mfp_dat["apm_mfp_settings"]:
+                d_tau = mfp_dat["apm_mfp_settings"]['d_mfp']
+            mfp = ConstantFlux(wind_farm, a=a_tau, d=d_tau)
             forcing.add_child(mfp)
     return wind_farm, forcing, wf_offset_x, wf_offset_y
 
