@@ -26,13 +26,6 @@ rotor_averaging:
   wind_speed_exponent_for_power: 3
   wind_speed_exponent_for_ct: 2
 
-# wayve
-layers_description:
-  farm_layer_height: 150
-  number_of_layers: 10
-APM_additional_terms:
-  term_list: None
-
 wake_tool: "foxes"
 
 # saturne
