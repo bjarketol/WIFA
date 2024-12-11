@@ -42,7 +42,7 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-    "windIO @ git+https://github.com/EUFLOW/windIO@master",
+    "windIO @ git+https://github.com/EUFLOW/windIO@wayve_inputs",
     "py_wake @ git+https://gitlab.windenergy.dtu.dk/TOPFARM/PyWake.git@v2.6.5",
     "foxes @ git+https://github.com/FraunhoferIWES/foxes@eu_flow",
     "wayve @ git+https://gitlab.kuleuven.be/TFSO-software/wayve@main",
