@@ -31,8 +31,8 @@ def two_turbine_site():
     turbine = DTU10MW()
     site = Hornsrev1Site()
     #deficit = BastankhahGaussianDeficit()
-    wfm = BastankhahGaussian(site, turbine, k=0.04, 
-                             use_effective_ws=True, 
+    wfm = BastankhahGaussian(site, turbine, k=0.04,
+                             use_effective_ws=True,
                              superpositionModel=LinearSum(),
                              rotorAvgModel=RotorCenter())
     return wfm(x, y, ws=ws, wd=wd, time=True)
@@ -40,7 +40,7 @@ def two_turbine_site():
 
 def test_pywake_KUL():
 
-    yaml_input = test_path / '../examples/cases/KUL_LES/wind_energy_system/system.yaml'
+    yaml_input = test_path / '../examples/cases/KUL_LES/wind_energy_system/system_pywake.yaml'
 
     # validate input
     validate_yaml(yaml_input, windIO_path / Path('plant/wind_energy_system.yaml'))
@@ -71,7 +71,7 @@ def test_pywake_4wts():
     # print(pywake_aep)
 
     wfm = two_turbine_site()
- 
+
     # Check result
     pywake_aep_expected = wfm.aep().sum()
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 0)
