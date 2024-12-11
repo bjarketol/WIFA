@@ -26,24 +26,24 @@ def run_api(yaml_input):
 
     elif model_name.lower() == 'foxes':
         foxes_aep = run_foxes(yaml_input)
-        
+
     elif model_name.lower() == 'wayve':
         run_wayve(yaml_input)
-        
-    elif model_name.lower() == 'codesaturne':
+
+    elif model_name.lower() == 'code_saturne':
         run_code_saturne(yaml_input, test_mode=True)
 
     else:
         print('Invalid Model')
 
 def run():
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("input_yaml", help="The input yaml file")
     args = parser.parse_args()
-    
+
     run_api(args.input_yaml)
-    
+
 if __name__ == "__main__":
     run()
-    
+
