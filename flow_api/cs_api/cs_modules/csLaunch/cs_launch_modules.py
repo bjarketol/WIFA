@@ -234,7 +234,6 @@ class CS_study:
         #
         self.case_dir = case_dir
         self.result_dir = result_dir
-        self.postprocess_only = False
         self.case_name = None
         #
         self.cs_path = cs_path
@@ -570,7 +569,7 @@ class CS_study:
 
         #
         if(standalone):
-            bash_file=open(launch_file_name,"w")
+            bash_file=open(self.cs_run_folder + sep + launch_file_name,"w")
             bash_file.write("#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
                             "#SBATCH --time=00:30:00\n")
@@ -979,9 +978,6 @@ class CS_study:
                                                       'attributes.analysis.HPC_config.wckey')
 
         ####################### OUTPUT DATA CONFIG ##########################
-        if get_value(self.wind_system_data, 'attributes.analysis.run_type')=="postprocess":
-            self.postprocess_only = True
-
         self.output.output_folder = self.cs_run_folder + '/' + get_value(self.wind_system_data,\
                                                       'attributes.model_outputs_specification.output_folder')
         self.output.outputs_nc_filename = get_value(self.wind_system_data,\
