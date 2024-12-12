@@ -7,41 +7,15 @@ import mpmath
 import warnings
 import xarray as xr
 import argparse
-from foxes import ModelBook
-from foxes.input.windio.read_attributes import _read_analysis
-
-from wayve.abl.abl import ABL
-from wayve.forcing.wind_farms.wind_farm import WindFarm, Turbine
-from wayve.forcing.wind_farms.dispersive_stresses import DispersiveStresses
-from wayve.forcing.wind_farms.entrainment import ConstantFlux
-from wayve.forcing.apm_forcing import ForcingComposite
-from wayve.apm import APM
-from wayve.grid.grid import Stat2Dgrid
-from wayve.momentum_flux_parametrizations import FrictionCoefficients
-from wayve.pressure.gravity_waves.gravity_waves import Uniform, NonUniform
-from wayve.solvers import FixedPointIteration
-from wayve.abl.abl_tools import Cg_cubic, alpha_cubic
-from wayve.abl import ci_methods
-from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.varying_background import (
-    WakeModelVelocityHandler,
-    SelfSimilarWMVH,
-)
-from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.velocity_matching import (
-    VelocityMatching,
-)
-from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.pressure_based import (
-    PressureBased,
-)
-from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.upstream import (
-    Upstream,
-)
-from wayve.forcing.wind_farms.wake_model_coupling.wake_models.lanzilao_merging import (
-    Lanzilao,
-)
-from wayve.couplings.foxes_coupling import FoxesWakeModel
 
 
 def run_wayve(yamlFile, output_dir="output", debug_mode=False):
+    # General APM setup
+    from wayve.apm import APM
+    from wayve.grid.grid import Stat2Dgrid
+    from wayve.momentum_flux_parametrizations import FrictionCoefficients
+    from wayve.pressure.gravity_waves.gravity_waves import Uniform, NonUniform
+    from wayve.solvers import FixedPointIteration
 
     #####################
     # Read out yaml file
@@ -295,6 +269,8 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
 
 def nieuwstadt83_profiles(zh, v, wd, z0=1.0e-1, h=1.5e3, fc=1.0e-4, ust=0.666):
     """Set up the cubic analytical profile from Nieuwstadt (1983), based on hub height velocity information"""
+    # Atmospheric state setup
+    from wayve.abl.abl_tools import Cg_cubic, alpha_cubic
 
     # Constants #
     kappa = 0.41  # Von Karman constant
@@ -412,6 +388,8 @@ def rotate_xy_arrays(xs, ys, angle):
 def ci_fitting(
     zs, ths, l_mo=5.0e3, blh=1.0e3, dh_max=300.0, serz=True, plot_fits=False
 ):
+    # Atmospheric state setup
+    from wayve.abl import ci_methods
 
     # Stable or unstable atmosphere
     stable = 0.0 < l_mo < 100
@@ -528,6 +506,11 @@ def read_turbine_type(turb_dat):
 
 
 def wf_setup(farm_dat, analysis_dat, L_filter=1.0e3):
+    # WAYVE imports
+    from wayve.forcing.wind_farms.wind_farm import WindFarm, Turbine
+    from wayve.forcing.wind_farms.dispersive_stresses import DispersiveStresses
+    from wayve.forcing.wind_farms.entrainment import ConstantFlux
+    from wayve.forcing.apm_forcing import ForcingComposite
 
     ####################
     # Set up WindFarm object
@@ -596,6 +579,20 @@ def wf_setup(farm_dat, analysis_dat, L_filter=1.0e3):
 
 
 def wm_coupling_setup(analysis_dat, wake_model):
+    # WAYVE imports
+    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.varying_background import (
+        WakeModelVelocityHandler,
+        SelfSimilarWMVH,
+    )
+    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.velocity_matching import (
+        VelocityMatching,
+    )
+    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.pressure_based import (
+        PressureBased,
+    )
+    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.upstream import (
+        Upstream,
+    )
 
     # Read inputs
     wmc_dat = analysis_dat["wm_coupling"]
@@ -629,6 +626,11 @@ def wm_coupling_setup(analysis_dat, wake_model):
 
 
 def wake_model_setup(analysis_dat):
+    # WAYVE imports
+    from wayve.forcing.wind_farms.wake_model_coupling.wake_models.lanzilao_merging import (
+        Lanzilao,
+    )
+    from wayve.couplings.foxes_coupling import FoxesWakeModel
 
     # WM tool
     if analysis_dat["wake_tool"] == "wayve":
@@ -649,6 +651,8 @@ def wake_model_setup(analysis_dat):
         # Use wake merging method of Lanzilao and Meyers (2021)
         wake_model = Lanzilao(ka=k_a, kb=k_b, eps_beta=ceps)
     elif analysis_dat["wake_tool"] == "foxes":
+        from foxes import ModelBook
+        from foxes.input.windio.read_attributes import _read_analysis
 
         algo_dict = dict(
             mbook=ModelBook(),
@@ -683,6 +687,8 @@ def flow_io_abl(wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True):
     serz (optional): boolean
         Whether the surface-extended version of the RZ model is used (default: True)
     """
+    # Atmospheric state setup
+    from wayve.abl.abl import ABL
 
     # Constants #
     gravity = 9.80665  # [m s-2]

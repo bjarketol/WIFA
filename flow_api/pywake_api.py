@@ -10,40 +10,6 @@ import argparse
 from scipy.interpolate import interp1d
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 
-from py_wake import HorizontalGrid
-from py_wake.deficit_models.fuga import FugaDeficit
-from py_wake.site import XRSite
-from py_wake.wind_turbines import WindTurbine
-from py_wake.wind_farm_models import PropagateDownwind, All2AllIterative
-from py_wake.examples.data.hornsrev1 import Hornsrev1Site
-from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
-from py_wake.deflection_models import JimenezWakeDeflection
-from py_wake.deficit_models.noj import NOJLocalDeficit
-from py_wake.deficit_models.gaussian import (
-    BastankhahGaussianDeficit,
-    TurboGaussianDeficit,
-    BlondelSuperGaussianDeficit2020,
-)
-from py_wake.turbulence_models import (
-    STF2005TurbulenceModel,
-    STF2017TurbulenceModel,
-    CrespoHernandez,
-)
-from py_wake import NOJ, BastankhahGaussian
-from py_wake.deficit_models import SelfSimilarityDeficit2020
-from py_wake.superposition_models import LinearSum, SquaredSum
-from py_wake.rotor_avg_models import (
-    RotorCenter,
-    GridRotorAvg,
-    EqGridRotorAvg,
-    GQGridRotorAvg,
-    CGIRotorAvg,
-    PolarGridRotorAvg,
-    polar_gauss_quadrature,
-    GaussianOverlapAvgModel,
-)
-from py_wake.wind_turbines import WindTurbines
-
 # Define default values for wind_deficit_model parameters
 DEFAULTS = {
     "wind_deficit_model": {
@@ -128,6 +94,40 @@ def weighted_quantile(
 
 
 def run_pywake(yamlFile, output_dir="output"):
+
+    from py_wake import HorizontalGrid
+    from py_wake.deficit_models.fuga import FugaDeficit
+    from py_wake.site import XRSite
+    from py_wake.wind_turbines import WindTurbine
+    from py_wake.wind_farm_models import PropagateDownwind, All2AllIterative
+    from py_wake.examples.data.hornsrev1 import Hornsrev1Site
+    from py_wake.wind_turbines.power_ct_functions import PowerCtTabular
+    from py_wake.deflection_models import JimenezWakeDeflection
+    from py_wake.deficit_models.noj import NOJLocalDeficit
+    from py_wake.deficit_models.gaussian import (
+        BastankhahGaussianDeficit,
+        TurboGaussianDeficit,
+        BlondelSuperGaussianDeficit2020,
+    )
+    from py_wake.turbulence_models import (
+        STF2005TurbulenceModel,
+        STF2017TurbulenceModel,
+        CrespoHernandez,
+    )
+    from py_wake import NOJ, BastankhahGaussian
+    from py_wake.deficit_models import SelfSimilarityDeficit2020
+    from py_wake.superposition_models import LinearSum, SquaredSum
+    from py_wake.rotor_avg_models import (
+        RotorCenter,
+        GridRotorAvg,
+        EqGridRotorAvg,
+        GQGridRotorAvg,
+        CGIRotorAvg,
+        PolarGridRotorAvg,
+        polar_gauss_quadrature,
+        GaussianOverlapAvgModel,
+    )
+    from py_wake.wind_turbines import WindTurbines
 
     system_dat = load_yaml(yamlFile)
 
