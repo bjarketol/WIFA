@@ -7,6 +7,7 @@ import mpmath
 import warnings
 import xarray as xr
 import argparse
+from pathlib import Path
 
 
 def run_wayve(yamlFile, output_dir="output", debug_mode=False):
@@ -259,10 +260,18 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
 
     # Combine into total dataset
     ds_full = xr.concat(ds_list, dim="states")
-    ds_full.to_netcdf(output_dir + "/" + turbine_nc_filename)
+    if type(output_dir) != str:
+        output_fn = output_dir / Path(turbine_nc_filename)
+    else:
+        output_fn = output_dir + "/" + turbine_nc_filename
+    ds_full.to_netcdf(output_fn)
     if report_flow:
         ds_ff_full = xr.concat(ds_ff_list, dim="states")
-        ds_ff_full.to_netcdf(output_dir + "/" + flow_nc_filename)
+        if type(output_dir) != str:
+            output_fn = output_dir / Path(flow_nc_filename)
+        else:
+            output_fn = output_dir + "/" + flow_nc_filename
+        ds_ff_full.to_netcdf(output_fn)
 
     return
 
