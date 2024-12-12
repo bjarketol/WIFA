@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flow_api"
-version = "0.2"
+version = "1.0"
 authors = [
   {name = "Julian Quick"},
   {name = "Rem-Sophia Mouradi"},
@@ -23,7 +23,7 @@ maintainers = [
 ]
 description = "Unified interface to wake and flow models"
 readme = "README.md"
-license = {text = "MIT License"}
+license = {file = "LICENSE"}
 keywords = ["Wind farm", "Wake modelling"]
 classifiers = [
     "Topic :: Scientific/Engineering",
@@ -45,7 +45,7 @@ dependencies = [
     "py_wake>=2.6.5",
     "foxes>=1.2.3",
     "windIO @ git+https://github.com/EUFLOW/windIO@master",
-    "wayve @ git+https://gitlab.kuleuven.be/TFSO-software/wayve@main",
+    "wayve @ git+https://gitlab.kuleuven.be/TFSO-software/wayve@dev_foxes",
 ]
 
 [project.optional-dependencies]
