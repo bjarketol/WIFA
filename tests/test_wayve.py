@@ -1,4 +1,4 @@
-from flow_api.wayve_api import run_wayve
+from wifa.wayve_api import run_wayve
 from windIO.utils.yml_utils import validate_yaml
 import os
 from pathlib import Path

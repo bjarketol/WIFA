@@ -2,7 +2,7 @@ from netCDF4 import Dataset
 import sys
 from os import path, sep
 import numpy as np
-import flow_api.cs_api.cs_modules.csPostpro.cs_postprocess_utils as cs_pp
+import wifa.cs_api.cs_modules.csPostpro.cs_postprocess_utils as cs_pp
 
 
 postpro_dir = sys.argv[1]

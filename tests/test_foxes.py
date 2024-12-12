@@ -1,4 +1,4 @@
-from flow_api.foxes_api import run_foxes
+from wifa.foxes_api import run_foxes
 from windIO.utils.yml_utils import validate_yaml
 from pathlib import Path
 from windIO import __path__ as wiop
