@@ -652,15 +652,20 @@ def wake_model_setup(analysis_dat):
         wake_model = Lanzilao(ka=k_a, kb=k_b, eps_beta=ceps)
     elif analysis_dat["wake_tool"] == "foxes":
         from foxes import ModelBook
-        from foxes.input.windio.read_attributes import _read_analysis
+        from foxes.utils import Dict
+        from foxes.input.yaml.windio.read_attributes import _read_analysis
 
-        algo_dict = dict(
-            mbook=ModelBook(),
-            wake_models=[],
-            verbosity=0,
+        idict = Dict(
+            algorithm=Dict(
+                wake_models=[],
+                name="wayfxs.algorithm",
+                verbosity=1,
+            ),
+            name="wayfxs",
         )
-        _read_analysis(analysis_dat, algo_dict, verbosity=1)
-        wake_model = FoxesWakeModel(**algo_dict)
+        mbook = ModelBook()
+        _read_analysis(analysis_dat, idict, mbook=mbook, verbosity=1)
+        wake_model = FoxesWakeModel(**idict["algorithm"])
     else:
         raise NotImplementedError(
             f"Wake tool '{analysis_dat['wake_tool']}' not implemented!"
