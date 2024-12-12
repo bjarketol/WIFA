@@ -139,8 +139,8 @@ class CS_output:
         self.znumber=None
         self.zcoords = None
         self.xy_sampling_type = None
-        self.xbounds=None
-        self.ybounds=None
+        self.x_bounds=None
+        self.y_bounds=None
         self.dx=None
         self.dy=None
         #
@@ -234,7 +234,6 @@ class CS_study:
         #
         self.case_dir = case_dir
         self.result_dir = result_dir
-        self.postprocess_only = False
         self.case_name = None
         #
         self.cs_path = cs_path
@@ -570,7 +569,7 @@ class CS_study:
 
         #
         if(standalone):
-            bash_file=open(launch_file_name,"w")
+            bash_file=open(self.cs_run_folder + sep + launch_file_name,"w")
             bash_file.write("#!/bin/bash\n"+"#SBATCH --nodes=1\n"+ \
                             "#SBATCH --cpus-per-task=1\n"+ \
                             "#SBATCH --time=00:30:00\n")
@@ -591,7 +590,7 @@ class CS_study:
 
             #postprocessing command
             if self.output.write_fields:
-                bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.case_name+" "+self.case_dir+"\n")
+                bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.case_name+" "+self.case_dir+" "+str(self.output.x_bounds[0])+" "+str(self.output.x_bounds[1])+" "+str(self.output.y_bounds[0])+" "+str(self.output.y_bounds[1])+" "+str(self.output.dx)+" "+str(self.output.dy)+"\n")
             bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_turbine_data.py ../"+self.output.output_folder+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str)
             bash_file.close()
         else:
@@ -617,7 +616,7 @@ class CS_study:
 
             #postprocessing command
             if self.output.write_fields:
-                bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.case_name+" "+self.case_dir+"\n")
+                bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_fields.py ../"+self.output.output_folder+" "+self.output.field_nc_filename+" "+self.case_name+" "+self.case_dir+" "+str(self.output.x_bounds[0])+" "+str(self.output.x_bounds[1])+" "+str(self.output.y_bounds[0])+" "+str(self.output.y_bounds[1])+" "+str(self.output.dx)+" "+str(self.output.dy)+"\n")
             bash_file.write(self.python_exe+" "+self.cs_api_path+sep+"cs_modules"+sep+"csPostpro"+sep+"write_cs_turbine_data.py ../"+self.output.output_folder+" "+self.output.outputs_nc_filename+" "+str(len(self.farm.rotor_diameters))+" "+self.case_name+" "+self.case_dir+" "+ntmax_str+"\n" \
                             "EOF\n"+")\n" + \
                             "# Extract the job ID from the output of sbatch\n" + \
@@ -979,9 +978,6 @@ class CS_study:
                                                       'attributes.analysis.HPC_config.wckey')
 
         ####################### OUTPUT DATA CONFIG ##########################
-        if get_value(self.wind_system_data, 'attributes.analysis.run_type')=="postprocess":
-            self.postprocess_only = True
-
         self.output.output_folder = self.cs_run_folder + '/' + get_value(self.wind_system_data,\
                                                       'attributes.model_outputs_specification.output_folder')
         self.output.outputs_nc_filename = get_value(self.wind_system_data,\
@@ -1010,8 +1006,21 @@ class CS_study:
                 print("WARNING : code_saturne does not support grid interpolation. Flow field will be stored on original grid")
                 self.output.x_bounds=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.x_bounds')
                 self.output.y_bounds=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.y_bounds')
+
                 self.output.dx=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.dx')
                 self.output.dy=get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.dy')
+                Nx = get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.Nx')
+                Ny = get_value(self.wind_system_data,'attributes.model_outputs_specification.flow_field.z_planes.Ny')
+                if (Nx != None):
+                    self.output.dx = abs(self.output.x_bounds[1]-self.output.x_bounds[0])/Nx
+                if (Ny != None):
+                    self.output.dy = abs(self.output.y_bounds[1]-self.output.y_bounds[0])/Ny
+            else:
+                self.output.x_bounds = [None, None]
+                self.output.y_bounds = [None, None]
+                self.output.dx = None
+                self.output.dy = None
+
 
         self.output.times = self.inflow.times #default
         self.output.run_times = self.inflow.run_times #default

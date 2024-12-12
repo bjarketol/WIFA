@@ -17,5 +17,14 @@ attributes:
       output_variables: ['power', 'rotor_effective_velocity'] #'frequency'
     #
     flow_field:
-      report: False
+      report: True
+      output_variables: ['wind_speed']
+      flow_nc_filename: flow_field.nc
+      z_planes:
+        z_sampling: "hub_heights"
+        xy_sampling: "grid"
+        x_bounds: [-1000, 5000]
+        y_bounds: [-1000, 1000]
+        dx: 150
+        dy: 150
 
