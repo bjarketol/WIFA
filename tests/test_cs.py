@@ -1,4 +1,4 @@
-from flow_api.cs_api.cs_modules.csLaunch.cs_run_function import run_code_saturne
+from wifa.cs_api.cs_modules.csLaunch.cs_run_function import run_code_saturne
 from windIO.utils.yml_utils import validate_yaml
 from pathlib import Path
 from windIO import __path__ as wiop

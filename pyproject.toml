@@ -5,21 +5,22 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "flow_api"
+name = "wifa"
 version = "1.0"
 authors = [
   {name = "Julian Quick"},
   {name = "Rem-Sophia Mouradi"},
   {name = "Jonas Schulte"},
-  {name = "Koen Devesse"},  
-  {name = "Paul van der Laan"}, 
-  {name = "Antoine Mathieu"}, 
+  {name = "Koen Devesse"},
+  {name = "Paul van der Laan"},
+  {name = "Antoine Mathieu"},
 ]
 maintainers = [
   {name = "Julian Quick"},
   {name = "Rem-Sophia Mouradi"},
   {name = "Jonas Schulte"},
-  {name = "Koen Devesse"}, 
+  {name = "Koen Devesse"},
+  {name = "Antoine Mathieu"},
 ]
 description = "Unified interface to wake and flow models"
 readme = "README.md"
@@ -63,17 +64,16 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://gitlab.windenergy.dtu.dk/eu-flow/wp4/FLOW_API/"
-Documentation = "https://gitlab.windenergy.dtu.dk/eu-flow/wp4/FLOW_API/"
-Repository = "https://gitlab.windenergy.dtu.dk/eu-flow/wp4/FLOW_API.git"
-"Bug Tracker" = "https://gitlab.windenergy.dtu.dk/eu-flow/wp4/FLOW_API/issues"
+Homepage = "https://github.com/EUFLOW/WIFA/"
+Repository = "https://github.com/EUFLOW/WIFA.git"
+"Bug Tracker" = "https://github.com/EUFLOW/WIFA/issues"
 
 [tool.setuptools.packages.find]
 exclude = ["notebooks", "examples", "tests", "docs", "recipe", "results", "output"]
 
 [project.scripts]
-flow_api = "flow_api.main_api:run"
-flow_api_foxes = "flow_api.foxes_api:run"
-flow_api_pywake = "flow_api.pywake_api:run"
-flow_api_wayve = "flow_api.wayve_api:run"
-flow_api_saturne = "flow_api.cs_api.cs_modules.csLaunch.cs_run_function:run"
+wifa = "wifa.main_api:run"
+wifa_foxes = "wifa.foxes_api:run"
+wifa_pywake = "wifa.pywake_api:run"
+wifa_wayve = "wifa.wayve_api:run"
+wifa_saturne = "wifa.cs_api.cs_modules.csLaunch.cs_run_function:run"

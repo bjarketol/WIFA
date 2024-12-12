@@ -15,7 +15,7 @@ import yaml
 from datetime import datetime, timedelta
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 from functools import reduce
-import flow_api.cs_api.cs_modules.csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
+import wifa.cs_api.cs_modules.csMeteo.nieuwstadt_stable_profiles_utils as nwstdt
 
 
 def theta2temp(theta, z_or_dz, P0, Pref=1000.0, g=9.81, Rair=287.0, Cp=1005.0):

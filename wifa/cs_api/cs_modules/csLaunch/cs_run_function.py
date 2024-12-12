@@ -1,10 +1,10 @@
-from flow_api.cs_api.cs_modules.csLaunch.cs_launch_modules import *
+from wifa.cs_api.cs_modules.csLaunch.cs_launch_modules import *
 import os as os
 from os import sep, mkdir, walk
 import numpy as np
 from datetime import datetime
 import shutil
-from flow_api.cs_api import (
+from wifa.cs_api import (
     cs_exe_path,
     cs_api_path,
     salome_exe_path,

@@ -1,4 +1,4 @@
-from flow_api.pywake_api import run_pywake
+from wifa.pywake_api import run_pywake
 from py_wake.tests import npt
 import os
 from pathlib import Path
