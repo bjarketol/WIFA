@@ -3,10 +3,8 @@ from .pywake_api import run_pywake
 from .cs_api.cs_modules.csLaunch.cs_run_function import run_code_saturne
 from .wayve_api import run_wayve
 import os
-import yaml
 import sys
 import argparse
-
 import windIO
 from windIO.utils.yml_utils import validate_yaml, load_yaml
 

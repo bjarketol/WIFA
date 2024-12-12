@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 from windIO.utils.yml_utils import load_yaml
+from foxes.input.yaml import read_windio, run_dict
 
 
 def run_foxes(
@@ -53,8 +54,6 @@ def run_foxes(
         foxes output class
 
     """
-
-    from foxes.input.yaml import read_windio, run_dict
 
     if isinstance(input_yaml, dict):
         wio = input_yaml
