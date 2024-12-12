@@ -3,7 +3,7 @@ site: !include ../plant_energy_site/site.yaml
 wind_farm: !include ../plant_wind_farm/awaken_farms.yaml
 attributes:
   flow_model:
-    name: pyWake
+    name: wayve
   analysis: !include analysis.yaml
 
   model_outputs_specification:

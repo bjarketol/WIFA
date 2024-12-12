@@ -8,19 +8,25 @@ APM_additional_terms:
     apm_mfp_settings:   # Only used when mfp_type is "constant_flux"
       a_mfp: 0.120  # Default: 0.120
       d_mfp: 27.80  # Default: 27.80
+  apm_disp_stresses:  # Dispersive stresses parametrization
+    ds_type: "subgrid"   # Options: None, "subgrid". Default: None
 apm_grid:
-  Lx: 1.e6
-  Ly: 1.e6
+  Lx: 1.e7
+  Ly: 30.e3
   dx: 500
   L_filter: 1.e3
 wake_tool: "wayve"  # Options: "wayve", "foxes" (pywake to do). Default: "wayve"
 wm_coupling:
-  method: "PB"  # Options: VM, PB, US (see https://dx.doi.org/10.1088/1742-6596/2767/9/092079)
+  method: "VM"  # Options: "VM", "PB", "US" (see https://dx.doi.org/10.1088/1742-6596/2767/9/092079). Default: "PB"
+  settings: # Contents depend on method
+    alpha: 0.4  # Ratio of filter length to shape function spacing (has to be specified when using "VM", no effect otherwise)
+  subgrid:
+    include_subgrid: True   # Can not be False when using VM. Default: False
+    D_to_dx: 8  # Ratio of average turbine diameter to subgrid spacing
 
 #pywake and foxes
 wind_deficit_model:
-  name: SuperGaussian
-  #name: Bastankhah2014
+  name: Bastankhah2014
   wake_expansion_coefficient: # k = ka*ti + kb
     k_a: 0.0
     k_b: 0.04
@@ -31,20 +37,20 @@ axial_induction_model: Madsen
 deflection_model:
   name: None
 turbulence_model:
-  name: CrespoHernandez
+  name: None
 superposition_model:
-  ws_superposition: Linear
+  ws_superposition: Product   # Only option that is implemented in wayve.
   ti_superposition: Squared
 rotor_averaging:
   grid: grid
-  n_x_grid_points: 5
-  n_y_grid_points: 5
+  n_x_grid_points: 4
+  n_y_grid_points: 4
   background_averaging: center
   wake_averaging: center
   wind_speed_exponent_for_power: 1
   wind_speed_exponent_for_ct: 1
 blockage_model:
-  name: SelfSimilarityDeficit2020
+  name: None
 
 #code_saturne
 run_type: "simulate" #"postprocess"

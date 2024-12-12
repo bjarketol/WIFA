@@ -17,9 +17,10 @@ def schema_path():
 def windio_path():
     return Path(wiop[0])
 
-def validate_system_yaml(base_path, case_path, windio_path, schema_path):
+def validate_system_yaml(base_path, case_path, windio_path, schema_path, system_fn="system.yaml"):
     """Helper function to validate a system.yaml file"""
-    system_yaml = base_path / case_path / "wind_energy_system/system.yaml"
+    yaml_fn = "wind_energy_system/" + system_fn
+    system_yaml = base_path / case_path / yaml_fn
     validate_yaml(system_yaml, windio_path / schema_path)
 
 # Test cases
@@ -30,6 +31,10 @@ def test_awaken_schema(base_path, windio_path, schema_path):
 def test_kul_les_schema(base_path, windio_path, schema_path):
     """Test KUL_LES case schema"""
     validate_system_yaml(base_path, "KUL_LES", windio_path, schema_path)
+
+def test_kul_les_pywake_schema(base_path, windio_path, schema_path):
+    """Test KUL_LES pywake case schema"""
+    validate_system_yaml(base_path, "KUL_LES", windio_path, schema_path, system_fn="system_pywake.yaml")
 
 def test_open_source_scada_schema(base_path, windio_path, schema_path):
     """Test open source SCADA case schema"""
@@ -83,6 +88,10 @@ if __name__ == '__main__':
         print('Testing KUL LES...')
         test_kul_les_schema(base_path, windio_path, schema_path)
         print("✓ KUL_LES schema validated")
+
+        print('Testing KUL LES...')
+        test_kul_les_pywake_schema(base_path, windio_path, schema_path)
+        print("✓ KUL_LES pywake schema validated")
         
         print('Testing Open source SCADA...')
         test_open_source_scada_schema(base_path, windio_path, schema_path)

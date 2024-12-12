@@ -3,8 +3,8 @@ site: !include ../plant_energy_site/FLOW_UQ_vnv_toy_study_energy_site.yaml
 wind_farm: !include ../plant_wind_farm/FLOW_UQ_vnv_toy_study_wind_farm.yaml
 attributes:
   flow_model:
-    name: wayve
-  analysis: !include analysis_PB.yaml
+    name: pyWake
+  analysis: !include analysis_pywake.yaml
 
   model_outputs_specification:
     output_folder: "results"
@@ -17,14 +17,5 @@ attributes:
       output_variables: ['power', 'rotor_effective_velocity'] #'frequency'
     #
     flow_field:
-      report: True
-      output_variables: ['wind_speed']
-      flow_nc_filename: flow_field.nc
-      z_planes:
-        z_sampling: "hub_heights"
-        xy_sampling: "grid"
-        x_bounds: [-1000, 5000]
-        y_bounds: [-1000, 1000]
-        dx: 150
-        dy: 150
+      report: False
 
