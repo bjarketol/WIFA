@@ -1,0 +1,1 @@
+examples/cases/AWAKEN/plant_energy_resource/A1_profiling_lidar_1s.nc filter=lfs diff=lfs merge=lfs -text
