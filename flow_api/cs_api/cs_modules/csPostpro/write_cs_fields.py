@@ -38,7 +38,7 @@ postprocess_heights_file = open(postpro_dir+"/postprocessing_heights.csv", "r")
 postprocess_cases_file = open(postpro_dir+"/postprocessing_cases.csv", "r")
 postprocess_fields_file = open(postpro_dir+"/postprocessing_fields.csv", "r")
 
-cases = np.genfromtxt(postprocess_cases_file, delimiter=",")
+cases = np.atleast_1d(np.genfromtxt(postprocess_cases_file, delimiter=","))
 zplot = np.array(np.genfromtxt(postprocess_heights_file, delimiter=","), ndmin=1)
 fields = np.genfromtxt(postprocess_fields_file, delimiter=",", dtype=str)
 
