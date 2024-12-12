@@ -17,7 +17,7 @@ if not path.exists(postpro_dir):
 
 postprocess_cases_file = open(postpro_dir+"/postprocessing_cases.csv", "r")
 
-cases = np.genfromtxt(postprocess_cases_file, delimiter=",")
+cases = np.atleast_1d(np.genfromtxt(postprocess_cases_file, delimiter=","))
 
 ################TURBINE DATA###################
 # File creation
