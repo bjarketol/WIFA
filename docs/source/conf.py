@@ -19,14 +19,14 @@
 
 # -- Project information -----------------------------------------------------
 
-project = "FLOWAPI"
+project = "WIFA"
 copyright = "2024, EU-FLOW"
 author = "EU-FLOW"
 
 # The short X.Y version
-version = ""
+version = "1.0"
 # The full version, including alpha/beta/rc tags
-release = "0.1"
+release = "1.1"
 
 
 # -- General configuration ---------------------------------------------------
@@ -107,7 +107,7 @@ html_static_path = ["_static"]
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "FLOW APIdoc"
+htmlhelp_basename = "WIFAdoc"
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -131,7 +131,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "FLOW_API.tex", "FLOW\\_API Documentation", "EU-FLOW", "manual"),
+    (master_doc, "WIFA.tex", "WIFA Documentation", "EU-FLOW", "manual"),
 ]
 
 
@@ -139,7 +139,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "flow_api", "FLOW API Documentation", [author], 1)]
+man_pages = [(master_doc, "wifa", "WIFA Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output ----------------------------------------------
@@ -150,10 +150,10 @@ man_pages = [(master_doc, "flow_api", "FLOW API Documentation", [author], 1)]
 texinfo_documents = [
     (
         master_doc,
-        "FLOW API",
-        "FLOW API Documentation",
+        "WIFA",
+        "WIFA Documentation",
         author,
-        "FLOW API",
+        "WIFA",
         "One line description of project.",
         "Miscellaneous",
     ),

@@ -1,6 +1,6 @@
-FLOW API
+WIFA
 --------
-The FLOW API allows to BLABLA and uses the WindIO schema to format its inputs.
+WIFA is a multi-fidelity tool for wind farm simulations. It uses the WindIO schema to format its inputs.
 
 .. toctree::
    :maxdepth: 2
