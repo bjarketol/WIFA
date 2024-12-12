@@ -1,4 +1,4 @@
-#__init__.py
+# __init__.py
 
 from .foxes_api import run_foxes
 from .pywake_api import run_pywake

@@ -2,27 +2,28 @@ import argparse
 from pathlib import Path
 from windIO.utils.yml_utils import load_yaml
 
+
 def run_foxes(
-        input_yaml,
-        input_dir=None, 
-        output_dir=None, 
-        engine="default",
-        n_procs=None,
-        chunksize_states=None,
-        chunksize_points=None,
-        verbosity=1, 
-        **kwargs,
-    ):
+    input_yaml,
+    input_dir=None,
+    output_dir=None,
+    engine="default",
+    n_procs=None,
+    chunksize_states=None,
+    chunksize_points=None,
+    verbosity=1,
+    **kwargs,
+):
     """
     Runs foxes based on windio yaml input
-    
+
     Parameters
     ----------
     input_yaml: str or dict
         Path to the input data file, or the input data
     input_dir: str, optional
-        The input base directory, for cases where 
-        input_yaml is a dict. In such cases it defaults to 
+        The input base directory, for cases where
+        input_yaml is a dict. In such cases it defaults to
         cwd, otherwise to the file containing directory
     output_dir: str, optional
         The output base directory, defaults to cwd
@@ -38,7 +39,7 @@ def run_foxes(
         The verbosity level, 0 = silent
     kwargs: dict, optional
         Additional parameters for foxes.input.yaml.run_dict
-    
+
     Returns
     -------
     farm_results: xarray.Dataset, optional
@@ -54,7 +55,7 @@ def run_foxes(
     """
 
     from foxes.input.yaml import read_windio, run_dict
-    
+
     if isinstance(input_yaml, dict):
         wio = input_yaml
         idir = input_dir
@@ -93,6 +94,7 @@ def run_foxes(
         **kwargs,
     )
 
+
 def run():
     """
     Command line tool for running foxes from windio yaml file input.
@@ -109,22 +111,22 @@ def run():
         help="The windio yaml file",
     )
     parser.add_argument(
-        "-o", 
-        "--output_dir", 
-        help="The output directory", 
+        "-o",
+        "--output_dir",
+        help="The output directory",
         default=None,
     )
     parser.add_argument(
-        "-e", 
-        "--engine", 
-        help="The engine", 
+        "-e",
+        "--engine",
+        help="The engine",
         default=None,
     )
     parser.add_argument(
-        "-n", 
-        "--n_procs", 
-        help="The number of processes", 
-        default=None, 
+        "-n",
+        "--n_procs",
+        help="The number of processes",
+        default=None,
         type=int,
     )
     parser.add_argument(
@@ -142,8 +144,8 @@ def run():
         type=int,
     )
     parser.add_argument(
-        "-it", 
-        "--iterative", 
+        "-it",
+        "--iterative",
         help="Use iterative algorithm",
         action="store_true",
     )
@@ -158,15 +160,14 @@ def run():
 
     run_foxes(
         input_yaml=args.input_yaml,
-        output_dir=args.output_dir, 
+        output_dir=args.output_dir,
         engine=args.engine,
         n_procs=args.n_procs,
         chunksize_states=args.chunksize_states,
         chunksize_points=args.chunksize_points,
-        verbosity=args.verbosity, 
+        verbosity=args.verbosity,
     )
 
-    
+
 if __name__ == "__main__":
     run()
-    

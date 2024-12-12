@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
 # This file is part of Code_Saturne, a general-purpose CFD tool.
 #
@@ -20,39 +20,48 @@
 # this program; if not, write to the Free Software Foundation, Inc., 51 Franklin
 # Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
 import os
 
-#===============================================================================
+# ===============================================================================
 # Local functions
-#===============================================================================
+# ===============================================================================
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Process the command line
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+
 
 def process_command_line(argv):
     """
     Processes the passed command line arguments.
     """
     from optparse import OptionParser
+
     parser = OptionParser(usage="usage: %prog [options]")
 
-    parser.add_option("--meteo", "--meteo-file", dest="MeteoFile", type="string",
-                      help="Name of meteo file")
+    parser.add_option(
+        "--meteo",
+        "--meteo-file",
+        dest="MeteoFile",
+        type="string",
+        help="Name of meteo file",
+    )
 
     (options, args) = parser.parse_args(argv)
 
     return options
 
-#===============================================================================
-# Local functions
-#===============================================================================
 
-#===============================================================================
+# ===============================================================================
+# Local functions
+# ===============================================================================
+
+# ===============================================================================
 # Defining parameters for a calculation domain
-#===============================================================================
+# ===============================================================================
+
 
 def domain_prepare_data_add(domain):
     """
@@ -63,7 +72,9 @@ def domain_prepare_data_add(domain):
 
     return
 
-#-------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
+
 
 def domain_copy_results_add(domain):
     """
@@ -73,15 +84,17 @@ def domain_copy_results_add(domain):
 
     return
 
-#-------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
+
 
 def define_domain_parameters(domain):
     """
     Define domain execution parameters.
     """
-    
+
     # Path for cronos librairies
-    # Don't forget to change if used on gaia or another cluster 
+    # Don't forget to change if used on gaia or another cluster
     domain.compile_cflags = "-I/software/rd/saturne/usr/include/gdal"
     domain.compile_cxxflags = None
     domain.compile_fcflags = None
@@ -94,22 +107,22 @@ def define_domain_parameters(domain):
         from code_saturne.model.XMLinitialize import XMLinit
         from code_saturne.model.AtmosphericFlowsModel import AtmosphericFlowsModel
 
-        fp = os.path.join(domain.exec_dir, 'setup.xml')
-        case = Case(package = domain.package, file_name = fp)
-        case['xmlfile'] = fp
+        fp = os.path.join(domain.exec_dir, "setup.xml")
+        case = Case(package=domain.package, file_name=fp)
+        case["xmlfile"] = fp
         case.xmlCleanAllBlank(case.xmlRootNode())
         XMLinit(case).initialize()
 
-        if (options.MeteoFile):
+        if options.MeteoFile:
             t = AtmosphericFlowsModel(case)
             fullPathMeteo = options.MeteoFile
             t.setMeteoDataFileName(fullPathMeteo)
 
         case.xmlSaveDocument()
 
-
     return
 
-#-------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
 # End
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
