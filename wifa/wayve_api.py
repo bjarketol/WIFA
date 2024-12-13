@@ -10,7 +10,7 @@ import argparse
 from pathlib import Path
 
 
-def run_wayve(yamlFile, output_dir="output", debug_mode=True):#False):
+def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     # General APM setup
     from wayve.apm import APM
     from wayve.grid.grid import Stat2Dgrid
@@ -60,7 +60,7 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=True):#False):
     # Set up WindFarm and Forcing objects
     ####################
     wind_farm, forcing, wf_offset_x, wf_offset_y = wf_setup(
-        farm_dat, analysis_dat, L_filter
+        farm_dat, analysis_dat, L_filter, debug_mode
     )
     coupling = wind_farm.coupling
     wake_model = coupling.wake_model
@@ -508,7 +508,7 @@ def read_turbine_type(turb_dat):
     return hh, rd, ct_curve, cp_curve
 
 
-def wf_setup(farm_dat, analysis_dat, L_filter=1.0e3):
+def wf_setup(farm_dat, analysis_dat, L_filter=1.0e3, debug_mode=False):
     # WAYVE imports
     from wayve.forcing.wind_farms.wind_farm import WindFarm, Turbine
     from wayve.forcing.wind_farms.dispersive_stresses import DispersiveStresses
@@ -546,7 +546,7 @@ def wf_setup(farm_dat, analysis_dat, L_filter=1.0e3):
         turbine = Turbine(x[t], y[t], rd, hh, ct_curve, cp_curve)
         turbines.append(turbine)
     # Set up wake model
-    wake_model = wake_model_setup(analysis_dat)
+    wake_model = wake_model_setup(analysis_dat, debug_mode)
     # Set up coupling object
     coupling = wm_coupling_setup(analysis_dat, wake_model)
     # Generate wind farm object
@@ -628,7 +628,7 @@ def wm_coupling_setup(analysis_dat, wake_model):
     return coupling
 
 
-def wake_model_setup(analysis_dat):
+def wake_model_setup(analysis_dat, debug_mode=False):
     # WAYVE imports
     from wayve.forcing.wind_farms.wake_model_coupling.wake_models.lanzilao_merging import (
         Lanzilao,
@@ -658,17 +658,22 @@ def wake_model_setup(analysis_dat):
         from foxes.utils import Dict
         from foxes.input.yaml.windio.read_attributes import _read_analysis
 
-        idict = Dict(
-            algorithm=Dict(
-                wake_models=[],
-                name="wayfxs.algorithm",
-                verbosity=1,
-            ),
-            name="wayfxs",
+        verbosity = 1 if debug_mode else 0
+
+        algo_dict = Dict(
+            algo_type="Downwind", 
+            wake_models=[], 
+            verbosity=verbosity, 
+            name="wayve.algorithm",
         )
+
+        ana_dict = Dict(analysis_dat, name="analysis")
+        idict = Dict(algorithm=algo_dict, name="wayve")
         mbook = ModelBook()
-        _read_analysis(analysis_dat, idict, mbook=mbook, verbosity=1)
-        wake_model = FoxesWakeModel(**idict["algorithm"])
+
+        _read_analysis(ana_dict, idict, mbook=mbook, verbosity=verbosity)
+
+        wake_model = FoxesWakeModel(mbook=mbook, **idict["algorithm"])
     else:
         raise NotImplementedError(
             f"Wake tool '{analysis_dat['wake_tool']}' not implemented!"

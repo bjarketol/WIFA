@@ -10,7 +10,7 @@ test_path = Path(os.path.dirname(__file__))
 windIO_path = Path(wiop[0])
 
 
-@pytest.mark.skip()
+#@pytest.mark.skip()
 def test_wayve_4wts():
     yaml_input = test_path / "../examples/cases/windio_4turbines/wind_energy_system/system.yaml"
     validate_yaml(yaml_input, windIO_path / "plant/wind_energy_system.yaml")

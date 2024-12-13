@@ -14,7 +14,7 @@ def _run_cs(wes_dir, output_dir):
         print("\nRUNNING CODE_SATURNE ON", yaml_input, "\n")
         validate_yaml(yaml_input, windIO_path / "plant/wind_energy_system.yaml")
         run_code_saturne(
-            yaml_input, test_mode=False, output_dir=output_dir + "_" + str(i)
+            yaml_input, test_mode=False, output_dir="output_test_" + output_dir + "_" + str(i)
         )
         i += 1
 
