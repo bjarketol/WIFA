@@ -10,7 +10,7 @@ import argparse
 from pathlib import Path
 
 
-def run_wayve(yamlFile, output_dir="output", debug_mode=False):
+def run_wayve(yamlFile, output_dir="output", debug_mode=True):#False):
     # General APM setup
     from wayve.apm import APM
     from wayve.grid.grid import Stat2Dgrid
@@ -259,21 +259,15 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
         print(f"crashes: {crashes}/{len(times)}")
 
     # Combine into total dataset
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     ds_full = xr.concat(ds_list, dim="states")
-    if type(output_dir) != str:
-        output_fn = output_dir / Path(turbine_nc_filename)
-    else:
-        output_fn = output_dir + "/" + turbine_nc_filename
+    output_fn = Path(output_dir) / turbine_nc_filename
     ds_full.to_netcdf(output_fn)
     if report_flow:
         ds_ff_full = xr.concat(ds_ff_list, dim="states")
-        if type(output_dir) != str:
-            output_fn = output_dir / Path(flow_nc_filename)
-        else:
-            output_fn = output_dir + "/" + flow_nc_filename
+        output_fn = Path(output_dir) / flow_nc_filename
         ds_ff_full.to_netcdf(output_fn)
-
-    return
 
 
 def nieuwstadt83_profiles(zh, v, wd, z0=1.0e-1, h=1.5e3, fc=1.0e-4, ust=0.666):
@@ -286,7 +280,7 @@ def nieuwstadt83_profiles(zh, v, wd, z0=1.0e-1, h=1.5e3, fc=1.0e-4, ust=0.666):
     # # We iterate until we find a profile that has the requested speed at hub height, by varying ust # #
     # Iteration settings
     ust_i = ust
-    error = np.infty
+    error = np.inf
     attempt = 0
     max_attempts = 30
     tolerance = 1.0e-3
