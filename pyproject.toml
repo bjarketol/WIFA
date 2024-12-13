@@ -41,12 +41,13 @@ classifiers = [
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.8,<=3.11"
 dependencies = [
     "py_wake>=2.6.5",
     "foxes>=1.2.3",
     "windIO @ git+https://github.com/EUFLOW/windIO@master",
     "wayve @ git+https://gitlab.kuleuven.be/TFSO-software/wayve@dev_foxes",
+    "numpy<2"
 ]
 
 [project.optional-dependencies]
