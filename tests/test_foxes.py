@@ -11,6 +11,7 @@ windIO_path = Path(wiop[0])
 
 engine = None
 
+
 def _run_foxes(wes_dir):
     assert wes_dir.is_dir(), f"{wes_dir} is not a directory"
 
@@ -33,17 +34,21 @@ def _run_foxes(wes_dir):
                 engine = None
                 raise e
 
+
 def test_foxes_KUL():
     wes_dir = test_path / "../examples/cases/KUL_LES/wind_energy_system/"
     _run_foxes(wes_dir)
+
 
 def test_foxes_4wts():
     wes_dir = test_path / "../examples/cases/windio_4turbines/wind_energy_system/"
     _run_foxes(wes_dir)
 
+
 def test_foxes_abl():
     wes_dir = test_path / "../examples/cases/windio_4turbines_ABL/wind_energy_system/"
     _run_foxes(wes_dir)
+
 
 def test_foxes_abl_stable():
     wes_dir = (
@@ -51,13 +56,13 @@ def test_foxes_abl_stable():
     )
     _run_foxes(wes_dir)
 
+
 def test_foxes_profiles():
     wes_dir = (
         test_path
         / "../examples/cases/windio_4turbines_profiles_stable/wind_energy_system/"
     )
     _run_foxes(wes_dir)
-
 
 
 if __name__ == "__main__":

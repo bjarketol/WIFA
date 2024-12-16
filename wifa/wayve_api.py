@@ -661,9 +661,9 @@ def wake_model_setup(analysis_dat, debug_mode=False):
         verbosity = 1 if debug_mode else 0
 
         algo_dict = Dict(
-            algo_type="Downwind", 
-            wake_models=[], 
-            verbosity=verbosity, 
+            algo_type="Downwind",
+            wake_models=[],
+            verbosity=verbosity,
             name="wayve.algorithm",
         )
 
