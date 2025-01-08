@@ -21,14 +21,13 @@ For the latest relase, run (for `conda` consult the link above):
 
   pip install foxes
 
-For the latest developments, clone and install the `eu_flow <https://github.com/FraunhoferIWES/foxes/tree/eu_flow>`_
-branch from github:
+For the latest developments, clone and install the *dev*
+branch from `github <https://github.com/FraunhoferIWES/foxes>`_:
 
 .. code-block:: console
 
-  git clone git@github.com:FraunhoferIWES/foxes.git
+  git clone git@github.com:FraunhoferIWES/foxes.git@dev
   cd foxes
-  git checkout eu_flow
   pip install -e .
 
 
