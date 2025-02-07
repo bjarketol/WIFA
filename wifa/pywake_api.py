@@ -214,38 +214,50 @@ def run_pywake(yamlFile, output_dir="output"):
     WFYLB = np.min(system_dat["site"]["boundaries"]["polygons"][1]["y"])
     WFYUB = np.max(system_dat["site"]["boundaries"]["polygons"][1]["y"])
     checkk = "flow_field" in system_dat["attributes"]["model_outputs_specification"]
+    if checkk:
+        checkk = "z_planes" in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
     if (
         checkk
         and "xlb"
-        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
+        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
     ):
-        WFXLB = system_dat["attributes"]["model_outputs_specification"]["flow_field"][
+        WFXLB = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes'][
             "xlb"
         ]
     if (
         checkk
         and "xub"
-        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
+        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
     ):
-        WFXUB = system_dat["attributes"]["model_outputs_specification"]["flow_field"][
+        WFXUB = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes'][
             "xub"
         ]
     if (
         checkk
         and "ylb"
-        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
+        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
     ):
-        WFYLB = system_dat["attributes"]["model_outputs_specification"]["flow_field"][
+        WFYLB = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes'][
             "ylb"
         ]
     if (
         checkk
         and "yub"
-        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
+        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
     ):
-        WFYUB = system_dat["attributes"]["model_outputs_specification"]["flow_field"][
+        WFYUB = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes'][
             "yub"
         ]
+
+    if checkk and 'dx' in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']:
+        WFDX = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']['dx']
+    else:
+        WFDX = (WFXUB - WFXLB) / 100
+
+    if checkk and 'dy' in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']:
+        WFDY = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']['dy']
+    else:
+        WFDX = (WFXUB - WFXLB) / 100
 
     # get x and y positions
     if type(farm_dat["layouts"]) == list:
@@ -280,7 +292,7 @@ def run_pywake(yamlFile, output_dir="output"):
                 z_planes = system_dat["attributes"]["model_outputs_specification"][
                     "flow_field"
                 ]
-                if z_planes is not "hub_heights":
+                if z_planes != "hub_heights":
                     additional_heights = system_dat["attributes"][
                         "model_outputs_specification"
                     ]["flow_field"]["z_planes"]["z_list"]
@@ -448,7 +460,17 @@ def run_pywake(yamlFile, output_dir="output"):
     print("Running deficit ", wind_deficit_model_data)
     if wind_deficit_model_data["name"] == "Jensen":
         wakeModel = NOJLocalDeficit
-        deficit_param_mapping = {"k": "k", "k2": "k2"}
+        #deficit_param_mapping = {"k": "k", "k2": "k2"}
+        if "k_b" in system_dat["attributes"]["analysis"]["wind_deficit_model"]['wake_expansion_coefficient']:
+            # Handle k2 if present, default to 0.0 if not
+            if "k_a" in system_dat["attributes"]["analysis"]["wind_deficit_model"]['wake_expansion_coefficient']:
+               k_a = system_dat["attributes"]["analysis"]["wind_deficit_model"]['wake_expansion_coefficient']['k_a']
+            else:
+               k_a = 0
+
+            k_b = system_dat["attributes"]["analysis"]["wind_deficit_model"]['wake_expansion_coefficient']['k_b']
+            deficit_args["a"] = [k_a, k_b]
+    
     elif wind_deficit_model_data["name"].lower() == "bastankhah2014":
         wakeModel = BastankhahGaussianDeficit
         if (
@@ -760,8 +782,8 @@ def run_pywake(yamlFile, output_dir="output"):
         # if 'x_bounds' in  z_planes
         # compute flow map for specified directions (wd) and speeds (ws)
         flow_map = sim_res.flow_box(
-            x=np.linspace(WFXLB, WFXUB, 400),
-            y=np.linspace(WFYLB, WFYUB, 400),
+            x=np.linspace(WFXLB, WFXUB, WFDX),
+            y=np.linspace(WFYLB, WFYUB, WFDY),
             h=additional_heights,
             time=sim_res.time,
         )
@@ -816,8 +838,8 @@ def run_pywake(yamlFile, output_dir="output"):
             else:
                 additional_heights = sorted(list(hub_heights.values()))
             flow_map = sim_res.flow_box(
-                x=np.linspace(WFXLB, WFXUB, 100),
-                y=np.linspace(WFYLB, WFYUB, 100),
+                x=np.linspace(WFXLB, WFXUB, WFDX),
+                y=np.linspace(WFYLB, WFYUB, WFDY),
                 h=additional_heights,
                 time=sim_res.time.values,
             )
