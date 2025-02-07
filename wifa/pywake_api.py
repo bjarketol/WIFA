@@ -280,7 +280,7 @@ def run_pywake(yamlFile, output_dir="output"):
                 z_planes = system_dat["attributes"]["model_outputs_specification"][
                     "flow_field"
                 ]
-                if z_planes is not "hub_heights":
+                if z_planes != "hub_heights":
                     additional_heights = system_dat["attributes"][
                         "model_outputs_specification"
                     ]["flow_field"]["z_planes"]["z_list"]
@@ -448,7 +448,17 @@ def run_pywake(yamlFile, output_dir="output"):
     print("Running deficit ", wind_deficit_model_data)
     if wind_deficit_model_data["name"] == "Jensen":
         wakeModel = NOJLocalDeficit
-        deficit_param_mapping = {"k": "k", "k2": "k2"}
+        #deficit_param_mapping = {"k": "k", "k2": "k2"}
+        if "k_b" in system_dat["attributes"]["analysis"]["wind_deficit_model"]['wake_expansion_coefficient']:
+            # Handle k2 if present, default to 0.0 if not
+            if "k_a" in system_dat["attributes"]["analysis"]["wind_deficit_model"]['wake_expansion_coefficient']:
+               k_a = system_dat["attributes"]["analysis"]["wind_deficit_model"]['wake_expansion_coefficient']['k_a']
+            else:
+               k_a = 0
+
+            k_b = system_dat["attributes"]["analysis"]["wind_deficit_model"]['wake_expansion_coefficient']['k_b']
+            deficit_args["a"] = [k_a, k_b]
+    
     elif wind_deficit_model_data["name"].lower() == "bastankhah2014":
         wakeModel = BastankhahGaussianDeficit
         if (
