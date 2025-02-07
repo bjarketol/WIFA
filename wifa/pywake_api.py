@@ -214,38 +214,50 @@ def run_pywake(yamlFile, output_dir="output"):
     WFYLB = np.min(system_dat["site"]["boundaries"]["polygons"][1]["y"])
     WFYUB = np.max(system_dat["site"]["boundaries"]["polygons"][1]["y"])
     checkk = "flow_field" in system_dat["attributes"]["model_outputs_specification"]
+    if checkk:
+        checkk = "z_planes" in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
     if (
         checkk
         and "xlb"
-        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
+        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
     ):
-        WFXLB = system_dat["attributes"]["model_outputs_specification"]["flow_field"][
+        WFXLB = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes'][
             "xlb"
         ]
     if (
         checkk
         and "xub"
-        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
+        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
     ):
-        WFXUB = system_dat["attributes"]["model_outputs_specification"]["flow_field"][
+        WFXUB = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes'][
             "xub"
         ]
     if (
         checkk
         and "ylb"
-        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
+        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
     ):
-        WFYLB = system_dat["attributes"]["model_outputs_specification"]["flow_field"][
+        WFYLB = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes'][
             "ylb"
         ]
     if (
         checkk
         and "yub"
-        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
+        in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
     ):
-        WFYUB = system_dat["attributes"]["model_outputs_specification"]["flow_field"][
+        WFYUB = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes'][
             "yub"
         ]
+
+    if 'dx' in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
+        WFDX = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']['dx']
+    else:
+        WFDX = (WFXUB - WFXLB) / 100
+
+    if 'dy' in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']
+        WFDY = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']['dy']
+    else:
+        WFDX = (WFXUB - WFXLB) / 100
 
     # get x and y positions
     if type(farm_dat["layouts"]) == list:
@@ -770,8 +782,8 @@ def run_pywake(yamlFile, output_dir="output"):
         # if 'x_bounds' in  z_planes
         # compute flow map for specified directions (wd) and speeds (ws)
         flow_map = sim_res.flow_box(
-            x=np.linspace(WFXLB, WFXUB, 400),
-            y=np.linspace(WFYLB, WFYUB, 400),
+            x=np.linspace(WFXLB, WFXUB, WFDX),
+            y=np.linspace(WFYLB, WFYUB, WFDY),
             h=additional_heights,
             time=sim_res.time,
         )
@@ -826,8 +838,8 @@ def run_pywake(yamlFile, output_dir="output"):
             else:
                 additional_heights = sorted(list(hub_heights.values()))
             flow_map = sim_res.flow_box(
-                x=np.linspace(WFXLB, WFXUB, 100),
-                y=np.linspace(WFYLB, WFYUB, 100),
+                x=np.linspace(WFXLB, WFXUB, WFDX),
+                y=np.linspace(WFYLB, WFYUB, WFDY),
                 h=additional_heights,
                 time=sim_res.time.values,
             )
