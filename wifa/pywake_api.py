@@ -129,7 +129,11 @@ def run_pywake(yamlFile, output_dir="output"):
     )
     from py_wake.wind_turbines import WindTurbines
 
-    system_dat = load_yaml(yamlFile)
+    # allow yamlFile to be an already parsed input dict
+    if not isinstance(yamlFile, dict):
+        system_dat = load_yaml(yamlFile)
+    else:
+        system_dat = yamlFile
 
     # check for multiple turbines?
 
