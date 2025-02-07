@@ -249,12 +249,12 @@ def run_pywake(yamlFile, output_dir="output"):
             "yub"
         ]
 
-    if 'dx' in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']:
+    if checkk and 'dx' in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']:
         WFDX = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']['dx']
     else:
         WFDX = (WFXUB - WFXLB) / 100
 
-    if 'dy' in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']:
+    if checkk and 'dy' in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']:
         WFDY = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']['dy']
     else:
         WFDX = (WFXUB - WFXLB) / 100
