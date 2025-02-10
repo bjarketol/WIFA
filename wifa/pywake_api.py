@@ -9,6 +9,8 @@ import yaml
 import argparse
 from scipy.interpolate import interp1d
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
+from pathlib import Path
+
 
 # Define default values for wind_deficit_model parameters
 DEFAULTS = {
@@ -128,6 +130,8 @@ def run_pywake(yamlFile, output_dir="output"):
         GaussianOverlapAvgModel,
     )
     from py_wake.wind_turbines import WindTurbines
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # allow yamlFile to be an already parsed input dict
     if not isinstance(yamlFile, dict):
@@ -786,8 +790,8 @@ def run_pywake(yamlFile, output_dir="output"):
         # if 'x_bounds' in  z_planes
         # compute flow map for specified directions (wd) and speeds (ws)
         flow_map = sim_res.flow_box(
-            x=np.linspace(WFXLB, WFXUB, WFDX),
-            y=np.linspace(WFYLB, WFYUB, WFDY),
+            x=np.arange(WFXLB, WFXUB, WFDX),
+            y=np.arange(WFYLB, WFYUB, WFDY),
             h=additional_heights,
             time=sim_res.time,
         )
