@@ -767,6 +767,7 @@ def run_pywake(yamlFile, output_dir="output"):
     #   data['FLOW_simulation_outputs']['computed_percentiles'] = system_dat['attributes']['analysis']['outputs']['power_percentiles']['percentiles']
     #   data['FLOW_simulation_outputs']['power_percentiles'] = power_percentiles
 
+    os.makedirs(output_dir, exist_ok=True)
     if "turbine_outputs" in system_dat["attributes"]["model_outputs_specification"]:
         # print('aep per turbine', list(aep_per_turbine)); hey
         # data['FLOW_simulation_outputs']['AEP_per_turbine'] = [float(value) for value in aep_per_turbine]
