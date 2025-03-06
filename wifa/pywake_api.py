@@ -847,8 +847,8 @@ def run_pywake(yamlFile, output_dir="output"):
             else:
                 additional_heights = sorted(list(hub_heights.values()))
             flow_map = sim_res.flow_box(
-                x=np.linspace(WFXLB, WFXUB, WFDX),
-                y=np.linspace(WFYLB, WFYUB, WFDY),
+                x=np.arange(WFXLB, WFXUB, WFDX),
+                y=np.arange(WFYLB, WFYUB, WFDY),
                 h=additional_heights,
                 time=sim_res.time.values,
             )
