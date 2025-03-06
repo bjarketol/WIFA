@@ -869,7 +869,7 @@ def run_pywake(yamlFile, output_dir="output"):
             .rename(
                 {
                     "h": "z",
-                    "WS_eff": "effective_wind_speed",
+                    "WS_eff": "wind_speed",
                     "TI_eff": "turbulence_intensity",
                 }
             )
