@@ -791,8 +791,8 @@ def run_pywake(yamlFile, output_dir="output"):
         # if 'x_bounds' in  z_planes
         # compute flow map for specified directions (wd) and speeds (ws)
         flow_map = sim_res.flow_box(
-            x=np.arange(WFXLB, WFXUB, WFDX),
-            y=np.arange(WFYLB, WFYUB, WFDY),
+            x=np.arange(WFXLB, WFXUB + WFDX, WFDX),
+            y=np.arange(WFYLB, WFYUB + WFDY, WFDY),
             h=additional_heights,
             time=sim_res.time,
         )
@@ -847,8 +847,8 @@ def run_pywake(yamlFile, output_dir="output"):
             else:
                 additional_heights = sorted(list(hub_heights.values()))
             flow_map = sim_res.flow_box(
-                x=np.arange(WFXLB, WFXUB, WFDX),
-                y=np.arange(WFYLB, WFYUB, WFDY),
+                x=np.arange(WFXLB, WFXUB + WFDX, WFDX),
+                y=np.arange(WFYLB, WFYUB + WFDY, WFDY),
                 h=additional_heights,
                 time=sim_res.time.values,
             )
