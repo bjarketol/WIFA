@@ -491,11 +491,17 @@ def read_turbine_type(turb_dat):
         # Read out Cp curve
         cp = turb_dat["performance"]["Cp_curve"]["Cp_values"]
         cp_ws = turb_dat["performance"]["Cp_curve"]["Cp_wind_speeds"]
-        power_curve_type = "cp"
     elif "power_curve" in turb_dat["performance"]:
+        # Power curve data
+        cp_ws = np.array(turb_dat["performance"]["power_curve"]["power_wind_speeds"])
+        pows = np.array(turb_dat["performance"]["power_curve"]["power_values"])
+        # Filter out Nan values and zero wind speeds
+        selection = np.logical_and(np.greater(cp_ws, 0.),
+                                   np.logical_not(np.logical_or(np.isnan(cp_ws),
+                                                                np.isnan(pows))))
+        cp_ws = cp_ws[selection]
+        pows = pows[selection]
         # Convert power curve to Cp curve
-        cp_ws = turb_dat["performance"]["power_curve"]["power_wind_speeds"]
-        pows = turb_dat["performance"]["power_curve"]["power_values"]
         rotor_area = np.pi * (rd / 2) ** 2
         cp = np.divide(
             np.array(pows), 0.5 * air_density * np.array(cp_ws) ** 3 * rotor_area
