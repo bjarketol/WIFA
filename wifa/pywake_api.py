@@ -265,7 +265,7 @@ def run_pywake(yamlFile, output_dir="output"):
     if checkk and 'dy' in system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']:
         WFDY = system_dat["attributes"]["model_outputs_specification"]["flow_field"]['z_planes']['dy']
     else:
-        WFDX = (WFXUB - WFXLB) / 100
+        WFDY = (WFYUB - WFYLB) / 100
 
     # get x and y positions
     if type(farm_dat["layouts"]) == list:
