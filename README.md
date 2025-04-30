@@ -8,4 +8,4 @@ A common set of example cases can be run by the different tools interfaced in WI
 
 ## Documentation
 
-https://eu-flow.pages.windenergy.dtu.dk/wp4/FLOW_API/
+https://euflow.github.io/WIFA/
