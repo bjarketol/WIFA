@@ -10,27 +10,29 @@ import yaml
 import sys
 from py_wake.examples.data.hornsrev1 import Hornsrev1Site
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
+import numpy as np
 
 # sys.path.append(windIO.__path__[0])
 from py_wake.examples.data.dtu10mw._dtu10mw import DTU10MW
 from py_wake.deficit_models.gaussian import BastankhahGaussian
 from py_wake.superposition_models import LinearSum
+from py_wake.wind_turbines.power_ct_functions import PowerCtFunctionList, PowerCtTabular, PowerCtFunctions
 from py_wake.rotor_avg_models import RotorCenter
 import pytest
 
 
 # todo
 # - set up KUL with constant thrust turbine / wake model
-# - set up two turbines case
-#    - test vertical profile options: new file(s)?
+# - set up four turbines case with multiple turbine types
 
 
-@pytest.mark.skip(reason="skipping until PyWake supports subsets of flow cases")
-def two_turbine_site():
+@pytest.fixture
+def four_turbine_site(config_params):
     x = [0, 1248.1, 2496.2, 3744.3]
     y = [0, 0, 0, 0]
-    ws = [10.09, 10.23]
-    wd = [271.8, 266.2]
+    #ws = [10.09, 8.798, 10.31]
+    #wd = [271.8, 268.7, 271.1]
+    config_name, ws, wd = config_params
     turbine = DTU10MW()
     site = Hornsrev1Site()
     # deficit = BastankhahGaussianDeficit()
@@ -42,7 +44,7 @@ def two_turbine_site():
         superpositionModel=LinearSum(),
         rotorAvgModel=RotorCenter(),
     )
-    return wfm(x, y, ws=ws, wd=wd, time=True)
+    return wfm(x, y, ws=ws, wd=wd, time=True), config_name
 
 
 def test_pywake_KUL():
@@ -65,12 +67,24 @@ def test_pywake_KUL():
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 1)
 
 
-@pytest.mark.skip(reason="skipping until PyWake supports subsets of flow cases")
-def test_pywake_4wts():
+"""Fixture that provides configuration parameters for each test case"""
+@pytest.fixture(params=[
+    # config_name, ws values, wd values
+    ("windio_4turbines", [10.09, 8.798, 10.31], [271.8, 268.7, 271.1]),
+    ("windio_4turbines_ABL", [10.09, 8.798, 10.31], [271.8, 268.7, 271.1]),
+    ("windio_4turbines_ABL_stable", [10.09, 8.798, 10.31], [271.8, 268.7, 271.1]),
+    ("windio_4turbines_profiles_stable", [9.708, 10.1, 11.25], [271.8, 268.7, 271.0])
+])
+def config_params(request):
+    return request.param
+
+def test_pywake_4wts(four_turbine_site):
+
+    wfm, config_name = four_turbine_site
 
     yaml_input = (
         test_path
-        / "../examples/cases/windio_4turbines_2flowcases/wind_energy_system/system.yaml"
+        / f"../examples/cases/{config_name}/wind_energy_system/system.yaml"
     )
 
     # validate input
@@ -82,13 +96,59 @@ def test_pywake_4wts():
     pywake_aep = run_pywake(yaml_input, output_dir=output_dir_name)
     # print(pywake_aep)
 
-    wfm = two_turbine_site()
 
     # Check result
     pywake_aep_expected = wfm.aep().sum()
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 0)
 
 
-if __name__ == "__main__":
-    test_pywake_KUL()
-    test_pywake_4wts()
+def test_pywake_4wts_operating_flag():
+    x = [0, 1248.1, 2496.2, 3744.3]
+    y = [0, 0, 0, 0]
+    ws = [10.0910225, 10.233016, 8.797999, 9.662098, 9.78371, 10.307792]
+    wd = [271.82462, 266.20148, 268.6852, 273.61642, 263.45584, 271.05014]
+    config_name = 'timeseries_with_operating_flag'
+    turbine = DTU10MW()
+    turbine.powerCtFunction = PowerCtFunctionList(
+            key='operating',
+            powerCtFunction_lst=[PowerCtTabular(ws=[0, 100], power=[0, 0], power_unit='w', ct=[0, 0]),  # 0=No power and ct
+                             turbine.powerCtFunction],  # 1=Normal operation
+            default_value=1)
+    site = Hornsrev1Site()
+    # deficit = BastankhahGaussianDeficit()
+    wfm = BastankhahGaussian(
+        site,
+        turbine,
+        k=0.04,
+        use_effective_ws=True,
+        superpositionModel=LinearSum(),
+        rotorAvgModel=RotorCenter(),
+    )
+
+    operating = np.ones((len(ws), len(x)))
+    operating[:-2, 0] = 0
+    res = wfm(x, y, ws=ws, wd=wd, time=True, operating=operating.T)
+
+    yaml_input = (
+        test_path
+        / f"../examples/cases/{config_name}/wind_energy_system/system.yaml"
+    )
+
+    # validate input
+    validate_yaml(yaml_input, windIO_path / Path("plant/wind_energy_system.yaml"))
+
+    # compute AEP (next step is to return a richer set of outputs)
+    output_dir_name = "output_pywake_4wts"
+    Path(output_dir_name).mkdir(parents=True, exist_ok=True)
+    pywake_aep = run_pywake(yaml_input, output_dir=output_dir_name)
+    # print(pywake_aep)
+
+
+    # Check result
+    pywake_aep_expected = res.aep().sum()
+    npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 0)
+
+#if __name__ == "__main__":
+#    test_pywake_4wts_operating_flag()
+#    test_pywake_4wts()
+#    test_pywake_KUL()

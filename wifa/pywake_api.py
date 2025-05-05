@@ -8,6 +8,7 @@ import os
 import yaml
 import argparse
 from scipy.interpolate import interp1d
+from windIO.utils import plant_schemas_path
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 from pathlib import Path
 
@@ -91,13 +92,14 @@ def weighted_quantile(
         weighted_quantiles -= weighted_quantiles[0]
         weighted_quantiles /= weighted_quantiles[-1]
     else:
-        weighted_quantiles /= np.sum(sample_weight)
+        weighted_quantiles /= np.suyamlFilem(sample_weight)
     return np.interp(quantiles, weighted_quantiles, values)
 
 
 def run_pywake(yamlFile, output_dir="output"):
 
     from py_wake import HorizontalGrid
+    from py_wake.wind_turbines.power_ct_functions import PowerCtFunctionList, PowerCtTabular, PowerCtFunctions
     from py_wake.deficit_models.fuga import FugaDeficit
     from py_wake.site import XRSite
     from py_wake.wind_turbines import WindTurbine
@@ -135,6 +137,7 @@ def run_pywake(yamlFile, output_dir="output"):
 
     # allow yamlFile to be an already parsed input dict
     if not isinstance(yamlFile, dict):
+        validate_yaml(yamlFile, plant_schemas_path + "wind_energy_system.yaml")
         system_dat = load_yaml(yamlFile)
     else:
         system_dat = yamlFile
@@ -194,6 +197,11 @@ def run_pywake(yamlFile, output_dir="output"):
             ws_cutin=cutin,
             ws_cutout=cutout,
         )
+        this_turbine.powerCtFunction = PowerCtFunctionList(
+            key='operating',
+            powerCtFunction_lst=[PowerCtTabular(ws=[0, 100], power=[0, 0], power_unit='w', ct=[0, 0]),  # 0=No power and ct
+                             this_turbine.powerCtFunction],  # 1=Normal operation
+            default_value=1)
         turbines.append(this_turbine)
 
     if len(turbines) == 1:
@@ -282,12 +290,24 @@ def run_pywake(yamlFile, output_dir="output"):
         timeseries = True
         wind_resource_timeseries = resource_dat["wind_resource"]["time"]
         times = wind_resource_timeseries
+        cases_idx = np.ones(len(times)).astype(bool)
+        if 'model_outputs_specification' in system_dat["attributes"]:
+            if 'cases_run' in system_dat["attributes"]['model_outputs_specification']:
+                if not bool(system_dat["attributes"]['model_outputs_specification']['cases_run']['all_occurences']):
+                    cases_idx = system_dat["attributes"]['model_outputs_specification']['cases_run']['subset']
+
         if "height" in resource_dat["wind_resource"].keys():
             heights = resource_dat["wind_resource"]["height"]
         else:
             heights = None
-        ws = resource_dat["wind_resource"]["wind_speed"]["data"]
-        wd = resource_dat["wind_resource"]["wind_direction"]["data"]
+        ws = np.array(resource_dat["wind_resource"]["wind_speed"]["data"])[cases_idx]
+        wd = np.array(resource_dat["wind_resource"]["wind_direction"]["data"])[cases_idx]
+
+        if 'operating' in resource_dat["wind_resource"].keys():
+             operating = np.array(resource_dat["wind_resource"]['operating']['data'])[cases_idx].T
+             assert(operating.shape[0] == len(x))
+        else:
+             operating = np.ones((len(x), len(cases_idx)))
 
         if len(hub_heights) > 1:
             speeds = []
@@ -345,13 +365,13 @@ def run_pywake(yamlFile, output_dir="output"):
                     wd = interp1d(
                         heights, np.array(wd).T, axis=1, fill_value="extrapolate"
                     )(hh)
-            assert len(times) == len(ws)
+            assert len(np.array(times)[cases_idx]) == len(ws)
             assert len(wd) == len(ws)
             site = Hornsrev1Site()
         if "turbulence_intensity" not in resource_dat["wind_resource"]:
             TI = 0.02
         else:
-            TI = resource_dat["wind_resource"]["turbulence_intensity"]["data"]
+            TI = np.array(resource_dat["wind_resource"]["turbulence_intensity"]["data"])[cases_idx]
             if len(hub_heights) > 1:
                 TIs = []
                 seen = []
@@ -387,7 +407,7 @@ def run_pywake(yamlFile, output_dir="output"):
                             )
                     else:
                         ti_int = TI
-                    TIs.append(ti_int)
+                    TIs.append(ti_int[cases_idx])
                 TI = ti_int
                 site = XRSite(
                     xr.Dataset(
@@ -663,7 +683,7 @@ def run_pywake(yamlFile, output_dir="output"):
     #    sim_res = noj(x, y)
     # sim_res = windFarmModel(x, y, type=turbine_types, time=timeseries, ws=ws, wd=wd, TI=0, yaw=0, tilt=0)
     sim_res = windFarmModel(
-        x, y, type=turbine_types, time=timeseries, ws=ws, wd=wd, TI=TI, yaw=0, tilt=0
+        x, y, type=turbine_types, time=timeseries, ws=ws, wd=wd, TI=TI, yaw=0, tilt=0, operating=operating,
     )
     aep = sim_res.aep(normalize_probabilities=not timeseries).sum()
     print("aep is ", aep, "GWh")
@@ -795,6 +815,7 @@ def run_pywake(yamlFile, output_dir="output"):
             y=np.arange(WFYLB, WFYUB + WFDY, WFDY),
             h=additional_heights,
             time=sim_res.time,
+            #operating=operating # TODO
         )
 
         # remove unwanted data
@@ -851,6 +872,7 @@ def run_pywake(yamlFile, output_dir="output"):
                 y=np.arange(WFYLB, WFYUB + WFDY, WFDY),
                 h=additional_heights,
                 time=sim_res.time.values,
+                #operating=operating,
             )
         # flow_map = sim_res.flow_map(HorizontalGrid(x = np.linspace(WFXLB, WFXUB, 100),
     # y = np.linspace(WFYLB, WFYUB, 100)))
