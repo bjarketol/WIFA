@@ -21,8 +21,7 @@ import pytest
 
 # todo
 # - set up KUL with constant thrust turbine / wake model
-# - set up two turbines case
-#    - test vertical profile options: new file(s)?
+# - set up four turbines case with multiple turbine types
 
 
 @pytest.fixture
