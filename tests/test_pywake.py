@@ -25,12 +25,12 @@ import pytest
 #    - test vertical profile options: new file(s)?
 
 
-@pytest.mark.skip(reason="skipping until PyWake supports subsets of flow cases")
-def two_turbine_site():
+@pytest.fixture
+def four_turbine_site():
     x = [0, 1248.1, 2496.2, 3744.3]
     y = [0, 0, 0, 0]
-    ws = [10.09, 10.23]
-    wd = [271.8, 266.2]
+    ws = [10.09, 8.798, 10.31]
+    wd = [271.8, 268.7, 271.1]
     turbine = DTU10MW()
     site = Hornsrev1Site()
     # deficit = BastankhahGaussianDeficit()
@@ -65,12 +65,11 @@ def test_pywake_KUL():
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 1)
 
 
-@pytest.mark.skip(reason="skipping until PyWake supports subsets of flow cases")
-def test_pywake_4wts():
+def test_pywake_4wts(four_turbine_site):
 
     yaml_input = (
         test_path
-        / "../examples/cases/windio_4turbines_2flowcases/wind_energy_system/system.yaml"
+        / "../examples/cases/windio_4turbines/wind_energy_system/system.yaml"
     )
 
     # validate input
@@ -82,13 +81,13 @@ def test_pywake_4wts():
     pywake_aep = run_pywake(yaml_input, output_dir=output_dir_name)
     # print(pywake_aep)
 
-    wfm = two_turbine_site()
+    wfm = four_turbine_site
 
     # Check result
     pywake_aep_expected = wfm.aep().sum()
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 0)
 
 
-if __name__ == "__main__":
-    test_pywake_KUL()
-    test_pywake_4wts()
+#if __name__ == "__main__":
+#    test_pywake_4wts()
+#    test_pywake_KUL()
