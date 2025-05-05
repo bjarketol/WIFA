@@ -10,11 +10,13 @@ import yaml
 import sys
 from py_wake.examples.data.hornsrev1 import Hornsrev1Site
 from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
+import numpy as np
 
 # sys.path.append(windIO.__path__[0])
 from py_wake.examples.data.dtu10mw._dtu10mw import DTU10MW
 from py_wake.deficit_models.gaussian import BastankhahGaussian
 from py_wake.superposition_models import LinearSum
+from py_wake.wind_turbines.power_ct_functions import PowerCtFunctionList, PowerCtTabular, PowerCtFunctions
 from py_wake.rotor_avg_models import RotorCenter
 import pytest
 
@@ -100,6 +102,53 @@ def test_pywake_4wts(four_turbine_site):
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 0)
 
 
+def test_pywake_4wts_operating_flag():
+    x = [0, 1248.1, 2496.2, 3744.3]
+    y = [0, 0, 0, 0]
+    ws = [10.0910225, 10.233016, 8.797999, 9.662098, 9.78371, 10.307792]
+    wd = [271.82462, 266.20148, 268.6852, 273.61642, 263.45584, 271.05014]
+    config_name = 'timeseries_with_operating_flag'
+    turbine = DTU10MW()
+    turbine.powerCtFunction = PowerCtFunctionList(
+            key='operating',
+            powerCtFunction_lst=[PowerCtTabular(ws=[0, 100], power=[0, 0], power_unit='w', ct=[0, 0]),  # 0=No power and ct
+                             turbine.powerCtFunction],  # 1=Normal operation
+            default_value=1)
+    site = Hornsrev1Site()
+    # deficit = BastankhahGaussianDeficit()
+    wfm = BastankhahGaussian(
+        site,
+        turbine,
+        k=0.04,
+        use_effective_ws=True,
+        superpositionModel=LinearSum(),
+        rotorAvgModel=RotorCenter(),
+    )
+
+    operating = np.ones((len(ws), len(x)))
+    operating[:-2, 0] = 0
+    res = wfm(x, y, ws=ws, wd=wd, time=True, operating=operating.T)
+
+    yaml_input = (
+        test_path
+        / f"../examples/cases/{config_name}/wind_energy_system/system.yaml"
+    )
+
+    # validate input
+    validate_yaml(yaml_input, windIO_path / Path("plant/wind_energy_system.yaml"))
+
+    # compute AEP (next step is to return a richer set of outputs)
+    output_dir_name = "output_pywake_4wts"
+    Path(output_dir_name).mkdir(parents=True, exist_ok=True)
+    pywake_aep = run_pywake(yaml_input, output_dir=output_dir_name)
+    # print(pywake_aep)
+
+
+    # Check result
+    pywake_aep_expected = res.aep().sum()
+    npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 0)
+
 #if __name__ == "__main__":
+#    test_pywake_4wts_operating_flag()
 #    test_pywake_4wts()
 #    test_pywake_KUL()
