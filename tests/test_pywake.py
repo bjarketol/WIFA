@@ -26,11 +26,12 @@ import pytest
 
 
 @pytest.fixture
-def four_turbine_site():
+def four_turbine_site(config_params):
     x = [0, 1248.1, 2496.2, 3744.3]
     y = [0, 0, 0, 0]
-    ws = [10.09, 8.798, 10.31]
-    wd = [271.8, 268.7, 271.1]
+    #ws = [10.09, 8.798, 10.31]
+    #wd = [271.8, 268.7, 271.1]
+    config_name, ws, wd = config_params
     turbine = DTU10MW()
     site = Hornsrev1Site()
     # deficit = BastankhahGaussianDeficit()
@@ -42,7 +43,7 @@ def four_turbine_site():
         superpositionModel=LinearSum(),
         rotorAvgModel=RotorCenter(),
     )
-    return wfm(x, y, ws=ws, wd=wd, time=True)
+    return wfm(x, y, ws=ws, wd=wd, time=True), config_name
 
 
 def test_pywake_KUL():
@@ -65,11 +66,24 @@ def test_pywake_KUL():
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 1)
 
 
+"""Fixture that provides configuration parameters for each test case"""
+@pytest.fixture(params=[
+    # config_name, ws values, wd values
+    ("windio_4turbines", [10.09, 8.798, 10.31], [271.8, 268.7, 271.1]),
+    ("windio_4turbines_ABL", [10.09, 8.798, 10.31], [271.8, 268.7, 271.1]),
+    ("windio_4turbines_ABL_stable", [10.09, 8.798, 10.31], [271.8, 268.7, 271.1]),
+    ("windio_4turbines_profiles_stable", [9.708, 10.1, 11.25], [271.8, 268.7, 271.0])
+])
+def config_params(request):
+    return request.param
+
 def test_pywake_4wts(four_turbine_site):
+
+    wfm, config_name = four_turbine_site
 
     yaml_input = (
         test_path
-        / "../examples/cases/windio_4turbines/wind_energy_system/system.yaml"
+        / f"../examples/cases/{config_name}/wind_energy_system/system.yaml"
     )
 
     # validate input
@@ -81,7 +95,6 @@ def test_pywake_4wts(four_turbine_site):
     pywake_aep = run_pywake(yaml_input, output_dir=output_dir_name)
     # print(pywake_aep)
 
-    wfm = four_turbine_site
 
     # Check result
     pywake_aep_expected = wfm.aep().sum()
