@@ -304,8 +304,8 @@ def run_pywake(yamlFile, output_dir="output"):
         wd = np.array(resource_dat["wind_resource"]["wind_direction"]["data"])[cases_idx]
 
         if 'operating' in resource_dat["wind_resource"].keys():
-             operating = np.array(resource_dat["wind_resource"]['operating'])[:, cases_idx]
-             assert(operating.shape[0] == x.size)
+             operating = np.array(resource_dat["wind_resource"]['operating']['data'])[cases_idx].T
+             assert(operating.shape[0] == len(x))
         else:
              operating = np.ones((len(x), len(cases_idx)))
 
