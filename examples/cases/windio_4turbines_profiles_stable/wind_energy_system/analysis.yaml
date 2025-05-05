@@ -8,7 +8,7 @@ wind_deficit_model:
   ceps: 0.2
   use_effective_ws: true
 turbulence_model:
-  name: IEC-TI-2019
+  name: CrespoHernandez
 axial_induction_model: Madsen
 deflection_model:
   name: None
