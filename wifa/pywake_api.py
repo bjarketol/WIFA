@@ -173,13 +173,13 @@ def run_pywake(yamlFile, output_dir="output"):
             raise Exception("Bad Power Curve")
         ct = turbine_dat["performance"]["Ct_curve"]["Ct_values"]
         ct_ws = turbine_dat["performance"]["Ct_curve"]["Ct_wind_speeds"]
-        speeds = np.linspace(np.min([cp_ws, ct_ws]), np.max([cp_ws, ct_ws]), 10000)
+        speeds = np.arange(np.min([cp_ws, ct_ws]), np.max([cp_ws, ct_ws]) + 1, 1)
         cts_int = np.interp(speeds, ct_ws, ct)
         if power_curve_type == "power":
             powers = np.interp(speeds, cp_ws, pows)
         else:
             cps_int = np.interp(speeds, cp_ws, cp)
-            powers = 0.5 * cps_int * speeds**3 * 1.225 * (rd / 2) ** 2 * np.pi
+            powers = 0.5 * cps_int * speeds ** 3 * 1.225 * (rd / 2) ** 2 * np.pi
 
         if "cutin_wind_speed" in turbine_dat["performance"]:
             cutin = turbine_dat["performance"]["cutin_wind_speed"]
@@ -286,6 +286,8 @@ def run_pywake(yamlFile, output_dir="output"):
     ##################
     # construct site
     ##################
+    operating = 1
+    additional_heights = []
     if "time" in resource_dat["wind_resource"].keys():
         timeseries = True
         wind_resource_timeseries = resource_dat["wind_resource"]["time"]
@@ -636,6 +638,7 @@ def run_pywake(yamlFile, output_dir="output"):
             "%s superposition model not implemented" % superposition_model_data["name"]
         )
 
+    print('using superposition ', superposition_model_data)
     # Map the rotor averaging model
     if rotor_averaging_data["name"].lower() == "center":
         print("Using Center Average")
@@ -810,21 +813,30 @@ def run_pywake(yamlFile, output_dir="output"):
         # sorted(np.append(list(hub_heights.values()), additional_heights))
         # if 'x_bounds' in  z_planes
         # compute flow map for specified directions (wd) and speeds (ws)
-        flow_map = sim_res.flow_box(
-            x=np.arange(WFXLB, WFXUB + WFDX, WFDX),
-            y=np.arange(WFYLB, WFYUB + WFDY, WFDY),
-            h=additional_heights,
-            time=sim_res.time,
-            #operating=operating # TODO
-        )
+        if timeseries:
+           flow_map = sim_res.flow_box(
+               x=np.arange(WFXLB, WFXUB + WFDX, WFDX),
+               y=np.arange(WFYLB, WFYUB + WFDY, WFDY),
+               h=additional_heights,
+               time=sim_res.time,
+               #operating=operating # TODO
+           )
 
-        # remove unwanted data
-        flow_map = flow_map.drop_vars(["WD", "WS", "TI", "P"])
+           # remove unwanted data
+           flow_map = flow_map.drop_vars(["WD", "WS", "TI", "P"])
+        else:
+           flow_map = sim_res.flow_box(
+               x=np.arange(WFXLB, WFXUB + WFDX, WFDX),
+               y=np.arange(WFYLB, WFYUB + WFDY, WFDY),
+               h=list(hub_heights.values())
+               #operating=operating # TODO
+           )
+
 
         # raise warning if user requests data we can not provide
         if any(
             element not in ["velocity_u", "turbulence_intensity"]
-            for element in system_dat["attributes"]["analysis"][
+            for element in system_dat["attributes"][
                 "model_outputs_specification"
             ]["flow_field"]["output_variables"]
         ):
@@ -833,18 +845,20 @@ def run_pywake(yamlFile, output_dir="output"):
         # remove TI or WS if they are not requested
         if (
             "turbulence_intensity"
-            not in system_dat["attributes"]["analysis"]["model_outputs_specification"][
+            not in system_dat["attributes"]["model_outputs_specification"][
                 "flow_field"
             ]["output_variables"]
         ):
-            flow_map = flow_map.drop_vars(["TI_eff"], inplace=True)
+            #flow_map = flow_map.drop_vars(["TI_eff"])
+            pass
         if (
             "velocity_u"
-            not in system_dat["attributes"]["analysis"]["model_outputs_specification"][
+            not in system_dat["attributes"]["model_outputs_specification"][
                 "flow_field"
             ]["output_variables"]
         ):
-            flow_map = flow_map.drop_vars(["WS_eff"], inplace=True)
+            pass
+            #flow_map = flow_map.drop_vars(["WS_eff"])
 
     elif (
         "flow_field" in system_dat["attributes"]["model_outputs_specification"]
@@ -887,7 +901,7 @@ def run_pywake(yamlFile, output_dir="output"):
         # save data
         flow_map = (
             flow_map[["WS_eff", "TI_eff"]]
-            .drop(["wd", "ws"])
+            #.drop(["wd", "ws"])
             .rename(
                 {
                     "h": "z",

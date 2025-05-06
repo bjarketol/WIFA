@@ -13,11 +13,13 @@ from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
 import numpy as np
 
 # sys.path.append(windIO.__path__[0])
+from py_wake.wind_turbines import WindTurbine
 from py_wake.examples.data.dtu10mw._dtu10mw import DTU10MW
 from py_wake.deficit_models.gaussian import BastankhahGaussian
 from py_wake.superposition_models import LinearSum
 from py_wake.wind_turbines.power_ct_functions import PowerCtFunctionList, PowerCtTabular, PowerCtFunctions
 from py_wake.rotor_avg_models import RotorCenter
+import xarray as xr
 import pytest
 
 
@@ -148,7 +150,43 @@ def test_pywake_4wts_operating_flag():
     pywake_aep_expected = res.aep().sum()
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 0)
 
+def test_simple_wind_rose():
+    wifa_res = run_pywake('../examples/cases/simple_wind_rose/wind_energy_system/system.yaml')
+    x = [0, 1248.1, 2496.2, 3744.3]
+    y = [0, 0, 0, 0]
+    site = Hornsrev1Site()
+    turbine = WindTurbine(name="test", diameter=178.3, hub_height=119.0, 
+                    powerCtFunction=(PowerCtTabular(
+                             [3, 4.,5.,6.,7.,8.,9.,10.,11.,12.,13.,14.,15.,16.,17.,18.,19.,20.,21.,22.,23.,24.,25.],
+                             [0, 263388., 751154., 1440738., 2355734., 3506858., 4993092., 6849310., 9116402., 10000754., 10009590., 10000942., 10042678., 10003480., 10001600., 10001506., 10013632., 10007428., 10005360., 10002728., 10001130., 10004984., 9997558.],
+                             'W',
+                             [0.923, 0.923,0.919,0.904,0.858,0.814,0.814,0.814,0.814,0.577,0.419,0.323,0.259,0.211,0.175,0.148,0.126,0.109,0.095,0.084,0.074,0.066,0.059])))
+                             
+#  power_curve:
+#    power_values: [0, 263388., 751154., 1440738., 2355734., 3506858., 4993092., 6849310., 9116402., 10000754., 10009590., 10000942., 10042678., 10003480., 10001600., 10001506., 10013632., 10007428., 10005360., 10002728., 10001130., 10004984., 9997558.]
+#    power_wind_speeds: [3, 4.,5.,6.,7.,8.,9.,10.,11.,12.,13.,14.,15.,16.,17.,18.,19.,20.,21.,22.,23.,24.,25.]
+#  Ct_curve:
+#    Ct_values: [0.923, 0.923,0.919,0.904,0.858,0.814,0.814,0.814,0.814,0.577,0.419,0.323,0.259,0.211,0.175,0.148,0.126,0.109,0.095,0.084,0.074,0.066,0.059]
+#    Ct_wind_speeds: [3, 4.,5.,6.,7.,8.,9.,10.,11.,12.,13.,14.,15.,16.,17.,18.,19.,20.,21.,22.,23.,24.,25.]
+#hub_height: 119.0
+#rotor_diameter: 178.3
+
+    #turbine = DTU10MW()
+    wfm = BastankhahGaussian(
+        site,
+        turbine,
+        k=0.04,
+        ceps=0.2,
+        use_effective_ws=True,
+        superpositionModel=LinearSum(),
+        rotorAvgModel=RotorCenter(),
+    )
+    res = wfm(x, y, wd=np.arange(0, 361, 30), TI=0.1)
+    assert(xr.load_dataset('output/PowerTable.nc').power.mean() == res.Power.mean())
+
+
 #if __name__ == "__main__":
+#    test_simple_wind_rose()
 #    test_pywake_4wts_operating_flag()
 #    test_pywake_4wts()
 #    test_pywake_KUL()
