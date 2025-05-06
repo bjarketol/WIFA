@@ -151,7 +151,7 @@ def test_pywake_4wts_operating_flag():
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 0)
 
 def test_simple_wind_rose():
-    wifa_res = run_pywake('../examples/cases/simple_wind_rose/wind_energy_system/system.yaml')
+    wifa_res = run_pywake(test_path / '../examples/cases/simple_wind_rose/wind_energy_system/system.yaml')
     x = [0, 1248.1, 2496.2, 3744.3]
     y = [0, 0, 0, 0]
     site = Hornsrev1Site()
