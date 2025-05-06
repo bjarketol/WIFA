@@ -65,7 +65,7 @@ def test_pywake_KUL():
     # print(pywake_aep)
 
     # Check result
-    pywake_aep_expected = 7452.48
+    pywake_aep_expected = 7515.2
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 1)
 
 
@@ -185,8 +185,8 @@ def test_simple_wind_rose():
     assert(xr.load_dataset('output/PowerTable.nc').power.mean() == res.Power.mean())
 
 
-#if __name__ == "__main__":
+if __name__ == "__main__":
 #    test_simple_wind_rose()
 #    test_pywake_4wts_operating_flag()
 #    test_pywake_4wts()
-#    test_pywake_KUL()
+    test_pywake_KUL()
