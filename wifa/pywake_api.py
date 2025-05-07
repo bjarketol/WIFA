@@ -9,7 +9,7 @@ import yaml
 import argparse
 from scipy.interpolate import interp1d
 from windIO.utils import plant_schemas_path
-from windIO.utils.yml_utils import validate_yaml, Loader, load_yaml
+from windIO.utils.yml_utils import load_yaml, validate_yaml, dict_to_netcdf
 from pathlib import Path
 
 
@@ -135,6 +135,14 @@ def run_pywake(yamlFile, output_dir="output"):
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+    def dict_to_site(resource_dict):
+            resource_ds = dict_to_netcdf(resource_dict)
+            to_rename = {'height': 'h', 'wind_direction': 'wd', 'wind_speed': 'ws', 'weibull_a': 'Weibull_A', 'weibull_k': 'Weibull_k', 'sector_probability': 'Sector_frequency'}
+            for name in to_rename:
+                if name in resource_ds:
+                   resource_ds = resource_ds.rename({name : to_rename[name]})
+            return XRSite(resource_ds)
+    
     # allow yamlFile to be an already parsed input dict
     if not isinstance(yamlFile, dict):
         validate_yaml(yamlFile, plant_schemas_path + "wind_energy_system.yaml")
@@ -441,20 +449,7 @@ def run_pywake(yamlFile, output_dir="output"):
             ws = resource_dat["wind_resource"]["wind_speed"]
         else:
             ws = np.arange(2, 30, 1)
-        site = XRSite(
-            ds=xr.Dataset(
-                data_vars={
-                    "Sector_frequency": ("wd", freq["data"]),
-                    "Weibull_A": ("wd", A["data"]),
-                    "Weibull_k": ("wd", k["data"]),
-                    "TI": (
-                        resource_dat["wind_resource"]["turbulence_intensity"]["dims"],
-                        resource_dat["wind_resource"]["turbulence_intensity"]["data"],
-                    ),
-                },
-                coords={"wd": wd, "ws": ws},
-            )
-        )
+        site = dict_to_site(resource_dat["wind_resource"])
 
         timeseries = False
         TI = resource_dat["wind_resource"]["turbulence_intensity"]["data"]
@@ -463,16 +458,7 @@ def run_pywake(yamlFile, output_dir="output"):
         ws = resource_dat["wind_resource"]["wind_speed"]
         wd = resource_dat["wind_resource"]["wind_direction"]
         P = np.array(resource_dat["wind_resource"]["probability"]["data"])
-        site = XRSite(
-            ds=xr.Dataset(
-                data_vars={"P": (["wd", "ws"], P)},
-                coords={
-                    "ws": ws,
-                    "wd": wd,
-                    "TI": resource_dat["wind_resource"]["turbulence_intensity"]["data"],
-                },
-            )
-        )
+        site = dict_to_site(resource_dat["wind_resource"])
         TI = resource_dat["wind_resource"]["turbulence_intensity"]["data"]
 
     # if 'name' in system_dat['attributes']['analysis']['model_outputs_specification']:
