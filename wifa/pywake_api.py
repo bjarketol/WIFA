@@ -137,10 +137,11 @@ def run_pywake(yamlFile, output_dir="output"):
 
     def dict_to_site(resource_dict):
             resource_ds = dict_to_netcdf(resource_dict)
-            to_rename = {'height': 'h', 'wind_direction': 'wd', 'wind_speed': 'ws', 'weibull_a': 'Weibull_A', 'weibull_k': 'Weibull_k', 'sector_probability': 'Sector_frequency'}
+            to_rename = {'height': 'h', 'wind_direction': 'wd', 'wind_speed': 'ws', 'weibull_a': 'Weibull_A', 'weibull_k': 'Weibull_k', 'sector_probability': 'Sector_frequency', 'turbulence_intensity': 'TI'}
             for name in to_rename:
                 if name in resource_ds:
                    resource_ds = resource_ds.rename({name : to_rename[name]})
+            print('making site with ', resource_ds)
             return XRSite(resource_ds)
     
     # allow yamlFile to be an already parsed input dict
@@ -452,7 +453,16 @@ def run_pywake(yamlFile, output_dir="output"):
         site = dict_to_site(resource_dat["wind_resource"])
 
         timeseries = False
-        TI = resource_dat["wind_resource"]["turbulence_intensity"]["data"]
+        site_ds = dict_to_netcdf(resource_dat["wind_resource"])
+        hey
+        if 'x' in site_ds.turbulence_intensity.dims:
+            interpolated_ti = site_ds.turbulence_intensity.interp(x=x, y=y)
+            if 'height' in interpolated_ti.dims:
+                interpolated_ti = interpolated_ti.interp(height=hub_heights['0'])
+            TI = np.array([interpolated_ti.isel(x=i, y=i).values for i in range(len(x))])
+        else:
+           TI = resource_dat["wind_resource"]["turbulence_intensity"]["data"]
+         
     else:
         timeseries = False
         ws = resource_dat["wind_resource"]["wind_speed"]
