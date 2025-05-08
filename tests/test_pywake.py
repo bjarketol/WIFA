@@ -194,7 +194,6 @@ def test_simple_wind_rose():
 #   
 #    hello
 #
-'''
 if True:
 #def test_heterogeneous_wind_rose():
     turbine = WindTurbine(name="test", diameter=178.3, hub_height=119.0,
@@ -227,7 +226,6 @@ if True:
 
     wifa_res = run_pywake(test_path / '../examples/cases/heterogeneous_wind_rose_map/wind_energy_system/system.yaml')
     hey
-'''
     
 
 
