@@ -202,13 +202,10 @@ if True:
                              [0, 263388., 751154., 1440738., 2355734., 3506858., 4993092., 6849310., 9116402., 10000754., 10009590., 10000942., 10042678., 10003480., 10001600., 10001506., 10013632., 10007428., 10005360., 10002728., 10001130., 10004984., 9997558.],
                              'W',
                              [0.923, 0.923,0.919,0.904,0.858,0.814,0.814,0.814,0.814,0.577,0.419,0.323,0.259,0.211,0.175,0.148,0.126,0.109,0.095,0.084,0.074,0.066,0.059])))
-    site = ParqueFicticioSite()
-    site.ds['x'] = 10 * (site.ds.x - site.ds.x.max() + 1000)
-    site.ds['y'] = 10 * (site.ds.y - site.ds.y.max() + 1000)
-    #site.ds = site.ds.drop(['flow_inc', 'ws_mean', 'orog_spd', 'Turning', 'ti15ms', 'Elevation'])
-    #site.ds = site.ds.drop(['flow_inc', 'ws_mean', 'orog_spd', 'Turning', 'ti15ms', 'Elevation', 'Speedup', 'ws'])
-    #site.ds['ws_mean'] = site.ds.Weibull_A * special.gamma(1 + 1 / site.ds.Weibull_k)
-    site = XRSite(site.ds)
+    dat = xr.load_dataset(test_path / '../examples/cases/heterogeneous_wind_rose_map/plant_energy_resource/Stochastic_atHubHeight.nc')
+    dat['P'] = 1
+    dat = dat.rename({'wind_speed': 'WS', 'wind_direction': 'WD', 'sector_probability': 'Sector_probability', 'weibull_a': 'Weibull_a', 'weibull_k': 'Weibull_k', 'wind_turbine': 'i', 'turbulence_intensity': 'TI'})
+    site = XRSite(dat)
     wfm =  BastankhahGaussian(
         site,
         turbine,
@@ -221,11 +218,16 @@ if True:
     x = [0, 1248.1, 2496.2, 3744.3]
     y = [0, 0, 0, 0]
     TI = 0.1
-    res = wfm(x, y, TI=TI, wd=site.ds.wd)
+    res = wfm(x, y)
     res.flow_box(x=np.linspace(0, 100), y=np.linspace(-100, 100), h=[100])
+    # ^ compute AEP with PyWake
 
+
+    # compute AEP with API
     wifa_res = run_pywake(test_path / '../examples/cases/heterogeneous_wind_rose_map/wind_energy_system/system.yaml')
-    hey
+
+    # we need these to match
+    assert(wifa_res_aep == res_aep)
     
 
 
