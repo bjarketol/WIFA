@@ -454,7 +454,6 @@ def run_pywake(yamlFile, output_dir="output"):
 
         timeseries = False
         site_ds = dict_to_netcdf(resource_dat["wind_resource"])
-        hey
         if 'x' in site_ds.turbulence_intensity.dims:
             interpolated_ti = site_ds.turbulence_intensity.interp(x=x, y=y)
             if 'height' in interpolated_ti.dims:
