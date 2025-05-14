@@ -11,12 +11,12 @@ from py_wake.rotor_avg_models import RotorCenter
 from py_wake.site import XRSite
 from py_wake.superposition_models import LinearSum
 from py_wake.tests import npt
-
 from py_wake.wind_turbines import WindTurbine
 from py_wake.wind_turbines.power_ct_functions import (
     PowerCtFunctionList,
     PowerCtTabular,
 )
+from scipy.special import gamma
 from windIO import __path__ as wiop
 from windIO.utils.yml_utils import validate_yaml
 
@@ -229,7 +229,7 @@ def test_simple_wind_rose():
     #
 
 
-def test_heterogeneous_wind_rose():
+def test_heterogeneous_wind_rose_grid():
     turbine = WindTurbine(
         name="test",
         diameter=178.3,
@@ -250,6 +250,22 @@ def test_heterogeneous_wind_rose():
             "height": "h",
         }
     )
+    mean_ws = dat["Weibull_A"].values * gamma(
+        1 + 1.0 / dat["Weibull_k"].values
+    )  # shape (x,y,h,wd)
+    max_mean = np.max(mean_ws, axis=(0, 1))  # shape (h,wd)
+    speedup = mean_ws / max_mean  # normalized speed-up (x,y,h,wd)
+    dat["Speedup"] = (("x", "y", "h", "wd"), speedup)
+
+    # plot speedup for single height and wind direction
+    # dat["Speedup"].isel(h=1, wd=0).plot.contourf(
+    #     add_colorbar=True,
+    #     levels=np.arange(0.0, 1.5, 0.1),
+    #     cmap="viridis",
+    # )
+    # import matplotlib.pyplot as plt
+    # plt.show()
+
     site = XRSite(dat)
     wfm = BastankhahGaussian(
         site,
@@ -278,6 +294,30 @@ def test_heterogeneous_wind_rose():
 
     # we need these to match
     assert wifa_res == res_aep
+
+
+def test_heterogeneous_wind_rose_arbitrary():
+    ds = xr.open_dataset(test_path / "WTResource.nc").load()
+    ds = ds.rename(
+        {
+            "wind_direction": "wd",
+            "wind_speed": "ws",
+            "wind_turbine": "i",
+            "sector_probability": "Sector_frequency",
+            "weibull_a": "Weibull_A",
+            "weibull_k": "Weibull_k",
+            "turbulence_intensity": "TI",
+            "height": "h",
+        }
+    )
+    mean_ws = ds["Weibull_A"].values * gamma(
+        1 + 1.0 / ds["Weibull_k"].values
+    )  # shape (i,wd)
+    max_mean = np.max(mean_ws, axis=0)  # shape (wd,)
+    Speedup = mean_ws / max_mean  # normalized speed-up (i,wd)
+    ds["Speedup"] = (("i", "wd"), Speedup)
+
+    assert False, "Not implemented yet"
 
 
 # if __name__ == "__main__":
