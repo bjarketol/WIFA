@@ -8,6 +8,7 @@ import os
 import yaml
 import argparse
 from scipy.interpolate import interp1d
+from scipy.special import gamma
 from windIO.utils import plant_schemas_path
 from windIO.utils.yml_utils import load_yaml, validate_yaml, dict_to_netcdf
 from pathlib import Path
@@ -136,13 +137,22 @@ def run_pywake(yamlFile, output_dir="output"):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     def dict_to_site(resource_dict):
-            resource_ds = dict_to_netcdf(resource_dict)
-            to_rename = {'height': 'h', 'wind_direction': 'wd', 'wind_speed': 'ws', 'weibull_a': 'Weibull_A', 'weibull_k': 'Weibull_k', 'sector_probability': 'Sector_frequency', 'turbulence_intensity': 'TI'}
-            for name in to_rename:
-                if name in resource_ds:
-                   resource_ds = resource_ds.rename({name : to_rename[name]})
-            print('making site with ', resource_ds)
-            return XRSite(resource_ds)
+        resource_ds = dict_to_netcdf(resource_dict)
+        to_rename = {
+            "height": "h",
+            "wind_direction": "wd",
+            "wind_speed": "ws",
+            "weibull_a": "Weibull_A",
+            "weibull_k": "Weibull_k",
+            "sector_probability": "Sector_frequency",
+            "turbulence_intensity": "TI",
+            "wind_turbine": "i",
+        }
+        for name in to_rename:
+            if name in resource_ds:
+                resource_ds = resource_ds.rename({name: to_rename[name]})
+        print("making site with ", resource_ds)
+        return XRSite(resource_ds)
     
     # allow yamlFile to be an already parsed input dict
     if not isinstance(yamlFile, dict):
@@ -450,6 +460,37 @@ def run_pywake(yamlFile, output_dir="output"):
             ws = resource_dat["wind_resource"]["wind_speed"]
         else:
             ws = np.arange(2, 30, 1)
+
+        if (
+            "wind_turbine"
+            in resource_dat["wind_resource"]["sector_probability"]["dims"]
+        ):
+            mean_ws = np.array(A["data"]) * gamma(
+                1 + 1.0 / np.array(k["data"])
+            )  # shape (i,wd)
+            max_mean = np.max(mean_ws, axis=0)  # shape (wd,)
+            Speedup = mean_ws / max_mean  # normalized speed-up (i,wd)
+            resource_dat["wind_resource"]["Speedup"] = {
+                "dims": ["wind_turbine", "wd"],
+                "data": Speedup,
+            }
+
+        if all(
+            [
+                k in resource_dat["wind_resource"]["sector_probability"]["dims"]
+                for k in ["x", "y"]
+            ]
+        ):
+            mean_ws = np.array(A["data"]) * gamma(
+                1 + 1.0 / np.array(k["data"])
+            )  # shape (x,y,h,wd)
+            max_mean = np.max(mean_ws, axis=(0, 1))  # shape (h,wd)
+            Speedup = mean_ws / max_mean  # normalized speed-up (x,y,h,wd)
+            resource_dat["wind_resource"]["Speedup"] = {
+                "dims": ["x", "y", "height", "wind_direction"],
+                "data": Speedup,
+            }
+
         site = dict_to_site(resource_dat["wind_resource"])
 
         timeseries = False

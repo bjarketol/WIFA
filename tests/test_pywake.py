@@ -257,15 +257,6 @@ def test_heterogeneous_wind_rose_grid():
     speedup = mean_ws / max_mean  # normalized speed-up (x,y,h,wd)
     dat["Speedup"] = (("x", "y", "h", "wd"), speedup)
 
-    # plot speedup for single height and wind direction
-    # dat["Speedup"].isel(h=1, wd=0).plot.contourf(
-    #     add_colorbar=True,
-    #     levels=np.arange(0.0, 1.5, 0.1),
-    #     cmap="viridis",
-    # )
-    # import matplotlib.pyplot as plt
-    # plt.show()
-
     site = XRSite(dat)
     wfm = BastankhahGaussian(
         site,
@@ -296,8 +287,11 @@ def test_heterogeneous_wind_rose_grid():
     assert wifa_res == res_aep
 
 
-def test_heterogeneous_wind_rose_arbitrary():
-    ds = xr.open_dataset(test_path / "WTResource.nc").load()
+def test_heterogeneous_wind_rose_arbitrary_points():
+    ds = xr.open_dataset(
+        test_path
+        / "../examples/cases/heterogeneous_wind_rose_at_turbines/plant_energy_resource/WTResource.nc"
+    )
     ds = ds.rename(
         {
             "wind_direction": "wd",
@@ -316,8 +310,36 @@ def test_heterogeneous_wind_rose_arbitrary():
     max_mean = np.max(mean_ws, axis=0)  # shape (wd,)
     Speedup = mean_ws / max_mean  # normalized speed-up (i,wd)
     ds["Speedup"] = (("i", "wd"), Speedup)
+    site = XRSite(ds)
 
-    assert False, "Not implemented yet"
+    turbine = WindTurbine(
+        name="test",
+        diameter=178.3,
+        hub_height=119.0,
+        powerCtFunction=POWER_CT_TABLE,
+    )
+    wfm = BastankhahGaussian(
+        site,
+        turbine,
+        k=0.04,
+        ceps=0.2,
+        use_effective_ws=True,
+        superpositionModel=LinearSum(),
+        rotorAvgModel=RotorCenter(),
+    )
+    x = ds["x"].values
+    y = ds["y"].values
+
+    res_aep = (
+        wfm(x, y, ws=ds["ws"], wd=ds["wd"]).aep(normalize_probabilities=True).sum()
+    )
+
+    wifa_res = run_pywake(
+        test_path
+        / "../examples/cases/heterogeneous_wind_rose_at_turbines/wind_energy_system/system.yaml"
+    )
+
+    assert wifa_res == res_aep
 
 
 # if __name__ == "__main__":
