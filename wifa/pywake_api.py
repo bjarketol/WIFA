@@ -9,8 +9,7 @@ import yaml
 import argparse
 from scipy.interpolate import interp1d
 from scipy.special import gamma
-from windIO.utils import plant_schemas_path
-from windIO.utils.yml_utils import load_yaml, validate_yaml, dict_to_netcdf
+from windIO import load_yaml, validate as validate_yaml, dict_to_netcdf
 from pathlib import Path
 
 
@@ -156,7 +155,7 @@ def run_pywake(yamlFile, output_dir="output"):
     
     # allow yamlFile to be an already parsed input dict
     if not isinstance(yamlFile, dict):
-        validate_yaml(yamlFile, plant_schemas_path + "wind_energy_system.yaml")
+        validate_yaml(yamlFile, "plant/wind_energy_system")
         system_dat = load_yaml(yamlFile)
     else:
         system_dat = yamlFile

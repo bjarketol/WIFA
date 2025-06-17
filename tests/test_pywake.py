@@ -18,7 +18,7 @@ from py_wake.wind_turbines.power_ct_functions import (
 )
 from scipy.special import gamma
 from windIO import __path__ as wiop
-from windIO.utils.yml_utils import validate_yaml
+from windIO import validate as validate_yaml
 
 from wifa.pywake_api import run_pywake
 
