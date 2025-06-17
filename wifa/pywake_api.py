@@ -156,7 +156,7 @@ def run_pywake(yamlFile, output_dir="output"):
     # allow yamlFile to be an already parsed input dict
     if not isinstance(yamlFile, dict):
         validate_yaml(yamlFile, "plant/wind_energy_system")
-        system_dat = load_yaml(yamlFile)
+        system_dat = load_yaml(Path(yamlFile))
     else:
         system_dat = yamlFile
 
@@ -245,8 +245,8 @@ def run_pywake(yamlFile, output_dir="output"):
     resource_dat = system_dat["site"]["energy_resource"]
     WFXLB = np.min(system_dat["site"]["boundaries"]["polygons"][0]["x"])
     WFXUB = np.max(system_dat["site"]["boundaries"]["polygons"][0]["x"])
-    WFYLB = np.min(system_dat["site"]["boundaries"]["polygons"][1]["y"])
-    WFYUB = np.max(system_dat["site"]["boundaries"]["polygons"][1]["y"])
+    WFYLB = np.min(system_dat["site"]["boundaries"]["polygons"][0]["y"])
+    WFYUB = np.max(system_dat["site"]["boundaries"]["polygons"][0]["y"])
     checkk = "flow_field" in system_dat["attributes"]["model_outputs_specification"]
     if checkk:
         checkk = "z_planes" in system_dat["attributes"]["model_outputs_specification"]["flow_field"]

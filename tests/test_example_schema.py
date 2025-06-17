@@ -13,7 +13,7 @@ def base_path():
 
 @pytest.fixture
 def schema_path():
-    return Path("plant/wind_energy_system.yaml")
+    return Path("plant/wind_energy_system")
 
 
 @pytest.fixture
@@ -107,6 +107,23 @@ def test_windio_4turbines_profiles_stable_schema(base_path, windio_path, schema_
     )
     validate_yaml(grid_yaml, schema_path)
 
+def test_operating_flag_timeseries(base_path, windio_path, schema_path):
+    base_yaml = (
+        base_path / "timeseries_with_operating_flag/wind_energy_system/system.yaml"
+    )
+    validate_yaml(base_yaml, schema_path)
+
+def test_simple_wind_rose(base_path, windio_path, schema_path):
+    base_yaml = (
+        base_path / "simple_wind_rose/wind_energy_system/system.yaml"
+    )
+    validate_yaml(base_yaml, schema_path)
+
+def test_hetero_wind_rose(base_path, windio_path, schema_path):
+    base_yaml = (
+        base_path / "simple_wind_rose/wind_energy_system/system.yaml"
+    )
+    validate_yaml(base_yaml, schema_path)
 
 if __name__ == "__main__":
     # Setup default values that would normally come from fixtures
