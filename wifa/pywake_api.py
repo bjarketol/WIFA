@@ -311,10 +311,12 @@ def run_pywake(yamlFile, output_dir="output"):
         wind_resource_timeseries = resource_dat["wind_resource"]["time"]
         times = wind_resource_timeseries
         cases_idx = np.ones(len(times)).astype(bool)
-        if 'model_outputs_specification' in system_dat["attributes"]:
-            if 'cases_run' in system_dat["attributes"]['model_outputs_specification']:
-                if not bool(system_dat["attributes"]['model_outputs_specification']['cases_run']['all_occurences']):
-                    cases_idx = system_dat["attributes"]['model_outputs_specification']['cases_run']['subset']
+        if 'model_outputs_specification' in system_dat["attributes"] and 'run_configuration' in system_dat["attributes"]['model_outputs_specification']:
+            run_config = system_dat["attributes"]['model_outputs_specification']['run_configuration']
+            if 'times_run' in run_config and not run_config['times_run'].get('all_occurences', True):
+                if 'subset' in run_config['times_run']:
+                    cases_idx = run_config['times_run']['subset']
+
 
         if "height" in resource_dat["wind_resource"].keys():
             heights = resource_dat["wind_resource"]["height"]

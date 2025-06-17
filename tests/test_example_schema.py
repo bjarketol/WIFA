@@ -121,9 +121,15 @@ def test_simple_wind_rose(base_path, windio_path, schema_path):
 
 def test_hetero_wind_rose(base_path, windio_path, schema_path):
     base_yaml = (
-        base_path / "simple_wind_rose/wind_energy_system/system.yaml"
+        base_path / "heterogeneous_wind_rose_at_turbines/wind_energy_system/system.yaml"
     )
     validate_yaml(base_yaml, schema_path)
+
+    base_yaml = (
+        base_path / "heterogeneous_wind_rose_map/wind_energy_system/system.yaml"
+    )
+    validate_yaml(base_yaml, schema_path)
+
 
 if __name__ == "__main__":
     # Setup default values that would normally come from fixtures
