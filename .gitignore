@@ -1,5 +1,6 @@
 .vscode/
 __pycache__/
+*.pyc
 html/
 results/
 output/
@@ -9,9 +10,11 @@ output_*/
 .ipynb_checkpoints/
 *.egg-info/
 .pytest*/
+*.ruff*
+uv.lock
+.venv/
 
 *.html
-*.pyc
 _*.yaml
 *foxes*states*.nc
 *states*foxes*.nc
