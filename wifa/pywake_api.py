@@ -134,8 +134,6 @@ def run_pywake(yamlFile, output_dir="output"):
     )
     from py_wake.wind_turbines import WindTurbines
 
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
     def dict_to_site(resource_dict):
         resource_ds = dict_to_netcdf(resource_dict)
         to_rename = {
@@ -160,6 +158,15 @@ def run_pywake(yamlFile, output_dir="output"):
         system_dat = load_yaml(yamlFile)
     else:
         system_dat = yamlFile
+
+    # output_dir priority: 1) yaml file, 2) function argument, 3) default
+    output_dir = str(
+        system_dat["attributes"]
+        .get("model_outputs_specification", {})
+        .get("output_dir", output_dir)
+    )
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     # check for multiple turbines?
 
