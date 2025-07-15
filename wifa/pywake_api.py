@@ -840,8 +840,14 @@ def run_pywake(yamlFile, output_dir="output"):
         sim_res_formatted = sim_res[["Power", "WS_eff"]].rename(
             {"Power": "power", "WS_eff": "effective_wind_speed", "wt": "turbine"}
         )
-        sim_res_formatted["power"]
-        sim_res_formatted.to_netcdf(output_dir + os.sep + "PowerTable.nc")
+        turbine_nc_filename = str(
+            system_dat["attributes"]
+            .get("model_outputs_specification", {})
+            .get("turbine_outputs", {})
+            .get("turbine_nc_filename", "PowerTable.nc")
+        )
+        turbine_nc_filepath = output_dir + os.sep + turbine_nc_filename
+        sim_res_formatted.to_netcdf(turbine_nc_filepath)
 
     print(sim_res)
 
