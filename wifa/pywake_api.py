@@ -163,7 +163,7 @@ def run_pywake(yamlFile, output_dir="output"):
     output_dir = str(
         system_dat["attributes"]
         .get("model_outputs_specification", {})
-        .get("output_dir", output_dir)
+        .get("output_folder", output_dir)
     )
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
