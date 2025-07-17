@@ -7,14 +7,14 @@ attributes:
   analysis: !include analysis.yaml
 
   model_outputs_specification:
-    output_folder: "results"
+    output_folder: "output"
     #
     cases_run:
       all_occurences: False
       subset: [0, 2, 5]
     #
     turbine_outputs:
-      turbine_nc_filename: 'turbine_data.nc' # dimension = states, turbine
+      turbine_nc_filename: 'PowerTable.nc' # dimension = states, turbine
       output_variables: ['power', 'rotor_effective_velocity'] #'frequency'
     #
     flow_field:
