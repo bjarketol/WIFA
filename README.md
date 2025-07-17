@@ -10,4 +10,4 @@ A common set of example cases can be run by the different tools interfaced in WI
 
 https://euflow.github.io/WIFA/
 
-[View WIFA Architecture Diagram](docs/img/wifa_diagram.pdf)
+![WIFA Architecture Diagram](docs/img/wifa_diagram.png)
