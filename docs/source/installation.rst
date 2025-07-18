@@ -4,7 +4,7 @@ To use WIFA, there are few prerequisites that need to be installed.
 
 The prerequisites are the embeded tools, their required packages, and a windIO fork containing the modifications that were necessary to parameterize the wind farm flow. These will ultimately be merged to the main windIO package.
 
-Except for windio, each of the modelling tools can be installed independently. If you don't install one of them, you simply need to comment the concerned "import" in the  `main_api script <https://github.com/EUFLOW/WIFA/-/blob/main/flow_api/main_api.py?ref_type=heads>`_ after copying it for use.
+Except for windio, each of the modelling tools can be installed independently. If you don't install one of them, you simply need to comment the concerned "import" in the  `main_api script <https://github.com/EUFLOW/WIFA/blob/main/wifa/main_api.py>`_ after copying it for use.
 
 WindIO
 ~~~~~~~~~~~~~~~~~~~~~~~
