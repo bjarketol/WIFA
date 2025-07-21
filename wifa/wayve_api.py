@@ -683,7 +683,7 @@ def wake_model_setup(analysis_dat, debug_mode=False):
         wake_model = FoxesWakeModel(mbook=mbook, **idict["algorithm"])
     else:
         raise NotImplementedError(
-            f"Wake tool '{analysis_dat['wake_tool']}' not implemented!"
+            f"Wake tool '{wake_tool}' not implemented!"
         )
     return wake_model
 
