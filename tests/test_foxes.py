@@ -17,11 +17,11 @@ def _run_foxes(wes_dir):
 
     global engine
     if engine is None:
-        engine = Engine.new("process", verbosity=0)
+        engine = Engine.new("default", verbosity=0)
         engine.initialize()
         print("SETTING ENGINE:", engine)
 
-    for yaml_input in wes_dir.glob("system*.yaml"):
+    for yaml_input in wes_dir.glob("system.yaml"):
         if "_noXYgrid" not in str(yaml_input):
             print("\nRUNNING FOXES ON", yaml_input, "\n")
             validate_yaml(yaml_input, Path("plant/wind_energy_system"))
@@ -56,7 +56,6 @@ def test_foxes_abl_stable():
     )
     _run_foxes(wes_dir)
 
-
 def test_foxes_profiles():
     wes_dir = (
         test_path
@@ -64,6 +63,23 @@ def test_foxes_profiles():
     )
     _run_foxes(wes_dir)
 
+def test_foxes_heterogeneous_wind_rose_at_turbines():
+    wes_dir = (
+        test_path / "../examples/cases/heterogeneous_wind_rose_at_turbines/wind_energy_system/"
+    )
+    _run_foxes(wes_dir)
+
+def test_foxes_heterogeneous_wind_rose_map():
+    wes_dir = (
+        test_path / "../examples/cases/heterogeneous_wind_rose_map/wind_energy_system/"
+    )
+    _run_foxes(wes_dir)
+
+def test_foxes_simple_wind_rose():
+    wes_dir = (
+        test_path / "../examples/cases/simple_wind_rose/wind_energy_system/"
+    )
+    _run_foxes(wes_dir)
 
 if __name__ == "__main__":
     test_foxes_KUL()
@@ -71,3 +87,6 @@ if __name__ == "__main__":
     test_foxes_abl()
     test_foxes_abl_stable()
     test_foxes_profiles()
+    test_foxes_heterogeneous_wind_rose_at_turbines()
+    test_foxes_heterogeneous_wind_rose_map()
+    test_foxes_simple_wind_rose()
