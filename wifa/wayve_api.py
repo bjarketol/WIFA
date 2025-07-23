@@ -1,7 +1,7 @@
 # General packages
 import numpy as np
 from scipy.interpolate import interp1d
-from windIO.utils.yml_utils import load_yaml
+from windIO import load_yaml
 import matplotlib.pyplot as plt
 import mpmath
 import warnings
@@ -96,14 +96,14 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     times = resource_dat["wind_resource"]["time"]
     if (
         "all_occurences"
-        in system_dat["attributes"]["model_outputs_specification"]["cases_run"]
+        in system_dat["attributes"]["model_outputs_specification"]["run_configuration"]
     ):
-        all_occ = system_dat["attributes"]["model_outputs_specification"]["cases_run"][
+        all_occ = system_dat["attributes"]["model_outputs_specification"]["run_configuration"][
             "all_occurences"
         ]
         if not all_occ:
             subset = system_dat["attributes"]["model_outputs_specification"][
-                "cases_run"
+                "run_configuration"
             ]["subset"]
             times = [times[i] for i in subset]
     # Get turbine variables to output
@@ -642,7 +642,8 @@ def wake_model_setup(analysis_dat, debug_mode=False):
     from wayve.couplings.foxes_coupling import FoxesWakeModel
 
     # WM tool
-    if analysis_dat["wake_tool"] == "wayve":
+    wake_tool = analysis_dat.get("wake_tool", "wayve") # updated by Jonas -TODO update this according to updated schema
+    if wake_tool == "wayve":
         # Read wake model settings #
         wm_dat = analysis_dat["wind_deficit_model"]
         k_dat = wm_dat["wake_expansion_coefficient"]
@@ -659,7 +660,7 @@ def wake_model_setup(analysis_dat, debug_mode=False):
             raise ValueError("Wake spreading parameter not specified!")
         # Use wake merging method of Lanzilao and Meyers (2021)
         wake_model = Lanzilao(ka=k_a, kb=k_b, eps_beta=ceps)
-    elif analysis_dat["wake_tool"] == "foxes":
+    elif wake_tool == "foxes":
         from foxes import ModelBook
         from foxes.utils import Dict
         from foxes.input.yaml.windio.read_attributes import _read_analysis
@@ -682,7 +683,7 @@ def wake_model_setup(analysis_dat, debug_mode=False):
         wake_model = FoxesWakeModel(mbook=mbook, **idict["algorithm"])
     else:
         raise NotImplementedError(
-            f"Wake tool '{analysis_dat['wake_tool']}' not implemented!"
+            f"Wake tool '{wake_tool}' not implemented!"
         )
     return wake_model
 
