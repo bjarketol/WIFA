@@ -14,9 +14,10 @@ sys.path.append(windIO.__path__[0])
 
 
 def run_api(yaml_input):
-
     # validate input
-    validate_yaml(yaml_input, windIO.__path__[0] + "/plant/wind_energy_system.yaml")
+    validate_yaml(
+        yaml_input, windIO.__path__[0] + "windIO/schemas/plant/wind_energy_system.yaml"
+    )
 
     # get number of turbines
     yaml_dat = load_yaml(yaml_input)
@@ -30,7 +31,6 @@ def run_api(yaml_input):
         foxes_aep = run_foxes(yaml_input)
 
     elif model_name.lower() == "wayve":
-
         # Output directory
         # yaml_input_no_ext = os.path.splitext(yaml_input)[0]  # Remove the file extension
         # output_dir_name = 'output_wayve' + yaml_input_no_ext.replace(os.sep, '_')  # Replace directory separators
@@ -50,7 +50,6 @@ def run_api(yaml_input):
 
 
 def run():
-
     parser = argparse.ArgumentParser()
     parser.add_argument("input_yaml", help="The input yaml file")
     args = parser.parse_args()
