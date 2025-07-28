@@ -16,7 +16,7 @@ sys.path.append(windIO.__path__[0])
 def run_api(yaml_input):
     # validate input
     validate_yaml(
-        yaml_input, windIO.__path__[0] + "windIO/schemas/plant/wind_energy_system"
+        yaml_input, windIO.__path__[0] + "/windIO/schemas/plant/wind_energy_system"
     )
 
     # get number of turbines
