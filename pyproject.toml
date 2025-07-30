@@ -40,16 +40,18 @@ classifiers = [
 ]
 requires-python = ">=3.9,<3.12"
 dependencies = [
-    "py_wake>=2.6.5",
-    "foxes @ git+https://github.com/FraunhoferIWES/foxes.git@eu_flow",
-    "windIO @ git+https://github.com/EUFlow/windIO.git@master",
-    "wayve @ git+https://gitlab.kuleuven.be/TFSO-software/wayve@dev_foxes",
     "numpy<2",
     "xarray>=2022.0.0,<2025",
     "mpmath",
 ]
 
 [project.optional-dependencies]
+models = [
+    "py_wake>=2.6.5",
+    "foxes @ git+https://github.com/FraunhoferIWES/foxes.git@eu_flow",
+    "windIO @ git+https://github.com/EUFlow/windIO.git@master",
+    "wayve @ git+https://gitlab.kuleuven.be/TFSO-software/wayve@dev_foxes",
+]
 test = [
     "pytest",
     "pytest-cov",
