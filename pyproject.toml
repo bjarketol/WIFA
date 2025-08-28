@@ -38,7 +38,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
 ]
-requires-python = ">=3.9,<3.12"
+requires-python = ">=3.9,<3.13"
 dependencies = [
     "numpy<2",
     "xarray>=2022.0.0,<2025",
