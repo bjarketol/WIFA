@@ -383,20 +383,20 @@ def run_pywake(yamlFile, output_dir="output"):
             wd = wd_int
         else:
             print(np.array(ws).shape, np.array(heights).shape)
-            if heights:
-                try:
-                    ws = interp1d(heights, ws, axis=1, fill_value="extrapolate")(hh)
-                    wd = interp1d(heights, wd, axis=1, fill_value="extrapolate")(hh)
-                except ValueError:
-                    ws = interp1d(
-                        heights, np.array(ws).T, axis=1, fill_value="extrapolate"
-                    )(hh)
-                    wd = interp1d(
-                        heights, np.array(wd).T, axis=1, fill_value="extrapolate"
-                    )(hh)
-            assert len(np.array(times)[cases_idx]) == len(ws)
-            assert len(wd) == len(ws)
-            site = Hornsrev1Site()
+            # if heights:
+            #     try:
+            #         ws = interp1d(heights, ws, axis=1, fill_value="extrapolate")(hh)
+            #         wd = interp1d(heights, wd, axis=1, fill_value="extrapolate")(hh)
+            #     except ValueError:
+            #         ws = interp1d(
+            #             heights, np.array(ws).T, axis=1, fill_value="extrapolate"
+            #         )(hh)
+            #         wd = interp1d(
+            #             heights, np.array(wd).T, axis=1, fill_value="extrapolate"
+            #         )(hh)
+            # assert len(np.array(times)[cases_idx]) == len(ws)
+            # assert len(wd) == len(ws)
+            # site = Hornsrev1Site()
         if "turbulence_intensity" not in resource_dat["wind_resource"]:
             TI = 0.02
         else:
@@ -438,8 +438,7 @@ def run_pywake(yamlFile, output_dir="output"):
                         ti_int = TI
                     TIs.append(ti_int[cases_idx])
                 TI = ti_int
-                site = XRSite(
-                    xr.Dataset(
+                ds = xr.Dataset(
                         data_vars={
                             "WS": (["h", "time"], np.array(speeds)),
                             "WD": (["h", "time"], np.array(dirs)),
@@ -448,10 +447,39 @@ def run_pywake(yamlFile, output_dir="output"):
                         },
                         coords={"h": seen, "time": np.arange(len(times))},
                     )
+
+
+                site = XRSite(
+                    ds
                 )
+
+
+
             else:
                 if heights:
+
+                    if "relative_speedup" in resource_dat["wind_resource"]:
+                        speedup = np.asarray(resource_dat["wind_resource"]["relative_speedup"]["data"])
+
+                    ds = xr.Dataset(
+                        data_vars={
+                            "WS": (["h", "time"], ws.T),
+                            "WD": (["h", "time"], wd.T),
+                            "TI": (["h", "time"], TI.T),
+                            "Speedup": (("i",), speedup),
+                            "P": 1,
+                        },
+                        coords={"h": heights, "time": np.arange(len(times))},
+                    )
+
+                    site = XRSite(
+                        ds
+                    )
+
+                    ws = interp1d(heights, ws, axis=1)(hh)
+                    wd = interp1d(heights, wd, axis=1)(hh)
                     TI = interp1d(heights, TI, axis=1)(hh)
+
 
         # ite = XRSite(xr.Dataset(
         # data_vars={'P': (('time'), np.ones(len(ws)) / len(speeds)), },
@@ -717,6 +745,8 @@ def run_pywake(yamlFile, output_dir="output"):
     if wake_deficit_key:
         deficit_model.WS_key = wake_deficit_key
 
+    print(site, turbine)
+
     windFarmModel = solver(
         site,
         turbine,
@@ -838,8 +868,26 @@ def run_pywake(yamlFile, output_dir="output"):
     if "turbine_outputs" in system_dat["attributes"]["model_outputs_specification"]:
         # print('aep per turbine', list(aep_per_turbine)); hey
         # data['FLOW_simulation_outputs']['AEP_per_turbine'] = [float(value) for value in aep_per_turbine]
-        sim_res_formatted = sim_res[["Power", "WS_eff"]].rename(
-            {"Power": "power", "WS_eff": "effective_wind_speed", "wt": "turbine"}
+        sim_res_formatted = sim_res[[
+            "Power", 
+            "WS_eff", 
+            "TI_eff",
+            "WS",
+            "WD",
+            "CT",
+            "TI",
+
+        ]].rename(
+            {
+                "Power": "power", 
+                "WS": "wind_speed",
+                "WD": "wind_direction",
+                "WS_eff": "effective_wind_speed", 
+                "TI": "turbulence_intensity",
+                "TI_eff": "effective_turbulence_intensity",
+                "CT": "thrust_coefficient",
+                "wt": "turbine",
+            }
         )
         turbine_nc_filename = str(
             system_dat["attributes"]
@@ -851,6 +899,7 @@ def run_pywake(yamlFile, output_dir="output"):
         sim_res_formatted.to_netcdf(turbine_nc_filepath)
 
     print(sim_res)
+    print(list(sim_res.data_vars))
 
     # flow field handling
     flow_map = None
