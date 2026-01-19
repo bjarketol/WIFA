@@ -1,6 +1,5 @@
 import argparse
-import os
-import sys
+from pathlib import Path
 
 import windIO
 from windIO import load_yaml
@@ -11,41 +10,47 @@ from .foxes_api import run_foxes
 from .pywake_api import run_pywake
 from .wayve_api import run_wayve
 
-sys.path.append(windIO.__path__[0])
+# Valid model names for error messages
+VALID_MODELS = ["pywake", "foxes", "wayve", "codesaturne"]
 
 
 def run_api(yaml_input):
-    # validate input
+    """Run wind farm simulation using the specified flow model.
+
+    Args:
+        yaml_input: Path to the input YAML file
+
+    Raises:
+        ValueError: If an invalid model is specified
+    """
+    # Validate input
     validate_yaml(yaml_input, windIO.__path__[0] + "/plant/wind_energy_system.yaml")
 
-    # get number of turbines
+    # Load configuration
     yaml_dat = load_yaml(yaml_input)
+    model_name = yaml_dat["attributes"]["flow_model"]["name"].lower()
 
-    model_name = yaml_dat["attributes"]["flow_model"]["name"]
+    # Create output directory if specified
+    output_spec = yaml_dat["attributes"].get("model_outputs_specification", {})
+    output_dir = output_spec.get("output_folder")
+    if output_dir:
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    if model_name.lower() == "pywake":
-        pywake_aep = run_pywake(yaml_input)
+    # Run the appropriate model
+    if model_name == "pywake":
+        run_pywake(yaml_input)
 
-    elif model_name.lower() == "foxes":
-        foxes_aep = run_foxes(yaml_input)
+    elif model_name == "foxes":
+        run_foxes(yaml_input)
 
-    elif model_name.lower() == "wayve":
-        # Output directory
-        # yaml_input_no_ext = os.path.splitext(yaml_input)[0]  # Remove the file extension
-        # output_dir_name = 'output_wayve' + yaml_input_no_ext.replace(os.sep, '_')  # Replace directory separators
-        output_dir_name = yaml_dat["attributes"]["model_outputs_specification"][
-            "output_folder"
-        ]
-        if not os.path.exists(output_dir_name):
-            os.makedirs(output_dir_name)
+    elif model_name == "wayve":
+        run_wayve(yaml_input, output_dir or "output")
 
-        run_wayve(yaml_input, output_dir_name)
-
-    elif model_name.lower() == "codesaturne":
+    elif model_name == "codesaturne":
         run_code_saturne(yaml_input, test_mode=True)
 
     else:
-        print("Invalid Model")
+        raise ValueError(f"Invalid model '{model_name}'. Choose from: {VALID_MODELS}")
 
 
 def run():

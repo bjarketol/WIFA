@@ -71,21 +71,15 @@ def run_foxes(
     if output_dir is not None:
         odir = output_dir
 
-    if (
-        engine is not None
-        or n_procs is not None
-        or chunksize_states is not None
-        or chunksize_points is not None
-    ):
-        epars = dict(
-            engine_type=engine,
-            n_procs=n_procs,
-            chunk_size_states=chunksize_states,
-            chunk_size_points=chunksize_points,
-            verbosity=verbosity,
-        )
-    else:
-        epars = None
+    # Configure engine parameters if any are specified
+    has_engine_config = any(p is not None for p in [engine, n_procs, chunksize_states, chunksize_points])
+    epars = {
+        "engine_type": engine,
+        "n_procs": n_procs,
+        "chunk_size_states": chunksize_states,
+        "chunk_size_points": chunksize_points,
+        "verbosity": verbosity,
+    } if has_engine_config else None
 
     return run_dict(
         idict,

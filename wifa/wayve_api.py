@@ -10,56 +10,125 @@ import xarray as xr
 from scipy.interpolate import interp1d
 from windIO import load_yaml
 
+# Physical constants
+GRAVITY = 9.80665  # m/s^2
+KAPPA = 0.41  # Von Karman constant
+OMEGA = 7.2921159e-5  # Angular speed of the Earth (rad/s)
+DEFAULT_AIR_DENSITY = 1.225  # kg/m^3
+
+# Default APM grid parameters (from Allaerts and Meyers, 2019)
+DEFAULT_LX = 1.0e6  # Grid size in x-direction (m)
+DEFAULT_LY = 1.0e6  # Grid size in y-direction (m)
+DEFAULT_DX = 500.0  # Grid spacing (m)
+DEFAULT_L_FILTER = 1.0e3  # Filter length (m)
+
+
+def _get_grid_params(analysis_dat):
+    """Extract APM grid parameters from analysis data with defaults."""
+    grid_dat = analysis_dat.get("apm_grid", {})
+    return {
+        "Lx": float(grid_dat.get("Lx", DEFAULT_LX)),
+        "Ly": float(grid_dat.get("Ly", DEFAULT_LY)),
+        "dx": float(grid_dat.get("dx", DEFAULT_DX)),
+        "L_filter": float(grid_dat.get("L_filter", DEFAULT_L_FILTER)),
+    }
+
+
+def _get_output_config(system_dat, wind_farm):
+    """Extract output configuration from system data.
+
+    Returns dict with keys: times, turbine_nc_filename, turbine_output_variables,
+                           report_flow, flow_nc_filename, flow_output_variables,
+                           x_ff, y_ff, z_ff
+    """
+    output_spec = system_dat["attributes"].get("model_outputs_specification", {})
+    resource_dat = system_dat["site"]["energy_resource"]
+
+    # Select timestamps
+    times = resource_dat["wind_resource"]["time"]
+    run_config = output_spec.get("run_configuration", {})
+    if not run_config.get("all_occurences", True) and "subset" in run_config:
+        subset = run_config["subset"]
+        times = [times[i] for i in subset]
+
+    # Turbine output settings
+    turb_out = output_spec.get("turbine_outputs", {})
+    turbine_nc_filename = turb_out.get("turbine_nc_filename", "turbine_data.nc")
+    turbine_output_variables = turb_out.get(
+        "turbine_output_variables", ["power", "rotor_effective_velocity"]
+    )
+
+    # Flow field output settings
+    flow_out = output_spec.get("flow_field", {})
+    report_flow = flow_out.get("report", False)
+    flow_nc_filename = flow_out.get("flow_nc_filename", "flow_field.nc")
+    flow_output_variables = flow_out.get("output_variables", ["wind_speed", "wind_direction"])
+
+    x_ff, y_ff, z_ff = [], [], []
+    if report_flow:
+        z_planes = flow_out.get("z_planes", {})
+        if z_planes.get("xy_sampling") != "grid":
+            report_flow = False
+            raise UserWarning("xy_sampling not supported")
+
+        x_bounds = z_planes["x_bounds"]
+        y_bounds = z_planes["y_bounds"]
+        Nx = z_planes.get("Nx", int((x_bounds[1] - x_bounds[0]) / z_planes.get("dx", 1)))
+        Ny = z_planes.get("Ny", int((y_bounds[1] - y_bounds[0]) / z_planes.get("dy", 1)))
+
+        x_ff = np.linspace(x_bounds[0], x_bounds[1], Nx)
+        y_ff = np.linspace(y_bounds[0], y_bounds[1], Ny)
+
+        if z_planes.get("z_sampling") == "hub_heights":
+            z_ff = np.unique([turb.zh for turb in wind_farm.turbines])
+        else:
+            z_ff = z_planes.get("z_list", [])
+
+    return {
+        "times": times,
+        "turbine_nc_filename": turbine_nc_filename,
+        "turbine_output_variables": turbine_output_variables,
+        "report_flow": report_flow,
+        "flow_nc_filename": flow_nc_filename,
+        "flow_output_variables": flow_output_variables,
+        "x_ff": x_ff,
+        "y_ff": y_ff,
+        "z_ff": z_ff,
+    }
+
 
 def run_wayve(yamlFile, output_dir="output", debug_mode=False):
-    # General APM setup
+    """Run WAYVE wind farm simulation.
+
+    Parameters
+    ----------
+    yamlFile : str or dict
+        Path to YAML file or pre-parsed dictionary
+    output_dir : str
+        Output directory path
+    debug_mode : bool
+        If True, run in debug mode with verbose output
+    """
     from wayve.apm import APM
     from wayve.grid.grid import Stat2Dgrid
     from wayve.momentum_flux_parametrizations import FrictionCoefficients
     from wayve.pressure.gravity_waves.gravity_waves import NonUniform, Uniform
     from wayve.solvers import FixedPointIteration
 
-    #####################
-    # Read out yaml file
-    #####################
-    # Yaml loading
-    if isinstance(yamlFile, dict):
-        system_dat = yamlFile
-    else:
-        system_dat = load_yaml(yamlFile)
-    # WindIO components
+    # Load configuration
+    system_dat = yamlFile if isinstance(yamlFile, dict) else load_yaml(yamlFile)
     farm_dat = system_dat["wind_farm"]
     resource_dat = system_dat["site"]["energy_resource"]
     analysis_dat = system_dat["attributes"]["analysis"]
 
-    ######################
-    # construct APM grid
-    ######################
-    # Default numerical parameters (values from Allaerts and Meyers, 2019)
-    Lx = 1.0e6  # grid size in x-direction [m]
-    Ly = 1.0e6  # grid size in y-direction [m]
-    dx = 500.0  # Grid spacing
-    L_filter = 1.0e3
-    # Read out numerical parameters
-    if "apm_grid" in analysis_dat:
-        grid_dat = analysis_dat["apm_grid"]
-        if "Lx" in grid_dat:
-            Lx = float(grid_dat["Lx"])
-        if "Ly" in grid_dat:
-            Ly = float(grid_dat["Ly"])
-        if "dx" in grid_dat:
-            dx = float(grid_dat["dx"])
-        if "L_filter" in grid_dat:
-            L_filter = float(grid_dat["L_filter"])
-    # Grid points
-    Nx = int(Lx / dx)  # grid points in x-direction
-    Ny = int(Ly / dx)  # grid points in y-direction
-    # Generate 2D grid object
+    # Set up APM grid
+    grid_params = _get_grid_params(analysis_dat)
+    Lx, Ly, dx = grid_params["Lx"], grid_params["Ly"], grid_params["dx"]
+    L_filter = grid_params["L_filter"]
+    Nx, Ny = int(Lx / dx), int(Ly / dx)
     grid = Stat2Dgrid(Lx, Nx, Ly, Ny)
 
-    ####################
     # Set up WindFarm and Forcing objects
-    ####################
     wind_farm, forcing, wf_offset_x, wf_offset_y = wf_setup(
         farm_dat, analysis_dat, L_filter, debug_mode
     )
@@ -69,105 +138,28 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     hh = np.mean([turb.zh for turb in wind_farm.turbines])
     h1_min = np.max([turb.zh + turb.D / 2 for turb in wind_farm.turbines])
 
-    # Determine H1
-    h1 = 2.0 * hh  # Default
-    if "layers_description" in analysis_dat:
-        if "farm_layer_height" in analysis_dat["layers_description"]:
-            h1 = analysis_dat["layers_description"]["farm_layer_height"]
+    # Determine lower layer height (H1)
+    layers_desc = analysis_dat.get("layers_description", {})
+    h1 = layers_desc.get("farm_layer_height", 2.0 * hh)
     if h1 < h1_min:
         raise UserWarning("Lower layer height too low, please specify a higher value")
 
-    ##################
-    # Other APM components
-    ##################
-    # Momentum flux parametrization
+    # Set up APM components
     mfp = FrictionCoefficients()
-    # Pressure feedback parametrization
-    pressure = Uniform(dynamic=True, rotating=False)
-    if "layers_description" in analysis_dat:
-        if "number_of_fa_layers" in analysis_dat["layers_description"]:
-            n_layers = analysis_dat["layers_description"]["number_of_fa_layers"]
-            if n_layers > 1:
-                pressure = NonUniform(n_layers=n_layers, order=1)
+    n_layers = layers_desc.get("number_of_fa_layers", 1)
+    pressure = NonUniform(n_layers=n_layers, order=1) if n_layers > 1 else Uniform(dynamic=True, rotating=False)
 
-    ######################
-    # Read output settings
-    ######################
-    # Select timestamps
-    times = resource_dat["wind_resource"]["time"]
-    if (
-        "all_occurences"
-        in system_dat["attributes"]["model_outputs_specification"]["run_configuration"]
-    ):
-        all_occ = system_dat["attributes"]["model_outputs_specification"][
-            "run_configuration"
-        ]["all_occurences"]
-        if not all_occ:
-            subset = system_dat["attributes"]["model_outputs_specification"][
-                "run_configuration"
-            ]["subset"]
-            times = [times[i] for i in subset]
-    # Get turbine variables to output
-    turbine_nc_filename = "turbine_data.nc"
-    turbine_output_variables = ["power", "rotor_effective_velocity"]
-    if "turbine_outputs" in system_dat["attributes"]["model_outputs_specification"]:
-        turb_out_dat = system_dat["attributes"]["model_outputs_specification"][
-            "turbine_outputs"
-        ]
-        if "turbine_nc_filename" in turb_out_dat:
-            turbine_nc_filename = turb_out_dat["turbine_nc_filename"]
-        if "turbine_output_variables" in turb_out_dat:
-            turbine_output_variables = turb_out_dat["turbine_output_variables"]
-    # Check flow field output specification
-    flow_nc_filename = "flow_field.nc"
-    flow_output_variables = ["wind_speed", "wind_direction"]
-    report_flow = False
-    x_ff = []
-    y_ff = []
-    z_ff = []
-    if "flow_field" in system_dat["attributes"]["model_outputs_specification"]:
-        if (
-            "report"
-            in system_dat["attributes"]["model_outputs_specification"]["flow_field"]
-        ):
-            report_flow = system_dat["attributes"]["model_outputs_specification"][
-                "flow_field"
-            ]["report"]
-    if report_flow:
-        # Output settings
-        flow_out_dat = system_dat["attributes"]["model_outputs_specification"][
-            "flow_field"
-        ]
-        if "flow_nc_filename" in flow_out_dat:
-            flow_nc_filename = flow_out_dat["flow_nc_filename"]
-        if "output_variables" in flow_out_dat:
-            flow_output_variables = flow_out_dat["output_variables"]
-        # Output grid
-        if flow_out_dat["z_planes"]["xy_sampling"] != "grid":
-            report_flow = False
-            raise UserWarning("xy_sampling not supported")
-        x_bounds = flow_out_dat["z_planes"]["x_bounds"]
-        y_bounds = flow_out_dat["z_planes"]["y_bounds"]
-        if "Nx" in flow_out_dat["z_planes"]:
-            Nx = flow_out_dat["z_planes"]["Nx"]
-        else:
-            dx = flow_out_dat["z_planes"]["dx"]
-            Nx = int((x_bounds[1] - x_bounds[0]) / dx)
-        if "Ny" in flow_out_dat["z_planes"]:
-            Ny = flow_out_dat["z_planes"]["Ny"]
-        else:
-            dy = flow_out_dat["z_planes"]["dy"]
-            Ny = int((y_bounds[1] - y_bounds[0]) / dy)
-        x_ff = np.linspace(x_bounds[0], x_bounds[1], Nx)
-        y_ff = np.linspace(y_bounds[0], y_bounds[1], Ny)
-        if flow_out_dat["z_planes"]["z_sampling"] == "hub_heights":
-            z_ff = np.unique([turb.zh for turb in wind_farm.turbines])
-        else:
-            z_ff = flow_out_dat["z_planes"]["z_list"]
+    # Get output configuration
+    output_config = _get_output_config(system_dat, wind_farm)
+    times = output_config["times"]
+    turbine_nc_filename = output_config["turbine_nc_filename"]
+    turbine_output_variables = output_config["turbine_output_variables"]
+    report_flow = output_config["report_flow"]
+    flow_nc_filename = output_config["flow_nc_filename"]
+    flow_output_variables = output_config["flow_output_variables"]
+    x_ff, y_ff, z_ff = output_config["x_ff"], output_config["y_ff"], output_config["z_ff"]
 
-    #####################
     # Perform model runs
-    #####################
     # Initialize crash counter
     crashes = 0
     # List of datasets
@@ -358,8 +350,7 @@ def nieuwstadt83_profiles(zh, v, wd, z0=1.0e-1, h=1.5e3, fc=1.0e-4, ust=0.666):
 
 
 def rotate_xy_arrays(xs, ys, angle):
-    """
-    Rotate the given vectors around the given angle.
+    """Rotate vectors by a given angle using vectorized operations.
 
     Parameters
     ----------
@@ -368,24 +359,16 @@ def rotate_xy_arrays(xs, ys, angle):
     ys : array_like
         y-components of the vectors
     angle : float
-        angle over which to rotate the vectors (in radians)
+        Rotation angle in radians
+
+    Returns
+    -------
+    tuple
+        (xs_rot, ys_rot) - rotated x and y components
     """
-    # Angle cosine and sine
     c, s = np.cos(angle), np.sin(angle)
-    # Rotation matrix
-    R = np.array(((c, -s), (s, c)))
-    # Output arrays
-    xs_rot, ys_rot = 0.0 * xs, 0.0 * ys
-    # Loop over vectors
-    Ns = len(xs)
-    for i in range(Ns):
-        # Vector i
-        vec = np.array([xs[i], ys[i]])
-        # Multiply with rotation matrix
-        rotated_vec = np.matmul(R, vec)
-        # Store rotated vector
-        xs_rot[i] = rotated_vec[0]
-        ys_rot[i] = rotated_vec[1]
+    xs_rot = c * xs - s * ys
+    ys_rot = s * xs + c * ys
     return xs_rot, ys_rot
 
 
@@ -480,257 +463,225 @@ def ci_fitting(
 
 
 def read_turbine_type(turb_dat):
-    # Turbine geometry
+    """Extract turbine parameters and create Ct/Cp interpolation curves.
+
+    Parameters
+    ----------
+    turb_dat : dict
+        Turbine data dictionary containing geometry and performance curves
+
+    Returns
+    -------
+    tuple
+        (hub_height, rotor_diameter, ct_curve, cp_curve)
+    """
     hh = turb_dat["hub_height"]
     rd = turb_dat["rotor_diameter"]
-    # Ct curve data
-    ct = turb_dat["performance"]["Ct_curve"]["Ct_values"]
-    ct_ws = turb_dat["performance"]["Ct_curve"]["Ct_wind_speeds"]
-    # Cp curve data
-    air_density = 1.225  # Hard-coded for now
-    if "Cp_curve" in turb_dat["performance"]:
-        # Read out Cp curve
-        cp = turb_dat["performance"]["Cp_curve"]["Cp_values"]
-        cp_ws = turb_dat["performance"]["Cp_curve"]["Cp_wind_speeds"]
-    elif "power_curve" in turb_dat["performance"]:
-        # Power curve data
-        cp_ws = np.array(turb_dat["performance"]["power_curve"]["power_wind_speeds"])
-        pows = np.array(turb_dat["performance"]["power_curve"]["power_values"])
-        # Filter out Nan values and zero wind speeds
-        selection = np.logical_and(
-            np.greater(cp_ws, 0.0),
-            np.logical_not(np.logical_or(np.isnan(cp_ws), np.isnan(pows))),
-        )
-        cp_ws = cp_ws[selection]
-        pows = pows[selection]
-        # Convert power curve to Cp curve
+    performance = turb_dat["performance"]
+
+    # Ct curve
+    ct = performance["Ct_curve"]["Ct_values"]
+    ct_ws = performance["Ct_curve"]["Ct_wind_speeds"]
+
+    # Cp curve - either direct or derived from power curve
+    if "Cp_curve" in performance:
+        cp = performance["Cp_curve"]["Cp_values"]
+        cp_ws = performance["Cp_curve"]["Cp_wind_speeds"]
+    elif "power_curve" in performance:
+        cp_ws = np.array(performance["power_curve"]["power_wind_speeds"])
+        pows = np.array(performance["power_curve"]["power_values"])
+
+        # Filter out NaN values and zero wind speeds
+        valid = (cp_ws > 0.0) & ~np.isnan(cp_ws) & ~np.isnan(pows)
+        cp_ws, pows = cp_ws[valid], pows[valid]
+
+        # Convert power to Cp
         rotor_area = np.pi * (rd / 2) ** 2
-        cp = np.divide(
-            np.array(pows), 0.5 * air_density * np.array(cp_ws) ** 3 * rotor_area
-        )
+        cp = pows / (0.5 * DEFAULT_AIR_DENSITY * cp_ws**3 * rotor_area)
     else:
-        raise Exception("Bad Power Curve")
-    # Ct and Cp curves
+        raise ValueError("Missing Cp_curve or power_curve in turbine performance data")
+
     ct_curve = interp1d(ct_ws, ct, fill_value="extrapolate")
     cp_curve = interp1d(cp_ws, cp, fill_value="extrapolate")
     return hh, rd, ct_curve, cp_curve
 
 
 def wf_setup(farm_dat, analysis_dat, L_filter=1.0e3, debug_mode=False):
-    # WAYVE imports
+    """Set up WindFarm and Forcing objects.
+
+    Returns
+    -------
+    tuple
+        (wind_farm, forcing, wf_offset_x, wf_offset_y)
+    """
     from wayve.forcing.apm_forcing import ForcingComposite
     from wayve.forcing.wind_farms.dispersive_stresses import DispersiveStresses
     from wayve.forcing.wind_farms.entrainment import ConstantFlux
     from wayve.forcing.wind_farms.wind_farm import Turbine, WindFarm
 
-    ####################
-    # Set up WindFarm object
-    ####################
-    # Get x and y positions
-    x = farm_dat["layouts"][0]["coordinates"]["x"]
-    y = farm_dat["layouts"][0]["coordinates"]["y"]
-    # Reposition to be at grid center
-    wf_offset_x = np.mean(x)
-    wf_offset_y = np.mean(y)
+    # Get turbine positions and center at grid origin
+    layout = farm_dat["layouts"][0]
+    x = np.array(layout["coordinates"]["x"], dtype=float)
+    y = np.array(layout["coordinates"]["y"], dtype=float)
+    wf_offset_x, wf_offset_y = np.mean(x), np.mean(y)
     x -= wf_offset_x
     y -= wf_offset_y
-    # Number of turbines
     Nt = len(x)
-    # Get turbine types
-    turb_types = {}
+
+    # Build turbine type lookup
     if "turbines" in farm_dat:
-        type_inds = [0 for _ in range(Nt)]
-        hh, rd, ct_curve, cp_curve = read_turbine_type(farm_dat["turbines"])
-        turb_types[0] = [hh, rd, ct_curve, cp_curve]
+        type_inds = [0] * Nt
+        turb_types = {0: read_turbine_type(farm_dat["turbines"])}
     else:
-        type_inds = farm_dat["layouts"][0]["turbine_types"]
-        for i in np.unique(type_inds):
-            hh, rd, ct_curve, cp_curve = read_turbine_type(farm_dat["turbine_types"][i])
-            turb_types[i] = [hh, rd, ct_curve, cp_curve]
-    # Turbine setup
+        type_inds = layout["turbine_types"]
+        turb_types = {i: read_turbine_type(farm_dat["turbine_types"][i]) for i in np.unique(type_inds)}
+
+    # Create turbine objects
     turbines = []
     for t in range(Nt):
         hh, rd, ct_curve, cp_curve = turb_types[type_inds[t]]
-        turbine = Turbine(x[t], y[t], rd, hh, ct_curve, cp_curve)
-        turbines.append(turbine)
-    # Set up wake model
+        turbines.append(Turbine(x[t], y[t], rd, hh, ct_curve, cp_curve))
+
+    # Set up wake model and coupling
     wake_model = wake_model_setup(analysis_dat, debug_mode)
-    # Set up coupling object
     coupling = wm_coupling_setup(analysis_dat, wake_model)
-    # Generate wind farm object
     wind_farm = WindFarm(turbines, L_filter, coupling)
-    # Combined forcing object
+
+    # Build forcing composite
     forcing = ForcingComposite([wind_farm])
-    # Additional forcing components
-    if "APM_additional_terms" in analysis_dat:
-        apm_terms_dat = analysis_dat["APM_additional_terms"]
-        if "apm_disp_stresses" in apm_terms_dat:
-            if apm_terms_dat["apm_disp_stresses"]["ds_type"] == "subgrid":
-                if wind_farm.coupling.wm_velocity_handler is None:
-                    raise ValueError(
-                        "Subgrid dispersive stresses parametrization requires a subgrid to be included"
-                    )
-                disp_stresses = DispersiveStresses(wind_farm)
-                forcing.add_child(disp_stresses)
-        if (
-            "momentum_entrainment" in apm_terms_dat
-            and apm_terms_dat["momentum_entrainment"]["mfp_type"] == "constant_flux"
-            and wind_farm.area > 0.0
-        ):
-            mfp_dat = apm_terms_dat["momentum_entrainment"]
-            a_tau = 0.12
-            if "a_mfp" in mfp_dat["apm_mfp_settings"]:
-                a_tau = mfp_dat["apm_mfp_settings"]["a_mfp"]
-            d_tau = 27.8
-            if "d_mfp" in mfp_dat["apm_mfp_settings"]:
-                d_tau = mfp_dat["apm_mfp_settings"]["d_mfp"]
-            mfp = ConstantFlux(wind_farm, a=a_tau, d=d_tau)
-            forcing.add_child(mfp)
+
+    # Add optional forcing components
+    apm_terms = analysis_dat.get("APM_additional_terms", {})
+
+    # Dispersive stresses
+    disp_config = apm_terms.get("apm_disp_stresses", {})
+    if disp_config.get("ds_type") == "subgrid":
+        if wind_farm.coupling.wm_velocity_handler is None:
+            raise ValueError("Subgrid dispersive stresses requires a subgrid to be included")
+        forcing.add_child(DispersiveStresses(wind_farm))
+
+    # Momentum entrainment
+    mom_config = apm_terms.get("momentum_entrainment", {})
+    if mom_config.get("mfp_type") == "constant_flux" and wind_farm.area > 0.0:
+        mfp_settings = mom_config.get("apm_mfp_settings", {})
+        a_tau = mfp_settings.get("a_mfp", 0.12)
+        d_tau = mfp_settings.get("d_mfp", 27.8)
+        forcing.add_child(ConstantFlux(wind_farm, a=a_tau, d=d_tau))
+
     return wind_farm, forcing, wf_offset_x, wf_offset_y
 
 
 def wm_coupling_setup(analysis_dat, wake_model):
-    # WAYVE imports
-    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.pressure_based import (
-        PressureBased,
-    )
-    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.upstream import (
-        Upstream,
-    )
+    """Set up wake model coupling based on analysis configuration."""
+    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.pressure_based import PressureBased
+    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.upstream import Upstream
     from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.varying_background import (
         SelfSimilarWMVH,
         WakeModelVelocityHandler,
     )
-    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.velocity_matching import (
-        VelocityMatching,
-    )
+    from wayve.forcing.wind_farms.wake_model_coupling.coupling_methods.velocity_matching import VelocityMatching
 
-    # Read inputs
     wmc_dat = analysis_dat["wm_coupling"]
-    # Subgrid settings
+
+    # Configure subgrid velocity handler if enabled
     wm_velocity_handler = None
-    if "subgrid" in wmc_dat and wmc_dat["subgrid"]["include_subgrid"]:
-        sg_ratio = wmc_dat["subgrid"]["D_to_dx"]
-        if analysis_dat["superposition_model"]["ws_superposition"] == "Product":
-            wm_velocity_handler = SelfSimilarWMVH(sg_ratio)
-        else:
-            wm_velocity_handler = WakeModelVelocityHandler(sg_ratio)
-    # Wake model coupling settings
-    if "method" not in wmc_dat or wmc_dat["method"] == "PB":
-        # Use pressure-based method
-        coupling = PressureBased(wake_model, wm_velocity_handler)
-    elif wmc_dat["method"] == "VM":
+    subgrid = wmc_dat.get("subgrid", {})
+    if subgrid.get("include_subgrid"):
+        sg_ratio = subgrid["D_to_dx"]
+        is_product_superposition = analysis_dat["superposition_model"]["ws_superposition"] == "Product"
+        wm_velocity_handler = SelfSimilarWMVH(sg_ratio) if is_product_superposition else WakeModelVelocityHandler(sg_ratio)
+
+    # Configure coupling method
+    method = wmc_dat.get("method", "PB")
+    settings = wmc_dat.get("settings", {})
+
+    if method == "PB":
+        return PressureBased(wake_model, wm_velocity_handler)
+    elif method == "VM":
         if analysis_dat["superposition_model"]["ws_superposition"] != "Product":
             raise ValueError("VM method requires product-based superposition")
-        # Read settings
-        alpha = wmc_dat["settings"]["alpha"]
-        # Use velocity matching method
-        coupling = VelocityMatching(wake_model, wm_velocity_handler, alpha)
-    elif wmc_dat["method"] == "US":
-        # Read settings
-        distance = wmc_dat["settings"]["distance"]
-        # Use velocity matching method
-        coupling = Upstream(wake_model, wm_velocity_handler, distance)
+        return VelocityMatching(wake_model, wm_velocity_handler, settings["alpha"])
+    elif method == "US":
+        return Upstream(wake_model, wm_velocity_handler, settings["distance"])
     else:
-        raise ValueError("Wake model coupling not implemented!")
-    return coupling
+        raise ValueError(f"Wake model coupling method '{method}' not implemented")
 
 
 def wake_model_setup(analysis_dat, debug_mode=False):
-    # WAYVE imports
-    from wayve.couplings.foxes_coupling import FoxesWakeModel
-    from wayve.forcing.wind_farms.wake_model_coupling.wake_models.lanzilao_merging import (
-        Lanzilao,
-    )
+    """Set up wake model based on analysis configuration.
 
-    # WM tool
-    wake_tool = analysis_dat.get(
-        "wake_tool", "wayve"
-    )  # updated by Jonas -TODO update this according to updated schema
+    Supports 'wayve' (Lanzilao) and 'foxes' wake tools.
+    """
+    wake_tool = analysis_dat.get("wake_tool", "wayve")
+
     if wake_tool == "wayve":
-        # Read wake model settings #
+        from wayve.forcing.wind_farms.wake_model_coupling.wake_models.lanzilao_merging import Lanzilao
+
         wm_dat = analysis_dat["wind_deficit_model"]
         k_dat = wm_dat["wake_expansion_coefficient"]
-        # k, k_a, k_b, ceps
+
+        # Extract wake expansion coefficients
         if "k_a" in k_dat and "k_b" in k_dat and "ceps" in wm_dat:
-            k_a = k_dat["k_a"]
-            k_b = k_dat["k_b"]
-            ceps = wm_dat["ceps"]
+            k_a, k_b, ceps = k_dat["k_a"], k_dat["k_b"], wm_dat["ceps"]
         elif "k" in k_dat and "ceps" in wm_dat:
-            k_a = k_dat["k"]
-            k_b = 0.0
-            ceps = wm_dat["ceps"]
+            k_a, k_b, ceps = k_dat["k"], 0.0, wm_dat["ceps"]
         else:
-            raise ValueError("Wake spreading parameter not specified!")
-        # Use wake merging method of Lanzilao and Meyers (2021)
-        wake_model = Lanzilao(ka=k_a, kb=k_b, eps_beta=ceps)
+            raise ValueError("Wake spreading parameter not specified (need k_a/k_b/ceps or k/ceps)")
+
+        return Lanzilao(ka=k_a, kb=k_b, eps_beta=ceps)
+
     elif wake_tool == "foxes":
         from foxes import ModelBook
         from foxes.input.yaml.windio.read_attributes import _read_analysis
         from foxes.utils import Dict
+        from wayve.couplings.foxes_coupling import FoxesWakeModel
 
         verbosity = 1 if debug_mode else 0
 
-        algo_dict = Dict(
-            algo_type="Downwind",
-            wake_models=[],
-            verbosity=verbosity,
-            name="wayve.algorithm",
-        )
-
+        algo_dict = Dict(algo_type="Downwind", wake_models=[], verbosity=verbosity, name="wayve.algorithm")
         ana_dict = Dict(analysis_dat, name="analysis")
         idict = Dict(algorithm=algo_dict, name="wayve")
         mbook = ModelBook()
 
         _read_analysis(ana_dict, idict, mbook=mbook, verbosity=verbosity)
+        return FoxesWakeModel(mbook=mbook, **idict["algorithm"])
 
-        wake_model = FoxesWakeModel(mbook=mbook, **idict["algorithm"])
     else:
-        raise NotImplementedError(f"Wake tool '{wake_tool}' not implemented!")
-    return wake_model
+        raise NotImplementedError(f"Wake tool '{wake_tool}' not implemented")
 
 
 def flow_io_abl(wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True):
-    """
-    Method to set up an ABL object based on FLOW IO
+    """Set up an ABL object based on FLOW IO wind resource data.
 
     Parameters
     ----------
-    wind_resource_dat: dict
+    wind_resource_dat : dict
         Wind resource data
-    time_index: int
+    time_index : int
         Index of the timestamp to set up ABL for
-    zh: float
+    zh : float
         Mean turbine hub height
-    h1: float
+    h1 : float
         Lower layer height
-    dh_max (optional): float
-        Maximum depth of the inversion layer used in the inversion curve fitting procedure (default: None)
-    serz (optional): boolean
-        Whether the surface-extended version of the RZ model is used (default: True)
+    dh_max : float, optional
+        Maximum depth of the inversion layer for curve fitting
+    serz : bool, optional
+        Whether to use surface-extended RZ model (default True)
     """
-    # Atmospheric state setup
     from wayve.abl.abl import ABL
 
-    # Constants #
-    gravity = 9.80665  # [m s-2]
-    kappa = 0.41  # Von Karman constant
-    omega = 7.2921159e-5  # angular speed of the Earth [rad/s]
-    # Basic atmospheric scalars #
-    air_density = 1.225  # Hard-coded for now
-    # Surface roughness
-    z0 = 1.0e-1
-    if "z0" in wind_resource_dat.keys():
-        z0 = wind_resource_dat["z0"]["data"][time_index]
-    # Monin-Obhukov length
-    l_mo = 5.0e3
-    if "LMO" in wind_resource_dat.keys():
-        l_mo = wind_resource_dat["LMO"]["data"][time_index]
-    # Coriolis parameter #
-    phi = 0.377  # Assume latitude location
-    fc = 2 * omega * np.sin(phi)
-    if "fc" in wind_resource_dat.keys():
-        fc = wind_resource_dat["fc"]["data"][time_index]
+    # Helper to get time-indexed data with default
+    def get_value(key, default):
+        return wind_resource_dat[key]["data"][time_index] if key in wind_resource_dat else default
+
+    # Basic atmospheric parameters
+    air_density = DEFAULT_AIR_DENSITY
+    z0 = get_value("z0", 1.0e-1)
+    l_mo = get_value("LMO", 5.0e3)
+
+    # Coriolis parameter (default assumes latitude ~21.6 degrees)
+    default_phi = 0.377
+    fc = get_value("fc", 2 * OMEGA * np.sin(default_phi))
     # Check if wind resource contains vertical profile
     profile_input = "height" in wind_resource_dat.keys()
     if not profile_input:
@@ -835,8 +786,8 @@ def flow_io_abl(wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True):
     if dth == 0.0:
         raise RuntimeWarning("No CI present!")
     # gprime and N
-    gprime = gravity * dth / th0
-    N = np.sqrt(gravity * dthdz / th0)
+    gprime = GRAVITY * dth / th0
+    N = np.sqrt(GRAVITY * dthdz / th0)
     # Set up ABL object
     return ABL(
         zs,

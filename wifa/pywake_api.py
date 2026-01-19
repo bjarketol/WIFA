@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import warnings
 from pathlib import Path
@@ -8,8 +9,16 @@ import xarray as xr
 import yaml
 from scipy.interpolate import interp1d
 from scipy.special import gamma
-from windIO import dict_to_netcdf, load_yaml
+from windIO import load_yaml
 from windIO import validate as validate_yaml
+
+# Configure module logger
+logger = logging.getLogger(__name__)
+
+# Physical constants
+DEFAULT_AIR_DENSITY = 1.225  # kg/m^3
+DEFAULT_TURBULENCE_INTENSITY = 0.02
+MIN_TURBULENCE_INTENSITY = 0.02
 
 # Define default values for wind_deficit_model parameters
 DEFAULTS = {
@@ -41,7 +50,7 @@ def get_with_default(data, key, defaults):
     If the value is a dictionary, apply the same process recursively.
     """
     if key not in data:
-        print("WARNING: Using default value for ", key)
+        logger.warning("Using default value for %s", key)
         return defaults[key]
     elif isinstance(data[key], dict):
         # For nested dictionaries, ensure all subkeys are checked for defaults
@@ -63,21 +72,15 @@ def load_and_validate_config(yaml_input, default_output_dir="output"):
     Returns:
         tuple: (system_dat, output_dir) where system_dat is the parsed config dict
     """
-    from windIO import load_yaml
-    from windIO import validate as validate_yaml
-
-    if not isinstance(yaml_input, dict):
+    if isinstance(yaml_input, dict):
+        system_dat = yaml_input
+    else:
         validate_yaml(yaml_input, "plant/wind_energy_system")
         system_dat = load_yaml(Path(yaml_input))
-    else:
-        system_dat = yaml_input
 
     # output_dir priority: 1) yaml file, 2) function argument, 3) default
-    output_dir = str(
-        system_dat["attributes"]
-        .get("model_outputs_specification", {})
-        .get("output_folder", default_output_dir)
-    )
+    output_spec = system_dat["attributes"].get("model_outputs_specification", {})
+    output_dir = str(output_spec.get("output_folder", default_output_dir))
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -143,7 +146,7 @@ def create_turbines(farm_dat):
             powers = np.interp(speeds, cp_ws, pows)
         else:
             cps_int = np.interp(speeds, cp_ws, cp)
-            powers = 0.5 * cps_int * speeds**3 * 1.225 * (rd / 2) ** 2 * np.pi
+            powers = 0.5 * cps_int * speeds**3 * DEFAULT_AIR_DENSITY * (rd / 2) ** 2 * np.pi
 
         cutin = turbine_dat["performance"].get("cutin_wind_speed", 0)
         cutout = turbine_dat["performance"].get("cutout_wind_speed")
@@ -191,6 +194,8 @@ def dict_to_site(resource_dict):
     from windIO import dict_to_netcdf
 
     resource_ds = dict_to_netcdf(resource_dict)
+
+    # Static rename mappings
     rename_map = {
         "height": "h",
         "weibull_a": "Weibull_A",
@@ -200,19 +205,16 @@ def dict_to_site(resource_dict):
         "wind_turbine": "i",
     }
 
-    # Smart rename for wind_direction and wind_speed
-    for key, coord_name, var_name in [
-        ("wind_direction", "wd", "WD"),
-        ("wind_speed", "ws", "WS"),
-    ]:
+    # Dynamic rename for wind_direction and wind_speed:
+    # coordinates (dimensions) use lowercase (wd, ws), data variables use uppercase (WD, WS)
+    for key, coord_name, var_name in [("wind_direction", "wd", "WD"), ("wind_speed", "ws", "WS")]:
         if key in resource_ds:
-            # If it's a coordinate (dimension), use lowercase (wd, ws)
-            # If it's a data variable (time series/map), use uppercase (WD, WS)
             rename_map[key] = coord_name if key in resource_ds.coords else var_name
 
-    for name in rename_map:
-        if name in resource_ds:
-            resource_ds = resource_ds.rename({name: rename_map[name]})
+    # Apply renames for keys that exist in the dataset
+    renames = {k: v for k, v in rename_map.items() if k in resource_ds}
+    if renames:
+        resource_ds = resource_ds.rename(renames)
 
     if "P" not in resource_ds and "time" in resource_ds.dims:
         n_time = len(resource_ds.time)
@@ -224,7 +226,7 @@ def dict_to_site(resource_dict):
         # This is required for XRSite's linear interpolation, which expects the turbine index
         # as the leading dimension.
         resource_ds = resource_ds.transpose("i", *other_dims)
-    print("making site with ", resource_ds)
+    logger.debug("Creating site with dataset: %s", resource_ds)
     return XRSite(resource_ds)
 
 
@@ -415,14 +417,14 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
 
         # Handle TI interpolation
         if "turbulence_intensity" not in wind_resource:
-            TI = 0.02
+            TI = DEFAULT_TURBULENCE_INTENSITY
         else:
             TI_data = np.array(wind_resource["turbulence_intensity"]["data"])[cases_idx]
             for hh in sorted(np.append(list(hub_heights.values()), additional_heights)):
                 if hh in seen[len(speeds) :]:
                     continue
                 if heights:
-                    ti_int = _interpolate_with_min(heights, TI_data, hh, min_val=0.02)
+                    ti_int = _interpolate_with_min(heights, TI_data, hh, min_val=MIN_TURBULENCE_INTENSITY)
                 else:
                     ti_int = TI_data
                 TIs.append(ti_int)
@@ -441,7 +443,7 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
             )
     else:
         # Single turbine type
-        print(np.array(ws).shape, np.array(heights).shape)
+        logger.debug("Wind speed shape: %s, heights shape: %s", np.array(ws).shape, np.array(heights).shape)
         if heights:
             ws, wd = _interpolate_wind_data(heights, ws, wd, hh)
 
@@ -455,7 +457,7 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
 
         # Handle TI
         if "turbulence_intensity" not in wind_resource:
-            TI = 0.02
+            TI = DEFAULT_TURBULENCE_INTENSITY
         else:
             TI = np.array(wind_resource["turbulence_intensity"]["data"])[cases_idx]
             if heights:
@@ -556,7 +558,7 @@ def _interpolate_wind_data(heights, ws, wd, target_height):
     return ws_int, wd_int
 
 
-def _interpolate_with_min(heights, values, target_height, min_val=0.02):
+def _interpolate_with_min(heights, values, target_height, min_val=MIN_TURBULENCE_INTENSITY):
     """Interpolate values to target height with minimum value clipping."""
     try:
         return np.maximum(
@@ -617,13 +619,13 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height):
     deficit_args = {"use_effective_ws": True}
     wake_deficit_key = None
 
-    print("Running deficit ", wind_deficit_data)
+    logger.info("Running deficit model: %s", wind_deficit_data)
 
     wake_model_class, deficit_args, wake_deficit_key = _configure_deficit_model(
         wind_deficit_data, analysis, rotor_diameter, hub_height, deficit_args
     )
 
-    print("deficit args ", deficit_args)
+    logger.debug("Deficit arguments: %s", deficit_args)
 
     # Configure deflection model
     deflection_model = _configure_deflection_model(deflection_data)
@@ -633,7 +635,7 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height):
 
     # Configure superposition model
     superposition_model = _configure_superposition_model(superposition_data)
-    print("using superposition ", superposition_data)
+    logger.debug("Using superposition model: %s", superposition_data)
 
     # Configure rotor averaging
     rotor_averaging = _configure_rotor_averaging(rotor_avg_data)
@@ -806,7 +808,7 @@ def _configure_rotor_averaging(rotor_avg_data):
 
     name = rotor_avg_data["name"].lower()
     if name == "center":
-        print("Using Center Average")
+        logger.debug("Using Center Average rotor averaging")
         return RotorCenter()
     elif name == "avg_deficit":
         return GridRotorAvg()
@@ -848,7 +850,7 @@ def run_simulation(site, turbine, wake_config, site_data, x, y, turbine_types):
         dict with keys: sim_res, aep, aep_per_turbine
     """
     # Build deficit model
-    print("Running ", wake_config["wake_model_class"], wake_config["deficit_args"])
+    logger.info("Running %s with args: %s", wake_config["wake_model_class"], wake_config["deficit_args"])
     deficit_model = wake_config["wake_model_class"](
         rotorAvgModel=wake_config["rotor_averaging"],
         groundModel=None,
@@ -889,7 +891,7 @@ def run_simulation(site, turbine, wake_config, site_data, x, y, turbine_types):
     # Run simulation
     sim_res = wind_farm_model(**sim_kwargs)
     aep = sim_res.aep(normalize_probabilities=not site_data["timeseries"]).sum()
-    print("aep is ", aep, "GWh")
+    logger.info("Calculated AEP: %s GWh", aep)
 
     # Calculate per-turbine AEP
     if site_data["timeseries"]:
@@ -901,7 +903,7 @@ def run_simulation(site, turbine, wake_config, site_data, x, y, turbine_types):
             sim_res.aep(normalize_probabilities=True).sum(["ws", "wd"]).to_numpy()
         )
 
-    print(sim_res)
+    logger.debug("Simulation results: %s", sim_res)
 
     return {"sim_res": sim_res, "aep": aep, "aep_per_turbine": aep_per_turbine}
 
