@@ -710,3 +710,44 @@ def test_weighted_superposition_allows_node_rotor_avg(rotor_name):
         _weighted_system(rotor_name), rotor_diameter=126.0, hub_height=90.0
     )
     assert isinstance(config["superposition_model"], WeightedSum)
+
+
+def _weighted_deficit_system(deficit_name):
+    """Weighted superposition + node rotor-avg, varying only the deficit."""
+    return {
+        "attributes": {
+            "analysis": {
+                "wind_deficit_model": {
+                    "name": deficit_name,
+                    "wake_expansion_coefficient": {"free_stream_ti": True},
+                },
+                "superposition_model": {"ws_superposition": "Weighted"},
+                "rotor_averaging": {"name": "grid"},
+                "deflection_model": {"name": "None"},
+                "turbulence_model": {"name": "None"},
+                "blockage_model": {"name": None},
+            }
+        }
+    }
+
+
+@pytest.mark.parametrize("deficit_name", ["SuperGaussian", "SuperGaussian2023", "GCL"])
+def test_weighted_superposition_requires_convection_deficit(deficit_name):
+    """WeightedSum/CumulativeWakeSum with a non-ConvectionDeficitModel deficit
+    (super-Gaussian, GCL) raises a clear ValueError instead of PyWake's deep
+    AssertionError, even when the rotor-averaging model is a node model."""
+    with pytest.raises(ValueError, match="ConvectionDeficitModel"):
+        configure_wake_model(
+            _weighted_deficit_system(deficit_name),
+            rotor_diameter=126.0,
+            hub_height=90.0,
+        )
+
+
+@pytest.mark.parametrize("deficit_name", ["Zong2020", "Niayifar2016", "Bastankhah2014"])
+def test_weighted_superposition_allows_convection_deficit(deficit_name):
+    """Convection-based deficits are accepted with Weighted superposition."""
+    config = configure_wake_model(
+        _weighted_deficit_system(deficit_name), rotor_diameter=126.0, hub_height=90.0
+    )
+    assert isinstance(config["superposition_model"], WeightedSum)

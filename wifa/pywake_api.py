@@ -689,20 +689,30 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height):
     rotor_averaging = _configure_rotor_averaging(rotor_avg_data)
     blockage_model = _configure_blockage_model(blockage_data, deficit_args)
 
-    # WeightedSum/CumulativeWakeSum only work with node-based rotor-averaging
-    # models (PyWake raises a bare AssertionError otherwise). Fail fast with an
-    # actionable message; windIO cannot express this cross-field constraint.
+    # WeightedSum/CumulativeWakeSum impose two constraints that PyWake otherwise
+    # enforces via bare AssertionErrors deep in a run. Fail fast with actionable
+    # messages; windIO cannot express these cross-field constraints.
+    from py_wake.deficit_models.deficit_model import ConvectionDeficitModel
     from py_wake.rotor_avg_models.rotor_avg_model import NodeRotorAvgModel
     from py_wake.superposition_models import CumulativeWakeSum, WeightedSum
 
-    if isinstance(
-        superposition_model, (WeightedSum, CumulativeWakeSum)
-    ) and not isinstance(rotor_averaging, NodeRotorAvgModel):
-        raise ValueError(
-            "WeightedSum/CumulativeWakeSum superposition requires a node "
-            "rotor-averaging model (grid/eq_grid/gq_grid/cgi); center, "
-            "gaussian_overlap and area_overlap are not node models."
-        )
+    if isinstance(superposition_model, (WeightedSum, CumulativeWakeSum)):
+        # 1. Requires a node-based rotor-averaging model.
+        if not isinstance(rotor_averaging, NodeRotorAvgModel):
+            raise ValueError(
+                "WeightedSum/CumulativeWakeSum superposition requires a node "
+                "rotor-averaging model (grid/eq_grid/gq_grid/cgi); center, "
+                "gaussian_overlap and area_overlap are not node models."
+            )
+        # 2. Requires a convection-based deficit (carries a convective velocity).
+        if not issubclass(wake_model_class, ConvectionDeficitModel):
+            raise ValueError(
+                f"WeightedSum/CumulativeWakeSum superposition requires a "
+                f"ConvectionDeficitModel-based deficit (e.g. Zong2020); "
+                f"'{wind_deficit_data['name']}' "
+                f"({wake_model_class.__name__}) is not one. SuperGaussian, "
+                f"SuperGaussian2023 and GCL do not support it — use Linear."
+            )
 
     # Blockage requires All2AllIterative solver
     solver_args = {}
