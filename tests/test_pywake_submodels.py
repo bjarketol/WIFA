@@ -198,6 +198,17 @@ def test_configure_deficit_model_jensen_1983_k():
     assert "use_effective_ws" not in args
 
 
+def test_configure_deficit_model_jensen_1983_k_b():
+    """Jensen_1983 (NOJDeficit) accepts k via k_b, since windIO's
+    wake_expansion_coefficient has no scalar k field."""
+    cls, args = _call_deficit(
+        "Jensen_1983",
+        {"wake_expansion_coefficient": {"k_a": 0.0, "k_b": 0.1}},
+    )
+    assert cls is NOJDeficit
+    assert args["k"] == 0.1
+
+
 def test_configure_deficit_model_gaussian_params_niayifar():
     """Verify Gaussian params pass through for Niayifar2016."""
     cls, args = _call_deficit(

@@ -793,8 +793,12 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
     elif normalized in ("jensen1983", "nojdeficit"):
         wake_model_class = NOJDeficit
         deficit_args.pop("use_effective_ws", None)
+        # NOJDeficit takes a scalar k. windIO's wake_expansion_coefficient has
+        # no scalar `k` field, so accept k_b (schema-valid) as well as `k`.
         if "k" in wake_expansion:
             deficit_args["k"] = wake_expansion["k"]
+        elif "k_b" in wake_expansion:
+            deficit_args["k"] = wake_expansion["k_b"]
 
     elif normalized in GAUSSIAN_MODELS:
         wake_model_class = GAUSSIAN_MODELS[normalized]
