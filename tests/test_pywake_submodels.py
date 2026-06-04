@@ -31,8 +31,10 @@ from py_wake.deficit_models.rathmann import Rathmann
 from py_wake.deflection_models import JimenezWakeDeflection
 from py_wake.deflection_models.gcl_hill_vortex import GCLHillDeflection
 from py_wake.rotor_avg_models import (
+    AreaOverlapAvgModel,
     CGIRotorAvg,
     EqGridRotorAvg,
+    GaussianOverlapAvgModel,
     GQGridRotorAvg,
     GridRotorAvg,
     PolarGridRotorAvg,
@@ -201,9 +203,12 @@ def test_configure_deficit_model_gaussian_params_niayifar():
     cls, args = _call_deficit(
         "Niayifar2016",
         {
-            "wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004},
+            "wake_expansion_coefficient": {
+                "k_a": 0.38,
+                "k_b": 0.004,
+                "free_stream_ti": False,
+            },
             "ceps": 0.3,
-            "use_effective_ti": True,
         },
     )
     assert cls is NiayifarGaussianDeficit
@@ -216,7 +221,7 @@ def test_configure_deficit_model_zong_no_ceps():
     """Verify Zong2020 does not pass ceps (unsupported)."""
     _, args = _call_deficit(
         "Zong2020",
-        {"ceps": 0.3, "use_effective_ti": False},
+        {"ceps": 0.3, "wake_expansion_coefficient": {"free_stream_ti": True}},
     )
     assert "ceps" not in args
     assert args["use_effective_ti"] is False
@@ -226,7 +231,7 @@ def test_configure_deficit_model_bastankhah2014_no_effective_ti():
     """Verify Bastankhah2014 does not pass use_effective_ti (unsupported)."""
     _, args = _call_deficit(
         "Bastankhah2014",
-        {"wake_expansion_coefficient": {"k": 0.04}, "use_effective_ti": True},
+        {"wake_expansion_coefficient": {"k": 0.04, "free_stream_ti": False}},
     )
     assert "use_effective_ti" not in args
     assert args["k"] == 0.04
@@ -262,13 +267,26 @@ def test_configure_deficit_model_a_param_warns_on_missing_k_a():
         (
             "Niayifar2016",
             {
-                "wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004},
+                "wake_expansion_coefficient": {
+                    "k_a": 0.38,
+                    "k_b": 0.004,
+                    "free_stream_ti": False,
+                },
                 "ceps": 0.3,
-                "use_effective_ti": True,
             },
             NiayifarGaussianDeficit,
         ),
-        ("Zong2020", {"use_effective_ti": False}, ZongGaussianDeficit),
+        (
+            "Zong2020",
+            {
+                "wake_expansion_coefficient": {
+                    "k_a": 0.38,
+                    "k_b": 0.004,
+                    "free_stream_ti": True,
+                }
+            },
+            ZongGaussianDeficit,
+        ),
         (
             "Jensen",
             {"wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004}},
@@ -310,6 +328,58 @@ def test_configure_deficit_model_bastankhah2016_not_implemented(name):
 def test_configure_deficit_model_unknown():
     with pytest.raises(NotImplementedError, match="NonexistentModel"):
         _call_deficit("NonexistentModel")
+
+
+# ---------------------------------------------------------------------------
+# TI reference flag (windIO free_stream_ti -> PyWake use_effective_ti)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Niayifar2016",
+        "Carbajofuertes2018",
+        "Zong2020",
+        "TurbOPark",
+        "SuperGaussian",
+        "SuperGaussian2023",
+    ],
+)
+@pytest.mark.parametrize("free_stream_ti,expected", [(False, True), (True, False)])
+def test_free_stream_ti_inverts_to_use_effective_ti(name, free_stream_ti, expected):
+    """free_stream_ti maps to use_effective_ti with inverted polarity, for every
+    TI-capable deficit (including SuperGaussian and TurbOPark, which the previous
+    narrow handling missed)."""
+    _, args = _call_deficit(
+        name, {"wake_expansion_coefficient": {"free_stream_ti": free_stream_ti}}
+    )
+    assert args["use_effective_ti"] is expected
+    # kwargs must actually instantiate the model
+    cls, _ = _call_deficit(name)
+    cls(**args)
+
+
+@pytest.mark.parametrize("name", ["Bastankhah2014", "Jensen", "GCL"])
+def test_free_stream_ti_ignored_for_non_ti_capable(name):
+    """Deficits without a use_effective_ti param must not receive it, even if
+    free_stream_ti is present (would raise TypeError on instantiation)."""
+    _, args = _call_deficit(
+        name, {"wake_expansion_coefficient": {"k_b": 0.04, "free_stream_ti": True}}
+    )
+    assert "use_effective_ti" not in args
+
+
+def test_use_effective_ti_key_is_ignored():
+    """The deprecated top-level use_effective_ti key is no longer read."""
+    _, args = _call_deficit(
+        "Niayifar2016",
+        {
+            "wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004},
+            "use_effective_ti": False,
+        },
+    )
+    assert "use_effective_ti" not in args
 
 
 # ---------------------------------------------------------------------------
@@ -416,6 +486,12 @@ def test_configure_superposition_model_product_not_implemented():
         _configure_superposition_model({"ws_superposition": "Product"})
 
 
+def test_configure_superposition_model_vector_not_implemented():
+    """Vector superposition is foxes-only; the pyWake path rejects it."""
+    with pytest.raises(NotImplementedError, match="Vector"):
+        _configure_superposition_model({"ws_superposition": "Vector"})
+
+
 def test_configure_superposition_model_unknown():
     with pytest.raises(NotImplementedError, match="UnknownSuper"):
         _configure_superposition_model({"ws_superposition": "UnknownSuper"})
@@ -432,8 +508,13 @@ def test_configure_superposition_model_unknown():
         ("Center", RotorCenter),
         ("center", RotorCenter),
         ("CENTER", RotorCenter),
+        ("grid", GridRotorAvg),
         ("avg_deficit", GridRotorAvg),
         ("Avg_Deficit", GridRotorAvg),
+        ("gaussian_overlap", GaussianOverlapAvgModel),
+        ("gaussianoverlap", GaussianOverlapAvgModel),
+        ("area_overlap", AreaOverlapAvgModel),
+        ("areaoverlap", AreaOverlapAvgModel),
         ("EqGrid", EqGridRotorAvg),
         ("eqgrid", EqGridRotorAvg),
         ("GQGrid", GQGridRotorAvg),
@@ -588,3 +669,43 @@ def test_configure_wake_model_returns_wake_deficit_key():
     config = configure_wake_model(system_dat, rotor_diameter=126.0, hub_height=90.0)
     assert "wake_deficit_key" in config
     assert config["wake_deficit_key"] is None
+
+
+def _weighted_system(rotor_name, ws_superposition="Weighted"):
+    return {
+        "attributes": {
+            "analysis": {
+                "wind_deficit_model": {
+                    "name": "Zong2020",
+                    "wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004},
+                },
+                "superposition_model": {"ws_superposition": ws_superposition},
+                "rotor_averaging": {"name": rotor_name},
+                "deflection_model": {"name": "None"},
+                "turbulence_model": {"name": "None"},
+                "blockage_model": {"name": None},
+            }
+        }
+    }
+
+
+@pytest.mark.parametrize("rotor_name", ["gaussian_overlap", "area_overlap", "center"])
+@pytest.mark.parametrize("ws_superposition", ["Weighted", "Cumulative"])
+def test_weighted_superposition_requires_node_rotor_avg(rotor_name, ws_superposition):
+    """WeightedSum/CumulativeWakeSum with a non-node rotor-averaging model raises
+    a clear ValueError instead of PyWake's deep AssertionError."""
+    with pytest.raises(ValueError, match="node"):
+        configure_wake_model(
+            _weighted_system(rotor_name, ws_superposition),
+            rotor_diameter=126.0,
+            hub_height=90.0,
+        )
+
+
+@pytest.mark.parametrize("rotor_name", ["grid", "eq_grid", "gq_grid", "cgi"])
+def test_weighted_superposition_allows_node_rotor_avg(rotor_name):
+    """A node rotor-averaging model is accepted with Weighted superposition."""
+    config = configure_wake_model(
+        _weighted_system(rotor_name), rotor_diameter=126.0, hub_height=90.0
+    )
+    assert isinstance(config["superposition_model"], WeightedSum)

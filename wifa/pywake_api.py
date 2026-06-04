@@ -612,6 +612,21 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height):
     rotor_averaging = _configure_rotor_averaging(rotor_avg_data)
     blockage_model = _configure_blockage_model(blockage_data, deficit_args)
 
+    # WeightedSum/CumulativeWakeSum only work with node-based rotor-averaging
+    # models (PyWake raises a bare AssertionError otherwise). Fail fast with an
+    # actionable message; windIO cannot express this cross-field constraint.
+    from py_wake.rotor_avg_models.rotor_avg_model import NodeRotorAvgModel
+    from py_wake.superposition_models import CumulativeWakeSum, WeightedSum
+
+    if isinstance(
+        superposition_model, (WeightedSum, CumulativeWakeSum)
+    ) and not isinstance(rotor_averaging, NodeRotorAvgModel):
+        raise ValueError(
+            "WeightedSum/CumulativeWakeSum superposition requires a node "
+            "rotor-averaging model (grid/eq_grid/gq_grid/cgi); center, "
+            "gaussian_overlap and area_overlap are not node models."
+        )
+
     # Blockage requires All2AllIterative solver
     solver_args = {}
     if blockage_model is not None:
@@ -668,6 +683,16 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
     }
     # Models that accept a=[k_a, k_b] instead of k (scalar)
     A_PARAM_MODELS = {"niayifar2016", "zong2020", "carbajofuertes2018"}
+    # Deficits that expose a use_effective_ti param (TI-dependent expansion/width).
+    # Bastankhah2014, NOJ/Jensen, GCL and FUGA do not accept it.
+    TI_CAPABLE = {
+        "niayifar2016",
+        "carbajofuertes2018",
+        "zong2020",
+        "turbopark",
+        "supergaussian",
+        "supergaussian2023",
+    }
 
     if normalized in ("jensen", "nojlocaldeficit"):
         wake_model_class = NOJLocalDeficit
@@ -707,9 +732,6 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
         # ceps: valid for Bastankhah, Niayifar, Carbajofuertes (not Zong)
         if normalized != "zong2020" and "ceps" in wind_deficit_cfg:
             deficit_args["ceps"] = wind_deficit_cfg["ceps"]
-        # use_effective_ti: valid for Niayifar, Zong, Carbajofuertes (not Bastankhah)
-        if normalized != "bastankhah2014" and "use_effective_ti" in wind_deficit_cfg:
-            deficit_args["use_effective_ti"] = wind_deficit_cfg["use_effective_ti"]
 
     elif normalized == "supergaussian":
         wake_model_class = BlondelSuperGaussianDeficit2020
@@ -761,6 +783,13 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
 
     else:
         raise NotImplementedError(f"Wake model '{model_name}' is not supported")
+
+    # TI reference: windIO carries this as the nested wake_expansion_coefficient
+    # .free_stream_ti flag (foxes-compatible). PyWake's deficits expose the
+    # inverse use_effective_ti param (use_effective_ti = not free_stream_ti),
+    # but only the TI-dependent deficits accept it.
+    if normalized in TI_CAPABLE and "free_stream_ti" in wake_expansion:
+        deficit_args["use_effective_ti"] = not wake_expansion["free_stream_ti"]
 
     return wake_model_class, deficit_args
 
@@ -847,14 +876,20 @@ def _configure_superposition_model(superposition_data):
         return SUPERPOSITION_MODELS[normalized]()
     if normalized == "product":
         raise NotImplementedError("Product superposition is not available in PyWake.")
+    if normalized == "vector":
+        raise NotImplementedError(
+            "Vector superposition is foxes-only; not available in PyWake."
+        )
     raise NotImplementedError(f"Superposition model '{name}' is not supported")
 
 
 def _configure_rotor_averaging(rotor_avg_data):
     """Configure the rotor averaging model."""
     from py_wake.rotor_avg_models import (
+        AreaOverlapAvgModel,
         CGIRotorAvg,
         EqGridRotorAvg,
+        GaussianOverlapAvgModel,
         GQGridRotorAvg,
         GridRotorAvg,
         PolarGridRotorAvg,
@@ -866,8 +901,13 @@ def _configure_rotor_averaging(rotor_avg_data):
 
     if normalized == "center":
         return RotorCenter()
-    if normalized == "avgdeficit":
+    # "grid" is the canonical windIO name; "avgdeficit" is a deprecated alias
+    if normalized in ("grid", "avgdeficit"):
         return GridRotorAvg()
+    if normalized == "gaussianoverlap":
+        return GaussianOverlapAvgModel()
+    if normalized == "areaoverlap":
+        return AreaOverlapAvgModel()
     if normalized == "eqgrid":
         return EqGridRotorAvg(n=rotor_avg_data.get("n", 4))
     if normalized == "gqgrid":
