@@ -338,6 +338,7 @@ def test_configure_deficit_model_unknown():
 @pytest.mark.parametrize(
     "name",
     [
+        "Jensen",
         "Niayifar2016",
         "Carbajofuertes2018",
         "Zong2020",
@@ -360,7 +361,7 @@ def test_free_stream_ti_inverts_to_use_effective_ti(name, free_stream_ti, expect
     cls(**args)
 
 
-@pytest.mark.parametrize("name", ["Bastankhah2014", "Jensen", "GCL"])
+@pytest.mark.parametrize("name", ["Bastankhah2014", "GCL"])
 def test_free_stream_ti_ignored_for_non_ti_capable(name):
     """Deficits without a use_effective_ti param must not receive it, even if
     free_stream_ti is present (would raise TypeError on instantiation)."""

@@ -761,8 +761,12 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
     # Models that accept a=[k_a, k_b] instead of k (scalar)
     A_PARAM_MODELS = {"niayifar2016", "zong2020", "carbajofuertes2018"}
     # Deficits that expose a use_effective_ti param (TI-dependent expansion/width).
-    # Bastankhah2014, NOJ/Jensen, GCL and FUGA do not accept it.
+    # NOJLocalDeficit (Jensen) accepts it too: with a=[k_a, k_b] it references
+    # effective TI, so honoring free_stream_ti lets a no-turbulence config use
+    # ambient TI. Bastankhah2014, free-stream NOJDeficit, GCL and FUGA do not.
     TI_CAPABLE = {
+        "jensen",
+        "nojlocaldeficit",
         "niayifar2016",
         "carbajofuertes2018",
         "zong2020",
