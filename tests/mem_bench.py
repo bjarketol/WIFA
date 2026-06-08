@@ -43,7 +43,10 @@ _ANALYSIS = {
     },
     "deflection_model": {"name": "None"},
     "turbulence_model": {"name": "STF2005", "c1": 1.0, "c2": 1.0},
-    "superposition_model": {"ws_superposition": "Linear", "ti_superposition": "Squared"},
+    "superposition_model": {
+        "ws_superposition": "Linear",
+        "ti_superposition": "Squared",
+    },
     "rotor_averaging": {"name": "Center"},
     "blockage_model": {"name": "None"},
 }
@@ -63,8 +66,12 @@ def _attrs():
 
 
 def _layout(n_turbines, spacing=600.0):
-    return {"coordinates": {"x": [i * spacing for i in range(n_turbines)],
-                            "y": [0.0] * n_turbines}}
+    return {
+        "coordinates": {
+            "x": [i * spacing for i in range(n_turbines)],
+            "y": [0.0] * n_turbines,
+        }
+    }
 
 
 def _bounds(n_turbines, spacing=600.0):
@@ -105,7 +112,11 @@ def timeseries_system(n_times, n_turbines, arrays=False):
                 },
             },
         },
-        "wind_farm": {"name": "f", "layouts": [_layout(n_turbines)], "turbines": _TURBINE},
+        "wind_farm": {
+            "name": "f",
+            "layouts": [_layout(n_turbines)],
+            "turbines": _TURBINE,
+        },
         "attributes": _attrs(),
     }
 
@@ -132,11 +143,18 @@ def weibull_system(n_dirs, n_turbines):
                     "weibull_a": {"data": a, "dims": dims},
                     "weibull_k": {"data": k, "dims": dims},
                     "sector_probability": {"data": p, "dims": dims},
-                    "turbulence_intensity": {"data": (0.07 * np.ones((n_turbines, n_dirs))).tolist(), "dims": dims},
+                    "turbulence_intensity": {
+                        "data": (0.07 * np.ones((n_turbines, n_dirs))).tolist(),
+                        "dims": dims,
+                    },
                 },
             },
         },
-        "wind_farm": {"name": "f", "layouts": [_layout(n_turbines)], "turbines": _TURBINE},
+        "wind_farm": {
+            "name": "f",
+            "layouts": [_layout(n_turbines)],
+            "turbines": _TURBINE,
+        },
         "attributes": _attrs(),
     }
 
@@ -181,7 +199,10 @@ def nc_load_peaks(n_times, n_turbines):
         },
         coords={"time": np.arange(n_times), "wind_turbine": np.arange(n_turbines)},
     )
-    ds["operating"] = (("time", "wind_turbine"), np.ones((n_times, n_turbines), dtype=int))
+    ds["operating"] = (
+        ("time", "wind_turbine"),
+        np.ones((n_times, n_turbines), dtype=int),
+    )
     ds.to_netcdf(d / "wind_resource.nc")
     sysf = d / "system.yaml"
     sysf.write_text("wind_resource: !include wind_resource.nc\n")
@@ -212,13 +233,17 @@ def main():
     nbytes = n_times * n_wt * 8 * 5 / MB  # 5 float arrays
     sysd, _, dpeak = _peak_of(lambda: timeseries_system(n_times, n_wt))
     cs = _construct_peak(sysd)
-    print(f"{'timeseries 4000x100 (lists)':<28}{dpeak / MB:>11.1f}MB{cs / MB:>15.1f}MB"
-          f"   (raw ndarray ~{nbytes:.1f}MB)")
+    print(
+        f"{'timeseries 4000x100 (lists)':<28}{dpeak / MB:>11.1f}MB{cs / MB:>15.1f}MB"
+        f"   (raw ndarray ~{nbytes:.1f}MB)"
+    )
 
     sysa, _, apeak = _peak_of(lambda: timeseries_system(n_times, n_wt, arrays=True))
     csa = _construct_peak(sysa)
-    print(f"{'timeseries 4000x100 (arrays)':<28}{apeak / MB:>11.1f}MB{csa / MB:>15.1f}MB"
-          f"   <- Phase 2 preview")
+    print(
+        f"{'timeseries 4000x100 (arrays)':<28}{apeak / MB:>11.1f}MB{csa / MB:>15.1f}MB"
+        f"   <- Phase 2 preview"
+    )
 
     n_dirs, n_wt_w = 12, 2000
     sysw, _, wpeak = _peak_of(lambda: weibull_system(n_dirs, n_wt_w))
@@ -231,8 +256,10 @@ def main():
         print("load_yaml(.nc): windIO has no nc_data option (skipped)")
     else:
         pl, pa = peaks
-        print(f"load_yaml(.nc) 4000x100   list={pl / MB:.1f}MB  "
-              f"array={pa / MB:.1f}MB  ({pl / pa:.1f}x lower peak)")
+        print(
+            f"load_yaml(.nc) 4000x100   list={pl / MB:.1f}MB  "
+            f"array={pa / MB:.1f}MB  ({pl / pa:.1f}x lower peak)"
+        )
 
 
 if __name__ == "__main__":

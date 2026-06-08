@@ -492,17 +492,14 @@ def test_pywake_mixed_turbine_types_hub_heights(tmp_path):
 
     # Per-turbine site (mirrors dict_to_site: wind_turbine -> i, i leading dim,
     # uniform P, integer time).
-    ds = (
-        xr.Dataset(
-            {
-                "WS": (("time", "i"), ws),
-                "WD": (("time", "i"), wd),
-                "TI": (("time", "i"), ti),
-            },
-            coords={"time": np.arange(n_time), "i": np.arange(n_wt)},
-        )
-        .transpose("i", "time")
-    )
+    ds = xr.Dataset(
+        {
+            "WS": (("time", "i"), ws),
+            "WD": (("time", "i"), wd),
+            "TI": (("time", "i"), ti),
+        },
+        coords={"time": np.arange(n_time), "i": np.arange(n_wt)},
+    ).transpose("i", "time")
     ds["P"] = (("time",), np.ones(n_time) / n_time)
     site = XRSite(ds, interp_method="linear")
 
