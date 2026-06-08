@@ -81,8 +81,11 @@ def load_and_validate_config(yaml_input, default_output_dir="output"):
     from windIO import validate as validate_yaml
 
     if not isinstance(yaml_input, dict):
-        validate_yaml(yaml_input, "plant/wind_energy_system")
-        system_dat = load_yaml(Path(yaml_input))
+        # Keep an included wind_resource.nc as numpy arrays instead of exploding
+        # it into Python lists; validate structure-only so jsonschema does not
+        # require/iterate the bulk data.
+        validate_yaml(yaml_input, "plant/wind_energy_system", array_data=True)
+        system_dat = load_yaml(Path(yaml_input), nc_data="array")
     else:
         system_dat = yaml_input
 
@@ -361,6 +364,9 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
         do_subset = True
 
     heights = wind_resource.get("height")
+    # ``heights`` may be a list or a numpy array (array-backed resource), so use
+    # an explicit boolean rather than the ambiguous truth value of an array.
+    has_heights = heights is not None and len(heights) > 0
 
     def _subset(arr):
         # Only copy when a real time subset is requested.  An all-True boolean
@@ -412,7 +418,7 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
 
     if len(hub_heights) > 1:
         # Multiple turbine types with differing hub heights.
-        if ("wind_turbine" in ws_dims or "wind_turbine" in wd_dims) and not heights:
+        if ("wind_turbine" in ws_dims or "wind_turbine" in wd_dims) and not has_heights:
             # Per-turbine ws/wd are given without a vertical profile (e.g. terrain
             # speedups produced by a microscale model, already at each turbine's
             # hub height). Preserve the per-turbine values via dict_to_site rather
@@ -519,7 +525,7 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
             TI = np.mean([ti_levels[i] for i in idx_per_turbine], axis=0)
     else:
         # Single turbine type
-        if heights:
+        if has_heights:
             ws, wd = _interpolate_wind_data(heights, ws, wd, hh)
 
         assert len(_subset(np.asarray(times))) == len(ws)
@@ -538,7 +544,7 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
             TI = 0.02
         else:
             TI = _subset(np.asarray(wind_resource["turbulence_intensity"]["data"]))
-            if heights:
+            if has_heights:
                 TI = interp1d(heights, TI, axis=1)(hh)
 
     return {

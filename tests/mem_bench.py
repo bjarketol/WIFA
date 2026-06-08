@@ -10,9 +10,13 @@ dict into a pyWake site, isolating the copies this optimization targets:
 Run:  pixi run python tests/mem_bench.py
 """
 
+import gc
+import tempfile
 import tracemalloc
+from pathlib import Path
 
 import numpy as np
+import xarray as xr
 
 from wifa.pywake_api import construct_site, create_turbines
 
@@ -160,6 +164,45 @@ def _construct_peak(system):
     return peak - base
 
 
+def nc_load_peaks(n_times, n_turbines):
+    """Peak memory of windIO.load_yaml on a real wind_resource.nc, list vs array.
+
+    Requires a windIO build with the ``nc_data`` loader option; returns None if
+    unavailable so the benchmark still runs the in-process cases.
+    """
+    import windIO
+
+    d = Path(tempfile.mkdtemp())
+    rng = np.random.default_rng(0)
+    ds = xr.Dataset(
+        {
+            v: (("time", "wind_turbine"), rng.random((n_times, n_turbines)))
+            for v in ("wind_speed", "wind_direction", "turbulence_intensity", "density")
+        },
+        coords={"time": np.arange(n_times), "wind_turbine": np.arange(n_turbines)},
+    )
+    ds["operating"] = (("time", "wind_turbine"), np.ones((n_times, n_turbines), dtype=int))
+    ds.to_netcdf(d / "wind_resource.nc")
+    sysf = d / "system.yaml"
+    sysf.write_text("wind_resource: !include wind_resource.nc\n")
+
+    def peak(mode):
+        gc.collect()
+        tracemalloc.start()
+        tracemalloc.clear_traces()
+        obj = windIO.load_yaml(sysf, nc_data=mode)
+        _, pk = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        del obj
+        gc.collect()
+        return pk
+
+    try:
+        return peak("list"), peak("array")
+    except TypeError:
+        return None  # windIO without the nc_data option
+
+
 def main():
     MB = 1e6
     print(f"{'case':<28}{'input dict':>14}{'construct_site':>18}")
@@ -181,6 +224,15 @@ def main():
     sysw, _, wpeak = _peak_of(lambda: weibull_system(n_dirs, n_wt_w))
     csw = _construct_peak(sysw)
     print(f"{'weibull 2000wt x 12dir':<28}{wpeak / MB:>11.1f}MB{csw / MB:>15.1f}MB")
+
+    print()
+    peaks = nc_load_peaks(n_times, n_wt)
+    if peaks is None:
+        print("load_yaml(.nc): windIO has no nc_data option (skipped)")
+    else:
+        pl, pa = peaks
+        print(f"load_yaml(.nc) 4000x100   list={pl / MB:.1f}MB  "
+              f"array={pa / MB:.1f}MB  ({pl / pa:.1f}x lower peak)")
 
 
 if __name__ == "__main__":
