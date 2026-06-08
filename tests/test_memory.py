@@ -10,9 +10,8 @@ import tracemalloc
 
 import numpy as np
 import pytest
-import xarray as xr
-
 import windIO
+import xarray as xr
 
 pytest.importorskip("netCDF4")
 

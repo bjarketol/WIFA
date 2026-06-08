@@ -28,8 +28,10 @@ from py_wake.deficit_models.gaussian import (
 from py_wake.deficit_models.gcl import GCLDeficit
 from py_wake.deficit_models.noj import NOJDeficit, NOJLocalDeficit, TurboNOJDeficit
 from py_wake.deficit_models.rathmann import Rathmann
+from py_wake.deficit_models.utils import ct2a_madsen, ct2a_mom1d
 from py_wake.deflection_models import JimenezWakeDeflection
 from py_wake.deflection_models.gcl_hill_vortex import GCLHillDeflection
+from py_wake.ground_models.ground_models import Mirror
 from py_wake.rotor_avg_models import (
     AreaOverlapAvgModel,
     CGIRotorAvg,
@@ -71,10 +73,23 @@ _RD = 126.0
 _HH = 90.0
 
 
-def _call_deficit(name, analysis_extra=None):
-    """Helper to call _configure_deficit_model with minimal boilerplate."""
+def _call_deficit(name, analysis_extra=None, analysis_top=None):
+    """Helper to call _configure_deficit_model with minimal boilerplate.
+
+    Returns ``(wake_model_class, deficit_args)``; the third element
+    (``deficit_post_attrs``) is dropped for the common case.  ``analysis_top``
+    merges keys at the ``analysis`` level (e.g. ``axial_induction_model``).
+    """
     wind_deficit_model = {"name": name, **(analysis_extra or {})}
-    analysis = {"wind_deficit_model": wind_deficit_model}
+    analysis = {"wind_deficit_model": wind_deficit_model, **(analysis_top or {})}
+    cls, args, _post = _configure_deficit_model({"name": name}, analysis, _RD, _HH)
+    return cls, args
+
+
+def _call_deficit_full(name, analysis_extra=None, analysis_top=None):
+    """Like ``_call_deficit`` but returns the full 3-tuple including post-attrs."""
+    wind_deficit_model = {"name": name, **(analysis_extra or {})}
+    analysis = {"wind_deficit_model": wind_deficit_model, **(analysis_top or {})}
     return _configure_deficit_model({"name": name}, analysis, _RD, _HH)
 
 
@@ -762,3 +777,76 @@ def test_weighted_superposition_allows_convection_deficit(deficit_name):
         _weighted_deficit_system(deficit_name), rotor_diameter=126.0, hub_height=90.0
     )
     assert isinstance(config["superposition_model"], WeightedSum)
+
+
+# ---------------------------------------------------------------------------
+# Axial induction -> ct2a (honoring axial_induction_model)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "axial, expected",
+    [("1D", ct2a_mom1d), ("Madsen", ct2a_madsen), ("madsen", ct2a_madsen)],
+)
+def test_axial_induction_sets_ct2a(axial, expected):
+    """axial_induction_model maps to the deficit's ct2a on a ct2a-capable model."""
+    _, args = _call_deficit(
+        "Bastankhah2014", analysis_top={"axial_induction_model": axial}
+    )
+    assert args["ct2a"] is expected
+
+
+def test_axial_induction_default_absent_keeps_deficit_default():
+    """No axial_induction_model -> no ct2a override (deficit keeps its default)."""
+    _, args = _call_deficit("Bastankhah2014")
+    assert "ct2a" not in args
+
+
+def test_axial_induction_skipped_when_deficit_has_no_ct2a():
+    """Blondel2020 has no ct2a parameter, so it is left untouched."""
+    _, args = _call_deficit(
+        "SuperGaussian", analysis_top={"axial_induction_model": "1D"}
+    )
+    assert "ct2a" not in args
+
+
+def test_axial_induction_ct2a_instantiates():
+    """The injected ct2a is a valid constructor argument."""
+    cls, args = _call_deficit(
+        "Niayifar2016", analysis_top={"axial_induction_model": "1D"}
+    )
+    assert isinstance(cls(**args), NiayifarGaussianDeficit)
+
+
+# ---------------------------------------------------------------------------
+# TurbOPark canonical recipe (Nygaard 2022)
+# ---------------------------------------------------------------------------
+
+
+def test_turbopark_recipe_ground_and_ctlim():
+    """TurbOPark gets a Mirror ground model and ctlim=0.96 as constructor args."""
+    cls, args, post = _call_deficit_full("TurbOPark")
+    assert cls is TurboGaussianDeficit
+    assert isinstance(args["groundModel"], Mirror)
+    assert args["ctlim"] == 0.96
+
+
+def test_turbopark_recipe_ws_key_post_attr():
+    """TurbOPark scales by the downstream ambient WS via WS_key='WS_jlk'."""
+    _, _, post = _call_deficit_full("TurbOPark")
+    assert post == {"WS_key": "WS_jlk"}
+
+
+def test_turbopark_recipe_instantiates_and_applies_ws_key():
+    """The recipe builds a valid deficit and WS_key is set post-construction."""
+    cls, args, post = _call_deficit_full("TurbOPark")
+    deficit = cls(**args)
+    for attr, value in post.items():
+        setattr(deficit, attr, value)
+    assert deficit.WS_key == "WS_jlk"
+
+
+def test_non_turbopark_has_no_post_attrs():
+    """Only TurbOPark carries post-construction attributes."""
+    _, _, post = _call_deficit_full("Bastankhah2014")
+    assert post == {}
