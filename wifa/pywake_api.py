@@ -853,9 +853,11 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
 
     model_name = wind_deficit_data["name"]
     normalized = _normalize_name(model_name)
-    deficit_args = {"use_effective_ws": True}
 
     wind_deficit_cfg = analysis.get("wind_deficit_model", {})
+    # Honor the windIO use_effective_ws flag (local vs free-stream inflow at the
+    # waking turbine); deficits that don't accept it pop it below (NOJDeficit).
+    deficit_args = {"use_effective_ws": wind_deficit_cfg.get("use_effective_ws", True)}
     wake_expansion = wind_deficit_cfg.get("wake_expansion_coefficient", {})
 
     GAUSSIAN_MODELS = {
@@ -869,7 +871,8 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
     # Deficits that expose a use_effective_ti param (TI-dependent expansion/width).
     # NOJLocalDeficit (Jensen) accepts it too: with a=[k_a, k_b] it references
     # effective TI, so honoring free_stream_ti lets a no-turbulence config use
-    # ambient TI. Bastankhah2014, free-stream NOJDeficit, GCL and FUGA do not.
+    # ambient TI. GCLDeficit also accepts it (GCLLocal sets use_effective_ti=True).
+    # Bastankhah2014, free-stream NOJDeficit and FUGA do not.
     TI_CAPABLE = {
         "jensen",
         "nojlocaldeficit",
@@ -877,6 +880,7 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
         "carbajofuertes2018",
         "zong2020",
         "turbopark",
+        "gcl",
         "supergaussian",
         "supergaussian2023",
     }

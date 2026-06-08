@@ -388,10 +388,13 @@ def test_free_stream_ti_inverts_to_use_effective_ti(name, free_stream_ti, expect
     cls(**args)
 
 
-@pytest.mark.parametrize("name", ["Bastankhah2014", "GCL"])
+@pytest.mark.parametrize("name", ["Bastankhah2014"])
 def test_free_stream_ti_ignored_for_non_ti_capable(name):
     """Deficits without a use_effective_ti param must not receive it, even if
-    free_stream_ti is present (would raise TypeError on instantiation)."""
+    free_stream_ti is present (would raise TypeError on instantiation).
+
+    (GCL was moved to TI_CAPABLE — GCLDeficit accepts use_effective_ti, as
+    GCLLocal demonstrates.)"""
     _, args = _call_deficit(
         name, {"wake_expansion_coefficient": {"k_b": 0.04, "free_stream_ti": True}}
     )
@@ -915,3 +918,27 @@ def test_non_turbopark_has_no_post_attrs():
     """Only TurbOPark carries post-construction attributes."""
     _, _, post = _call_deficit_full("Bastankhah2014")
     assert post == {}
+
+
+# ---------------------------------------------------------------------------
+# use_effective_ws / use_effective_ti for GCL (Phase 3)
+# ---------------------------------------------------------------------------
+
+
+def test_use_effective_ws_honored():
+    """The windIO use_effective_ws flag is passed through (not hardcoded)."""
+    _, args = _call_deficit("Bastankhah2014", {"use_effective_ws": False})
+    assert args["use_effective_ws"] is False
+
+
+def test_use_effective_ws_defaults_true():
+    _, args = _call_deficit("Bastankhah2014")
+    assert args["use_effective_ws"] is True
+
+
+def test_gcl_honors_free_stream_ti():
+    """GCLDeficit accepts use_effective_ti (GCLLocal); free_stream_ti is honored."""
+    _, args = _call_deficit(
+        "GCL", {"wake_expansion_coefficient": {"free_stream_ti": False}}
+    )
+    assert args["use_effective_ti"] is True
