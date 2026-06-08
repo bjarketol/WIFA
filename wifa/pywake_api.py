@@ -403,62 +403,112 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
     site = None
 
     if len(hub_heights) > 1:
-        # Multiple turbine types - need height interpolation
-        flow_field_spec = (
-            system_dat["attributes"]
-            .get("model_outputs_specification", {})
-            .get("flow_field", {})
-        )
-        if (
-            "z_planes" in flow_field_spec
-            and flow_field_spec["z_planes"] != "hub_heights"
-        ):
-            additional_heights = flow_field_spec.get("z_planes", {}).get("z_list", [])
-
-        speeds, dirs, TIs, seen = [], [], [], []
-        for hh in sorted(np.append(list(hub_heights.values()), additional_heights)):
-            if hh in seen:
-                continue
-            seen.append(hh)
-            ws_int, wd_int = _interpolate_wind_data(heights, ws, wd, hh)
-            speeds.append(ws_int)
-            dirs.append(wd_int)
-
-        ws, wd = ws_int, wd_int
-
-        # Handle TI interpolation
-        if "turbulence_intensity" not in wind_resource:
-            TI = 0.02
+        # Multiple turbine types with differing hub heights.
+        if ("wind_turbine" in ws_dims or "wind_turbine" in wd_dims) and not heights:
+            # Per-turbine ws/wd are given without a vertical profile (e.g. terrain
+            # speedups produced by a microscale model, already at each turbine's
+            # hub height). Preserve the per-turbine values via dict_to_site rather
+            # than averaging across turbines or interpolating a vertical profile.
+            site = dict_to_site(wind_resource)
+            if "turbulence_intensity" not in wind_resource:
+                TI = 0.02
+            else:
+                TI = np.array(wind_resource["turbulence_intensity"]["data"])[cases_idx]
+        elif "wind_turbine" in ws_dims or "wind_turbine" in wd_dims:
+            # Both a vertical profile and per-turbine data is ambiguous — we
+            # cannot tell whether height or turbine indexes the inflow.
+            raise NotImplementedError(
+                "A wind resource with both a 'height' profile and a "
+                "'wind_turbine' dimension is not supported. Provide one or the "
+                "other for mixed hub heights."
+            )
         else:
-            TI_data = np.array(wind_resource["turbulence_intensity"]["data"])[cases_idx]
-            for hh in sorted(np.append(list(hub_heights.values()), additional_heights)):
-                if hh in seen[len(speeds) :]:
-                    continue
-                if heights:
-                    ti_int = _interpolate_with_min(heights, TI_data, hh, min_val=0.02)
-                else:
-                    ti_int = TI_data
-                TIs.append(ti_int)
-            TI = ti_int
+            # Vertical wind profile (a `height` dimension) with mixed hub
+            # heights: interpolate the profile to each distinct hub height (plus
+            # any requested flow-field z-planes) and build a height-indexed
+            # XRSite.  pyWake then assigns every turbine its inflow at its own
+            # hub height.
+            flow_field_spec = (
+                system_dat["attributes"]
+                .get("model_outputs_specification", {})
+                .get("flow_field", {})
+            )
+            if (
+                "z_planes" in flow_field_spec
+                and flow_field_spec["z_planes"] != "hub_heights"
+            ):
+                additional_heights = flow_field_spec.get("z_planes", {}).get(
+                    "z_list", []
+                )
+
+            h_levels = sorted(set(hub_heights.values()) | set(additional_heights))
+
+            # Interpolate WS (linear) and WD (vector / circular) to each level.
+            speeds = [_interpolate_wind_data(heights, ws, wd, h)[0] for h in h_levels]
+            dirs = [_interpolate_wind_dir(heights, wd, h) for h in h_levels]
+            n_time = np.asarray(speeds[0]).shape[0]
+
+            # Interpolate TI to each level (floored), else a constant default.
+            if "turbulence_intensity" not in wind_resource:
+                ti_levels = [np.full(n_time, 0.02) for _ in h_levels]
+            else:
+                ti_data = np.array(wind_resource["turbulence_intensity"]["data"])[
+                    cases_idx
+                ]
+                ti_levels = [
+                    _interpolate_with_min(heights, ti_data, h, min_val=0.02)
+                    for h in h_levels
+                ]
 
             data_vars = {
                 "WS": (["h", "time"], np.array(speeds)),
                 "WD": (["h", "time"], np.array(dirs)),
-                "TI": (["h", "time"], np.array(TIs)),
-                "P": 1,
+                "TI": (["h", "time"], np.array(ti_levels)),
+                "P": (["time"], np.ones(n_time) / n_time),
             }
             if "density" in wind_resource:
                 density_vals = np.array(wind_resource["density"]["data"])[cases_idx]
                 density_dims = wind_resource["density"].get("dims", ["time"])
-                if "wind_turbine" in density_dims:
-                    density_vals = np.mean(density_vals, axis=1)
-                data_vars["Air_density"] = (["time"], density_vals)
+                if "height" in density_dims:
+                    data_vars["Air_density"] = (
+                        ["h", "time"],
+                        np.array(
+                            [
+                                _interpolate_with_min(heights, density_vals, h, 0.0)
+                                for h in h_levels
+                            ]
+                        ),
+                    )
+                elif "wind_turbine" in density_dims:
+                    data_vars["Air_density"] = (["time"], np.mean(density_vals, axis=1))
+                else:
+                    data_vars["Air_density"] = (["time"], density_vals)
+
             site = XRSite(
                 xr.Dataset(
                     data_vars=data_vars,
-                    coords={"h": seen, "time": np.arange(len(times))},
+                    coords={"h": h_levels, "time": np.arange(n_time)},
                 )
             )
+
+            # Reference inflow arrays (1-D over time).  The height-indexed site
+            # is authoritative per turbine, so these only define the flow cases;
+            # use the turbine-averaged inflow for a representative reference.
+            turbine_types = system_dat["wind_farm"]["layouts"][0]["turbine_types"]
+            ordered_hh = list(hub_heights.values())
+            level_of = {h: i for i, h in enumerate(h_levels)}
+            idx_per_turbine = [level_of[ordered_hh[t]] for t in turbine_types]
+            ws = np.mean([speeds[i] for i in idx_per_turbine], axis=0)
+            rads = np.deg2rad([dirs[i] for i in idx_per_turbine])
+            wd = np.mod(
+                np.rad2deg(
+                    np.arctan2(
+                        np.mean(np.sin(rads), axis=0), np.mean(np.cos(rads), axis=0)
+                    )
+                ),
+                360.0,
+            )
+            TI = np.mean([ti_levels[i] for i in idx_per_turbine], axis=0)
     else:
         # Single turbine type
         if heights:
@@ -637,6 +687,33 @@ def _interpolate_wind_data(heights, ws, wd, target_height):
         )
 
     return ws_int, wd_int
+
+
+def _interpolate_wind_dir(heights, wd, target_height):
+    """Interpolate wind direction (degrees) to ``target_height``.
+
+    Uses vector (sin/cos) interpolation so the 0/360 wrap-around is handled
+    correctly — plain linear interpolation of the raw degrees would average,
+    e.g., 350° and 10° to 180° instead of 0°.
+    """
+    if heights is None:
+        return wd
+    rad = np.deg2rad(np.asarray(wd, dtype=float))
+    try:
+        sin_i = interp1d(heights, np.sin(rad), axis=1, fill_value="extrapolate")(
+            target_height
+        )
+        cos_i = interp1d(heights, np.cos(rad), axis=1, fill_value="extrapolate")(
+            target_height
+        )
+    except ValueError:
+        sin_i = interp1d(
+            heights, np.sin(rad).T, axis=1, fill_value="extrapolate"
+        )(target_height)
+        cos_i = interp1d(
+            heights, np.cos(rad).T, axis=1, fill_value="extrapolate"
+        )(target_height)
+    return np.mod(np.rad2deg(np.arctan2(sin_i, cos_i)), 360.0)
 
 
 def _interpolate_with_min(heights, values, target_height, min_val=0.02):

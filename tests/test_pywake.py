@@ -18,7 +18,7 @@ from py_wake.site import XRSite
 from py_wake.superposition_models import LinearSum
 from py_wake.tests import npt
 from py_wake.turbulence_models import CrespoHernandez
-from py_wake.wind_turbines import WindTurbine
+from py_wake.wind_turbines import WindTurbine, WindTurbines
 from py_wake.wind_turbines.power_ct_functions import PowerCtFunctionList, PowerCtTabular
 from scipy.special import gamma
 from windIO import __path__ as wiop
@@ -461,6 +461,228 @@ def test_turbine_specific_speeds_timeseries():
 
     # 3. Assert match
     npt.assert_allclose(wifa_res, manual_aep, rtol=1e-6)
+
+
+def test_pywake_mixed_turbine_types_hub_heights(tmp_path):
+    """Two turbine types at two hub heights with per-turbine timeseries inflow.
+
+    WIFA must reproduce a hand-built pyWake simulation. This is the golden
+    equivalence check for the mixed-type / mixed-hub-height path: the API
+    builds the per-turbine XRSite (via dict_to_site) inside the
+    ``len(hub_heights) > 1`` branch and assigns turbine types, and the
+    resulting per-turbine power time series must match raw pyWake.
+    """
+    from conftest import make_mixed_type_timeseries_system_dict
+
+    system_dict = make_mixed_type_timeseries_system_dict("pywake")
+    output_dir = tmp_path / "output_pywake_mixed"
+    aep_wifa = run_pywake(system_dict, output_dir=str(output_dir))
+
+    # --- Build the reference pyWake simulation directly ---
+    wr = system_dict["site"]["energy_resource"]["wind_resource"]
+    farm = system_dict["wind_farm"]
+    coords = farm["layouts"][0]["coordinates"]
+    x, y = coords["x"], coords["y"]
+    type_list = farm["layouts"][0]["turbine_types"]
+
+    ws = np.array(wr["wind_speed"]["data"])  # (time, turbine)
+    wd = np.array(wr["wind_direction"]["data"])
+    ti = np.array(wr["turbulence_intensity"]["data"])
+    n_time, n_wt = ws.shape
+
+    # Per-turbine site (mirrors dict_to_site: wind_turbine -> i, i leading dim,
+    # uniform P, integer time).
+    ds = (
+        xr.Dataset(
+            {
+                "WS": (("time", "i"), ws),
+                "WD": (("time", "i"), wd),
+                "TI": (("time", "i"), ti),
+            },
+            coords={"time": np.arange(n_time), "i": np.arange(n_wt)},
+        )
+        .transpose("i", "time")
+    )
+    ds["P"] = (("time",), np.ones(n_time) / n_time)
+    site = XRSite(ds, interp_method="linear")
+
+    # Two turbine types matching the windIO definitions (WIFA interpolates the
+    # curves onto integer wind speeds; the nodes here are already integer).
+    tdefs = farm["turbine_types"]
+    turbines = []
+    for k in sorted(tdefs):
+        td = tdefs[k]
+        pc = td["performance"]["power_curve"]
+        ctc = td["performance"]["Ct_curve"]
+        speeds = np.arange(
+            min(pc["power_wind_speeds"][0], ctc["Ct_wind_speeds"][0]),
+            max(pc["power_wind_speeds"][-1], ctc["Ct_wind_speeds"][-1]) + 1,
+            1,
+        )
+        powers = np.interp(speeds, pc["power_wind_speeds"], pc["power_values"])
+        cts = np.interp(speeds, ctc["Ct_wind_speeds"], ctc["Ct_values"])
+        turbines.append(
+            WindTurbine(
+                name=td["name"],
+                diameter=td["rotor_diameter"],
+                hub_height=td["hub_height"],
+                powerCtFunction=PowerCtTabular(speeds, powers, "W", ct=cts),
+            )
+        )
+    turbine = WindTurbines.from_WindTurbine_lst(turbines)
+
+    wfm = BastankhahGaussian(
+        site,
+        turbine,
+        k=0.04,
+        ceps=0.2,
+        superpositionModel=LinearSum(),
+        use_effective_ws=True,
+        turbulenceModel=CrespoHernandez(),
+    )
+
+    # Reference inflow arrays, exactly as the API reduces them (mean over
+    # turbines, vector mean for direction).
+    ws_ref = ds.WS.mean(dim="i").values
+    rads = np.deg2rad(ds.WD)
+    wd_ref = (
+        np.rad2deg(np.arctan2(np.sin(rads).mean("i"), np.cos(rads).mean("i"))) % 360
+    ).values
+
+    res = wfm(x, y, type=type_list, time=True, ws=ws_ref, wd=wd_ref)
+    ref_power = res.Power.transpose("wt", "time").values
+    ref_aep = res.aep(normalize_probabilities=False).sum()
+
+    # --- Compare WIFA output (per-turbine power) to the reference ---
+    with xr.open_dataset(output_dir / "turbine_data.nc") as out:
+        wifa_power = out["power"].transpose("turbine", "time").values
+
+    npt.assert_allclose(wifa_power, ref_power, rtol=1e-6, atol=1.0)
+    npt.assert_allclose(aep_wifa, ref_aep, rtol=1e-6)
+
+    # The case really does exercise two distinct hub heights.
+    assert {td["hub_height"] for td in tdefs.values()} == {119.0, 90.0}
+
+
+def test_pywake_mixed_types_vertical_profile(tmp_path):
+    """Two turbine types at two hub heights driven by a (time, height) vertical
+    profile. WIFA interpolates the profile to each turbine's hub height and must
+    match a hand-built per-turbine pyWake reference (per-turbine power)."""
+    from conftest import make_mixed_type_profile_system_dict
+
+    system_dict = make_mixed_type_profile_system_dict("pywake")
+    output_dir = tmp_path / "output_pywake_profile"
+    aep_wifa = run_pywake(system_dict, output_dir=str(output_dir))
+
+    wr = system_dict["site"]["energy_resource"]["wind_resource"]
+    farm = system_dict["wind_farm"]
+    coords = farm["layouts"][0]["coordinates"]
+    x, y = coords["x"], coords["y"]
+    type_list = farm["layouts"][0]["turbine_types"]
+
+    heights = np.array(wr["height"], dtype=float)
+    ws_prof = np.array(wr["wind_speed"]["data"])  # (time, height)
+    wd_prof = np.array(wr["wind_direction"]["data"])
+    ti_prof = np.array(wr["turbulence_intensity"]["data"])
+    n_time = ws_prof.shape[0]
+
+    tdefs = farm["turbine_types"]
+    ordered_keys = sorted(tdefs)
+    ordered_hh = [tdefs[k]["hub_height"] for k in ordered_keys]
+
+    # Interpolate the profile to each turbine's hub height: linear WS/TI,
+    # vector (sin/cos) WD — mirroring the WIFA helpers.
+    def _lin(prof, hub):
+        return np.array([np.interp(hub, heights, prof[t]) for t in range(n_time)])
+
+    def _dir(prof, hub):
+        rad = np.deg2rad(prof)
+        s = np.array([np.interp(hub, heights, np.sin(rad)[t]) for t in range(n_time)])
+        c = np.array([np.interp(hub, heights, np.cos(rad)[t]) for t in range(n_time)])
+        return np.mod(np.rad2deg(np.arctan2(s, c)), 360.0)
+
+    n_wt = len(type_list)
+    hub_of = [ordered_hh[type_list[i]] for i in range(n_wt)]
+    ws_i = np.array([_lin(ws_prof, hub_of[i]) for i in range(n_wt)])
+    wd_i = np.array([_dir(wd_prof, hub_of[i]) for i in range(n_wt)])
+    ti_i = np.maximum(np.array([_lin(ti_prof, hub_of[i]) for i in range(n_wt)]), 0.02)
+
+    ds = xr.Dataset(
+        {
+            "WS": (("i", "time"), ws_i),
+            "WD": (("i", "time"), wd_i),
+            "TI": (("i", "time"), ti_i),
+        },
+        coords={"i": np.arange(n_wt), "time": np.arange(n_time)},
+    )
+    ds["P"] = (("time",), np.ones(n_time) / n_time)
+    site = XRSite(ds, interp_method="linear")
+
+    turbines = []
+    for k in ordered_keys:
+        td = tdefs[k]
+        pc = td["performance"]["power_curve"]
+        ctc = td["performance"]["Ct_curve"]
+        speeds = np.arange(
+            min(pc["power_wind_speeds"][0], ctc["Ct_wind_speeds"][0]),
+            max(pc["power_wind_speeds"][-1], ctc["Ct_wind_speeds"][-1]) + 1,
+            1,
+        )
+        powers = np.interp(speeds, pc["power_wind_speeds"], pc["power_values"])
+        cts = np.interp(speeds, ctc["Ct_wind_speeds"], ctc["Ct_values"])
+        turbines.append(
+            WindTurbine(
+                name=td["name"],
+                diameter=td["rotor_diameter"],
+                hub_height=td["hub_height"],
+                powerCtFunction=PowerCtTabular(speeds, powers, "W", ct=cts),
+            )
+        )
+    turbine = WindTurbines.from_WindTurbine_lst(turbines)
+
+    wfm = BastankhahGaussian(
+        site,
+        turbine,
+        k=0.04,
+        ceps=0.2,
+        superpositionModel=LinearSum(),
+        use_effective_ws=True,
+        turbulenceModel=CrespoHernandez(),
+    )
+    ws_ref = ds.WS.mean("i").values
+    rads = np.deg2rad(ds.WD)
+    wd_ref = (
+        np.rad2deg(np.arctan2(np.sin(rads).mean("i"), np.cos(rads).mean("i"))) % 360
+    ).values
+
+    res = wfm(x, y, type=type_list, time=True, ws=ws_ref, wd=wd_ref)
+    ref_power = res.Power.transpose("wt", "time").values
+    ref_aep = res.aep(normalize_probabilities=False).sum()
+
+    with xr.open_dataset(output_dir / "turbine_data.nc") as out:
+        wifa_power = out["power"].transpose("turbine", "time").values
+
+    npt.assert_allclose(wifa_power, ref_power, rtol=1e-6, atol=1.0)
+    npt.assert_allclose(aep_wifa, ref_aep, rtol=1e-6)
+
+    # Two distinct hub heights, at least one strictly between profile levels
+    # (so the interpolation is genuinely exercised, not just node selection).
+    assert len(set(ordered_hh)) == 2
+    assert any(h not in set(heights.tolist()) for h in ordered_hh)
+
+
+def test_pywake_mixed_height_and_per_turbine_raises(tmp_path):
+    """A resource carrying BOTH a height profile and a wind_turbine dimension is
+    ambiguous and must fail loudly rather than guess."""
+    from conftest import make_mixed_type_timeseries_system_dict
+
+    system_dict = make_mixed_type_timeseries_system_dict("pywake")
+    # The per-turbine resource already has wind_turbine-dimensioned ws/wd;
+    # add a height axis alongside it to create the ambiguous combination.
+    system_dict["site"]["energy_resource"]["wind_resource"]["height"] = [80.0, 120.0]
+
+    with pytest.raises(NotImplementedError, match="both a 'height' profile"):
+        run_pywake(system_dict, output_dir=str(tmp_path / "output_pywake_ambig"))
 
 
 def test_pywake_dict_timeseries_per_turbine_with_density(tmp_path):
