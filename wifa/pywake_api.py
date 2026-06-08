@@ -355,15 +355,23 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
         .get("run_configuration", {})
         .get("times_run", {})
     )
+    do_subset = False
     if not times_run.get("all_occurences", True) and "subset" in times_run:
         cases_idx = times_run["subset"]
+        do_subset = True
 
     heights = wind_resource.get("height")
 
-    # Helper to get data and dimensions safely
+    def _subset(arr):
+        # Only copy when a real time subset is requested.  An all-True boolean
+        # index still copies the whole array, so skip it in the common case.
+        return arr[cases_idx] if do_subset else arr
+
+    # Helper to get data and dimensions safely.  np.asarray avoids copying when
+    # the data is already an ndarray (e.g. an array-backed windIO resource).
     def get_resource_data(var_name):
         data_obj = wind_resource[var_name]
-        vals = np.array(data_obj["data"])
+        vals = np.asarray(data_obj["data"])
         dims = data_obj.get("dims", ["time"])
         return vals, dims
 
@@ -372,8 +380,8 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
     wd_vals, wd_dims = get_resource_data("wind_direction")
 
     # Apply subsetting
-    ws_vals = ws_vals[cases_idx]
-    wd_vals = wd_vals[cases_idx]
+    ws_vals = _subset(ws_vals)
+    wd_vals = _subset(wd_vals)
 
     # Prepare reference arrays - average across turbines if turbine-specific
     if "wind_turbine" in ws_dims:
@@ -392,7 +400,7 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
 
     # Handle operating status
     if "operating" in wind_resource:
-        operating = np.array(wind_resource["operating"]["data"])[cases_idx].T
+        operating = _subset(np.asarray(wind_resource["operating"]["data"])).T
         assert operating.shape[0] == len(x_positions)
     else:
         operating = np.ones((len(x_positions), len(cases_idx)))
@@ -413,7 +421,7 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
             if "turbulence_intensity" not in wind_resource:
                 TI = 0.02
             else:
-                TI = np.array(wind_resource["turbulence_intensity"]["data"])[cases_idx]
+                TI = _subset(np.asarray(wind_resource["turbulence_intensity"]["data"]))
         elif "wind_turbine" in ws_dims or "wind_turbine" in wd_dims:
             # Both a vertical profile and per-turbine data is ambiguous — we
             # cannot tell whether height or turbine indexes the inflow.
@@ -452,9 +460,9 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
             if "turbulence_intensity" not in wind_resource:
                 ti_levels = [np.full(n_time, 0.02) for _ in h_levels]
             else:
-                ti_data = np.array(wind_resource["turbulence_intensity"]["data"])[
-                    cases_idx
-                ]
+                ti_data = _subset(
+                    np.asarray(wind_resource["turbulence_intensity"]["data"])
+                )
                 ti_levels = [
                     _interpolate_with_min(heights, ti_data, h, min_val=0.02)
                     for h in h_levels
@@ -467,7 +475,7 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
                 "P": (["time"], np.ones(n_time) / n_time),
             }
             if "density" in wind_resource:
-                density_vals = np.array(wind_resource["density"]["data"])[cases_idx]
+                density_vals = _subset(np.asarray(wind_resource["density"]["data"]))
                 density_dims = wind_resource["density"].get("dims", ["time"])
                 if "height" in density_dims:
                     data_vars["Air_density"] = (
@@ -514,7 +522,7 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
         if heights:
             ws, wd = _interpolate_wind_data(heights, ws, wd, hh)
 
-        assert len(np.array(times)[cases_idx]) == len(ws)
+        assert len(_subset(np.asarray(times))) == len(ws)
         assert len(wd) == len(ws)
 
         if "wind_turbine" in ws_dims or "wind_turbine" in wd_dims:
@@ -522,14 +530,14 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
         else:
             site = Hornsrev1Site()
             if "density" in wind_resource:
-                density_vals = np.array(wind_resource["density"]["data"])[cases_idx]
+                density_vals = _subset(np.asarray(wind_resource["density"]["data"]))
                 site.ds["Air_density"] = (("time",), density_vals)
 
         # Handle TI
         if "turbulence_intensity" not in wind_resource:
             TI = 0.02
         else:
-            TI = np.array(wind_resource["turbulence_intensity"]["data"])[cases_idx]
+            TI = _subset(np.asarray(wind_resource["turbulence_intensity"]["data"]))
             if heights:
                 TI = interp1d(heights, TI, axis=1)(hh)
 
@@ -562,8 +570,6 @@ def _construct_weibull_site(resource_dat, hub_heights, x_positions, n_subsector=
         Number of sub-directions per wind direction sector.  Higher values
         smooth directional wake effects.  Default 5 (matching pywasp).
     """
-    from windIO import dict_to_netcdf
-
     wind_resource = resource_dat["wind_resource"]
     A = wind_resource["weibull_a"]
     k = wind_resource["weibull_k"]
@@ -640,13 +646,14 @@ def _construct_weibull_site(resource_dat, hub_heights, x_positions, n_subsector=
     site = dict_to_site(wind_resource)
 
     if "turbulence_intensity" in wind_resource:
-        site_ds = dict_to_netcdf(wind_resource)
-        if "x" in site_ds.turbulence_intensity.dims:
-            interpolated_ti = site_ds.turbulence_intensity.interp(
-                x=x_positions, y=x_positions
-            )
-            if "height" in interpolated_ti.dims:
-                interpolated_ti = interpolated_ti.interp(height=hub_heights["0"])
+        # Reuse the dataset already materialized inside ``site`` instead of
+        # rebuilding it with a second dict_to_netcdf.  dict_to_site renames
+        # turbulence_intensity -> TI and height -> h.
+        ti_da = site.ds["TI"]
+        if "x" in ti_da.dims:
+            interpolated_ti = ti_da.interp(x=x_positions, y=x_positions)
+            if "h" in interpolated_ti.dims:
+                interpolated_ti = interpolated_ti.interp(h=hub_heights["0"])
             TI = np.array(
                 [interpolated_ti.isel(x=i, y=i).values for i in range(len(x_positions))]
             )
