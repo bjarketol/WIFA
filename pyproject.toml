@@ -38,7 +38,7 @@ classifiers = [
 ]
 requires-python = ">=3.10,<3.13"
 dependencies = [
-    "windIO @ git+https://github.com/bjarketol/windIO.git@windio-rotor-avg-and-ti-flag",
+    "windIO @ git+https://github.com/bjarketol/windIO.git@flow-model-chain",
     "xarray",
     "scipy",
     "pyyaml",
