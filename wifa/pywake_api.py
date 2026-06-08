@@ -787,12 +787,15 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height):
     from py_wake.superposition_models import CumulativeWakeSum, WeightedSum
 
     if isinstance(superposition_model, (WeightedSum, CumulativeWakeSum)):
-        # 1. Requires a node-based rotor-averaging model.
-        if not isinstance(rotor_averaging, NodeRotorAvgModel):
+        # 1. Requires a node-based rotor-averaging model, or None (rotor centre,
+        #    which PyWake accepts; an explicit RotorCenter is rejected).
+        if rotor_averaging is not None and not isinstance(
+            rotor_averaging, NodeRotorAvgModel
+        ):
             raise ValueError(
                 "WeightedSum/CumulativeWakeSum superposition requires a node "
-                "rotor-averaging model (grid/eq_grid/gq_grid/cgi); center, "
-                "gaussian_overlap and area_overlap are not node models."
+                "rotor-averaging model (grid/eq_grid/gq_grid/cgi) or 'none'; "
+                "center, gaussian_overlap and area_overlap are not node models."
             )
         # 2. Requires a convection-based deficit (carries a convective velocity).
         if not issubclass(wake_model_class, ConvectionDeficitModel):
@@ -917,9 +920,13 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
                 deficit_args["k"] = wake_expansion["k_b"]
             elif "k" in wake_expansion:
                 deficit_args["k"] = wake_expansion["k"]
-        # ceps: valid for Bastankhah, Niayifar, Carbajofuertes (not Zong)
-        if normalized != "zong2020" and "ceps" in wind_deficit_cfg:
-            deficit_args["ceps"] = wind_deficit_cfg["ceps"]
+        # ceps maps to the deficit's near-wake epsilon coefficient. Bastankhah,
+        # Niayifar and Carbajofuertes name it `ceps`; Zong names it `eps_coeff`.
+        if "ceps" in wind_deficit_cfg:
+            if normalized == "zong2020":
+                deficit_args["eps_coeff"] = wind_deficit_cfg["ceps"]
+            else:
+                deficit_args["ceps"] = wind_deficit_cfg["ceps"]
 
     elif normalized == "supergaussian":
         wake_model_class = BlondelSuperGaussianDeficit2020
@@ -1066,6 +1073,19 @@ def _configure_turbulence_model(turbulence_data):
         c = [turbulence_data.get("c1", 1.0), turbulence_data.get("c2", 1.0)]
         return STF_MODELS[normalized](c=c)
     if normalized == "crespohernandez":
+        c = turbulence_data.get("c")
+        if c is not None:
+            # A paper's calibration (e.g. Niayifar 2016, Zong 2020): the
+            # literature CrespoHernandez uses 1D induction and SqrMaxSum
+            # added-turbulence summation alongside the calibrated coefficients.
+            from py_wake.deficit_models.utils import ct2a_mom1d
+            from py_wake.superposition_models import SqrMaxSum
+
+            return CrespoHernandez(
+                c=list(c),
+                ct2a=ct2a_mom1d,
+                addedTurbulenceSuperpositionModel=SqrMaxSum(),
+            )
         return CrespoHernandez()
     if normalized == "gcl":
         return GCLTurbulence()
@@ -1120,6 +1140,11 @@ def _configure_rotor_averaging(rotor_avg_data):
     name = rotor_avg_data["name"]
     normalized = _normalize_name(name)
 
+    if normalized == "none":
+        # No rotor-averaging model. PyWake's Weighted superposition accepts this
+        # (rotor centre) but rejects an explicit RotorCenter; the Zong (2020)
+        # literature model uses None.
+        return None
     if normalized == "center":
         return RotorCenter()
     # "grid" is the canonical windIO name; "avgdeficit" is a deprecated alias
