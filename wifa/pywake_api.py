@@ -720,12 +720,12 @@ def _interpolate_wind_dir(heights, wd, target_height):
             target_height
         )
     except ValueError:
-        sin_i = interp1d(
-            heights, np.sin(rad).T, axis=1, fill_value="extrapolate"
-        )(target_height)
-        cos_i = interp1d(
-            heights, np.cos(rad).T, axis=1, fill_value="extrapolate"
-        )(target_height)
+        sin_i = interp1d(heights, np.sin(rad).T, axis=1, fill_value="extrapolate")(
+            target_height
+        )
+        cos_i = interp1d(heights, np.cos(rad).T, axis=1, fill_value="extrapolate")(
+            target_height
+        )
     return np.mod(np.rad2deg(np.arctan2(sin_i, cos_i)), 360.0)
 
 
@@ -770,7 +770,7 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height):
     rotor_avg_data = get_with_default(analysis, "rotor_averaging", DEFAULTS)
     blockage_data = get_with_default(analysis, "blockage_model", DEFAULTS)
 
-    wake_model_class, deficit_args = _configure_deficit_model(
+    wake_model_class, deficit_args, deficit_post_attrs = _configure_deficit_model(
         wind_deficit_data, analysis, rotor_diameter, hub_height
     )
     deflection_model = _configure_deflection_model(deflection_data)
@@ -815,6 +815,7 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height):
     return {
         "wake_model_class": wake_model_class,
         "deficit_args": deficit_args,
+        "deficit_post_attrs": deficit_post_attrs,
         "wake_deficit_key": None,  # Deprecated: kept for API compatibility
         "deflection_model": deflection_model,
         "turbulence_model": turbulence_model,
@@ -830,7 +831,9 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
     """Configure the wind deficit model.
 
     Returns:
-        tuple: (wake_model_class, deficit_args)
+        tuple: (wake_model_class, deficit_args, deficit_post_attrs) where
+            deficit_post_attrs is a dict of attributes to set on the built
+            deficit after construction (e.g. TurbOPark's WS_key).
     """
     from py_wake.deficit_models.fuga import FugaDeficit
     from py_wake.deficit_models.gaussian import (
@@ -926,6 +929,15 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
 
     elif normalized == "turbopark":
         wake_model_class = TurboGaussianDeficit
+        # Canonical Nygaard (2022) recipe (py_wake.literature.turbopark): a Mirror
+        # ground model and ctlim=0.96 as constructor args; the WS_key='WS_jlk'
+        # attribute (scale the deficit by the downstream turbine's ambient WS) is
+        # applied post-construction via deficit_post below.
+        from py_wake.ground_models.ground_models import Mirror
+        from py_wake.superposition_models import SquaredSum
+
+        deficit_args["groundModel"] = Mirror(superpositionModel=SquaredSum())
+        deficit_args["ctlim"] = 0.96
 
     elif normalized == "turbonoj":
         wake_model_class = TurboNOJDeficit
@@ -976,7 +988,31 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
     if normalized in TI_CAPABLE and "free_stream_ti" in wake_expansion:
         deficit_args["use_effective_ti"] = not wake_expansion["free_stream_ti"]
 
-    return wake_model_class, deficit_args
+    # Axial induction: windIO's axial_induction_model maps to PyWake's ct2a
+    # (1D -> ct2a_mom1d, Madsen -> ct2a_madsen). Honor it on every deficit that
+    # accepts a ct2a parameter; without this the deficit silently keeps its
+    # ct2a_madsen default, so a "1D" request was previously ignored on the
+    # pyWake path.
+    import inspect
+
+    from py_wake.deficit_models.utils import ct2a_madsen, ct2a_mom1d
+
+    axial = analysis.get("axial_induction_model")
+    if axial is not None:
+        ct2a_fn = {"1d": ct2a_mom1d, "madsen": ct2a_madsen}.get(_normalize_name(axial))
+        if (
+            ct2a_fn is not None
+            and "ct2a" in inspect.signature(wake_model_class.__init__).parameters
+        ):
+            deficit_args["ct2a"] = ct2a_fn
+
+    # Attributes set on the deficit *after* construction (not constructor
+    # kwargs), applied by run_simulation.
+    deficit_post = {}
+    if normalized == "turbopark":
+        deficit_post["WS_key"] = "WS_jlk"
+
+    return wake_model_class, deficit_args, deficit_post
 
 
 def _configure_deflection_model(deflection_data):
@@ -1164,12 +1200,17 @@ def run_simulation(site, turbine, wake_config, site_data, x, y, turbine_types):
     Returns:
         dict with keys: sim_res, aep, aep_per_turbine
     """
-    # Build deficit model
+    # Build deficit model. groundModel comes from deficit_args when a model needs
+    # a specific one (e.g. TurbOPark's Mirror); otherwise the deficit's own
+    # default (None) applies.
+    deficit_args = dict(wake_config["deficit_args"])
+    deficit_args.setdefault("groundModel", None)
     deficit_model = wake_config["wake_model_class"](
         rotorAvgModel=wake_config["rotor_averaging"],
-        groundModel=None,
-        **wake_config["deficit_args"],
+        **deficit_args,
     )
+    for attr, value in wake_config.get("deficit_post_attrs", {}).items():
+        setattr(deficit_model, attr, value)
 
     # Build wind farm model
     wind_farm_model = wake_config["solver_class"](
