@@ -46,6 +46,7 @@ from py_wake.superposition_models import (
     CumulativeWakeSum,
     LinearSum,
     MaxSum,
+    SqrMaxSum,
     SquaredSum,
     WeightedSum,
 )
@@ -777,6 +778,70 @@ def test_weighted_superposition_allows_convection_deficit(deficit_name):
         _weighted_deficit_system(deficit_name), rotor_diameter=126.0, hub_height=90.0
     )
     assert isinstance(config["superposition_model"], WeightedSum)
+
+
+# ---------------------------------------------------------------------------
+# CrespoHernandez calibration coefficients (Phase 2 / Fix C)
+# ---------------------------------------------------------------------------
+
+
+def test_crespo_default_without_c():
+    """No c -> the PyWake-default CrespoHernandez (ct2a_madsen)."""
+    tm = _configure_turbulence_model({"name": "CrespoHernandez"})
+    assert isinstance(tm, CrespoHernandez)
+    assert tm.ct2a is ct2a_madsen
+
+
+def test_crespo_with_c_uses_literature_recipe():
+    """c -> CrespoHernandez with those coefficients, 1D induction and SqrMaxSum."""
+    c = [0.73, 0.83, 0.03, -0.32]
+    tm = _configure_turbulence_model({"name": "CrespoHernandez", "c": c})
+    assert isinstance(tm, CrespoHernandez)
+    assert list(tm.c) == c
+    assert tm.ct2a is ct2a_mom1d
+    assert isinstance(tm.addedTurbulenceSuperpositionModel, SqrMaxSum)
+
+
+# ---------------------------------------------------------------------------
+# 'none' rotor averaging + WeightedSum (Phase 2 / Fix D)
+# ---------------------------------------------------------------------------
+
+
+def test_rotor_averaging_none():
+    assert _configure_rotor_averaging({"name": "none"}) is None
+
+
+def test_weighted_superposition_allows_none_rotor():
+    """WeightedSum accepts rotorAvgModel=None (rotor centre), as Zong (2020) uses."""
+    sd = _weighted_deficit_system("Zong2020")
+    sd["attributes"]["analysis"]["rotor_averaging"] = {"name": "none"}
+    config = configure_wake_model(sd, rotor_diameter=126.0, hub_height=90.0)
+    assert config["rotor_averaging"] is None
+    assert isinstance(config["superposition_model"], WeightedSum)
+
+
+def test_weighted_superposition_rejects_center_rotor():
+    """A non-node, non-None rotor model is still rejected for WeightedSum."""
+    sd = _weighted_deficit_system("Zong2020")
+    sd["attributes"]["analysis"]["rotor_averaging"] = {"name": "center"}
+    with pytest.raises(ValueError, match="node"):
+        configure_wake_model(sd, rotor_diameter=126.0, hub_height=90.0)
+
+
+# ---------------------------------------------------------------------------
+# Zong ceps -> eps_coeff (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def test_zong_ceps_maps_to_eps_coeff():
+    """Zong's near-wake epsilon is named eps_coeff (not ceps) in PyWake."""
+    cls, args = _call_deficit(
+        "Zong2020",
+        {"wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004}, "ceps": 0.35},
+    )
+    assert cls is ZongGaussianDeficit
+    assert args["eps_coeff"] == 0.35
+    assert "ceps" not in args
 
 
 # ---------------------------------------------------------------------------
