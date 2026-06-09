@@ -1,4 +1,5 @@
 import argparse
+import os
 import warnings
 from pathlib import Path
 
@@ -751,13 +752,16 @@ def _interpolate_with_min(heights, values, target_height, min_val=0.02):
         )
 
 
-def configure_wake_model(system_dat, rotor_diameter, hub_height):
+def configure_wake_model(system_dat, rotor_diameter, hub_height, resource_dat=None):
     """Configure the wake model components based on system configuration.
 
     Args:
         system_dat: System data dictionary
         rotor_diameter: Rotor diameter for FUGA LUT generation
         hub_height: Hub height for FUGA LUT generation
+        resource_dat: Optional energy_resource dict; lets FUGA derive its LUT
+            roughness/inversion height from the site (z0 from TI, zi from
+            ABL_height) instead of using defaults.
 
     Returns:
         dict with keys: wake_model_class, deficit_args, deflection_model,
@@ -777,7 +781,7 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height):
     blockage_data = get_with_default(analysis, "blockage_model", DEFAULTS)
 
     wake_model_class, deficit_args, deficit_post_attrs = _configure_deficit_model(
-        wind_deficit_data, analysis, rotor_diameter, hub_height
+        wind_deficit_data, analysis, rotor_diameter, hub_height, resource_dat
     )
     deflection_model = _configure_deflection_model(deflection_data)
     turbulence_model = _configure_turbulence_model(turbulence_data)
@@ -836,7 +840,130 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height):
     }
 
 
-def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_height):
+# --- Fuga LUT generation -----------------------------------------------------
+# Fuga is a linearised-RANS wake model that reads a precomputed look-up table
+# (LUT). Historically those came from a Windows GUI; pyfuga (conda-forge, pure
+# Python) now generates them, so WIFA can build a LUT on the fly for any farm.
+#
+# Fuga has NO turbulence-intensity input: ambient turbulence enters implicitly
+# through the roughness z0 (which sets the neutral shear/mixing) and the
+# stability zeta0. We therefore derive z0 from the site's representative TI via
+# the same inversion PyWake uses at runtime (z0 = zref * exp(-1/TI), neutral),
+# unless the windIO config or the resource supplies z0 directly.
+
+
+def _fuga_default_lut_dir():
+    """Persistent, shared LUT cache dir (override with $WIFA_FUGA_LUT_DIR).
+
+    LUTs are content-addressed by filename, so a single shared dir is safe and
+    lets the expensive preLUT stage be reused across runs and farms.
+    """
+    return Path(
+        os.environ.get(
+            "WIFA_FUGA_LUT_DIR", Path.home() / ".cache" / "wifa" / "fuga_luts"
+        )
+    )
+
+
+def _mean_resource_field(resource_dat, key):
+    """Finite mean of a windIO wind_resource field (dict-with-'data' or array)."""
+    if resource_dat is None:
+        return None
+    field = resource_dat.get("wind_resource", {}).get(key)
+    if field is None:
+        return None
+    data = np.asarray(field["data"] if isinstance(field, dict) else field, dtype=float)
+    data = data[np.isfinite(data)]
+    return float(np.mean(data)) if data.size else None
+
+
+def _fuga_atmosphere(resource_dat, fuga_cfg, hub_height):
+    """Resolve (z0, zi, zeta0, ti) for a Fuga LUT from config + site resource.
+
+    Precedence for z0/zi: explicit fuga config > site resource field > default.
+    z0 is derived from the site TI (Fuga has no TI knob) when not given.
+    """
+    from py_wake.utils import fuga_utils
+
+    zeta0 = float(fuga_cfg.get("zeta0", 0.0))
+
+    zi = fuga_cfg.get("zi")
+    if zi is None:
+        zi = _mean_resource_field(resource_dat, "ABL_height")
+    if zi is None:
+        zi = 500.0
+
+    ti = _mean_resource_field(resource_dat, "turbulence_intensity")
+    z0 = fuga_cfg.get("z0")
+    if z0 is None:
+        z0 = _mean_resource_field(resource_dat, "z0")
+    if z0 is None and ti is not None and ti > 0:
+        z0 = float(np.ravel(fuga_utils.z0(ti, hub_height, zeta0))[0])
+    if z0 is None:
+        z0 = 0.03  # open-farmland fallback if neither z0 nor TI is available
+    return float(z0), float(zi), zeta0, ti
+
+
+def _ensure_fuga_lut(
+    *, folder, zeta0, nkz0, nbeta, diameter, zhub, z0, zi, lut_vars, nx, ny
+):
+    """Generate (or reuse a cached) hub-height Fuga LUT; return its path.
+
+    The LUT filename encodes every physical/grid parameter, so an existing file
+    with the right name is a valid cache hit. pyfuga reuses the costly preLUT
+    stage (which depends only on zeta0/nkz0/nbeta) across geometries.
+    """
+    from pyfuga import get_luts
+    from pyfuga.paths import get_luts_path
+
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    # pyfuga's own defaults; pass explicitly so the cache-probe path built by
+    # get_luts_path matches the filename get_luts actually writes.
+    dx, dy = diameter / 4, diameter / 16
+    lut_vars = list(lut_vars)
+    # zlow == zhigh == zhub -> single hub-height level (the cheap path).
+    lut_path = get_luts_path(
+        folder,
+        zeta0,
+        nkz0,
+        nbeta,
+        diameter,
+        zhub,
+        z0,
+        zi,
+        zhub,
+        zhub,
+        lut_vars,
+        nx,
+        ny,
+        dx,
+        dy,
+    )
+    if not lut_path.exists():
+        get_luts(
+            folder=folder,
+            zeta0=zeta0,
+            nkz0=nkz0,
+            nbeta=nbeta,
+            diameter=diameter,
+            zhub=zhub,
+            z0=z0,
+            zi=zi,
+            zlow=zhub,
+            zhigh=zhub,
+            lut_vars=lut_vars,
+            nx=nx,
+            ny=ny,
+            dx=dx,
+            dy=dy,
+        )
+    return str(lut_path)
+
+
+def _configure_deficit_model(
+    wind_deficit_data, analysis, rotor_diameter, hub_height, resource_dat=None
+):
     """Configure the wind deficit model.
 
     Returns:
@@ -972,27 +1099,23 @@ def _configure_deficit_model(wind_deficit_data, analysis, rotor_diameter, hub_he
 
     elif normalized == "fuga":
         wake_model_class = FugaDeficit
-        from pyfuga import get_luts
-
-        get_luts(
-            folder="luts",
-            zeta0=0,
-            nkz0=8,
-            nbeta=32,
+        # FugaDeficit reads a LUT instead of an analytic expansion; it takes no
+        # use_effective_ws (it always uses the free-stream-referenced deficit).
+        deficit_args.pop("use_effective_ws", None)
+        fuga_cfg = wind_deficit_cfg.get("fuga", {}) or {}
+        z0, zi, zeta0, _ti = _fuga_atmosphere(resource_dat, fuga_cfg, hub_height)
+        deficit_args["LUT_path"] = _ensure_fuga_lut(
+            folder=fuga_cfg.get("cache_dir", _fuga_default_lut_dir()),
+            zeta0=zeta0,
+            nkz0=int(fuga_cfg.get("nkz0", 8)),
+            nbeta=int(fuga_cfg.get("nbeta", 32)),
             diameter=rotor_diameter,
             zhub=hub_height,
-            z0=0.00001,
-            zi=500,
-            zlow=70,
-            zhigh=70,
-            lut_vars=["UL"],
-            nx=2048,
-            ny=512,
-            n_cpu=1,
-        )
-        deficit_args["LUT_path"] = (
-            f"luts/LUTs_Zeta0=0.00e+00_8_32_D{rotor_diameter:.1f}_zhub{hub_height:.1f}"
-            f"_zi500_z0=0.00001000_z69.2-72.8_UL_nx2048_ny512_dx44.575_dy11.14375.nc"
+            z0=z0,
+            zi=zi,
+            lut_vars=fuga_cfg.get("lut_vars", ["UL"]),
+            nx=int(fuga_cfg.get("nx", 2048)),
+            ny=int(fuga_cfg.get("ny", 512)),
         )
 
     else:
@@ -1440,7 +1563,7 @@ def run_pywake(yaml_input, output_dir="output"):
         first_key = list(farm_dat["turbine_types"].keys())[0]
         rd = farm_dat["turbine_types"][first_key]["rotor_diameter"]
 
-    wake_config = configure_wake_model(system_dat, rd, first_hh)
+    wake_config = configure_wake_model(system_dat, rd, first_hh, resource_dat)
 
     # Step 5: Run simulation
     sim_results = run_simulation(
