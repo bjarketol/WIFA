@@ -1014,3 +1014,12 @@ def test_fuga_z0_sweep_explicit_z0_overrides():
         _resource(ti=np.full(10, 0.1)), {"z0": [0.01, 0.05]}, 78.0, 0.0, 0.04
     )
     assert z0s == [0.01, 0.05]
+
+
+def test_fuga_atmosphere_ignores_list_z0():
+    # An explicit z0 list is a sweep (handled by _fuga_z0_sweep); _fuga_atmosphere
+    # must not choke on it when computing the scalar fallback.
+    z0, zi, _, _ = _fuga_atmosphere(
+        _resource(ti=np.full(10, 0.10)), {"z0": [1e-4, 1e-2]}, 78.0
+    )
+    assert isinstance(z0, float)  # derived from TI, not the list

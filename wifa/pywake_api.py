@@ -919,6 +919,10 @@ def _fuga_atmosphere(resource_dat, fuga_cfg, hub_height):
 
     ti = _mean_resource_field(resource_dat, "turbulence_intensity")
     z0 = fuga_cfg.get("z0")
+    if isinstance(z0, (list, tuple)):
+        # An explicit z0 list is a sweep, handled by _fuga_z0_sweep; the single
+        # scalar here is only a fallback, so don't treat the list as scalar.
+        z0 = None
     if z0 is None:
         z0 = _mean_resource_field(resource_dat, "z0")
     if z0 is None and ti is not None and ti > 0:
