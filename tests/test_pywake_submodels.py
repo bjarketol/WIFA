@@ -65,6 +65,8 @@ from wifa.pywake_api import (
     _configure_rotor_averaging,
     _configure_superposition_model,
     _configure_turbulence_model,
+    _fuga_atmosphere,
+    _fuga_z0_sweep,
     configure_wake_model,
     get_with_default,
 )
@@ -942,3 +944,73 @@ def test_gcl_honors_free_stream_ti():
         "GCL", {"wake_expansion_coefficient": {"free_stream_ti": False}}
     )
     assert args["use_effective_ti"] is True
+
+
+# ---------------------------------------------------------------------------
+# Fuga LUT-atmosphere helpers (pure functions; no LUT generation)
+# ---------------------------------------------------------------------------
+import numpy as np  # noqa: E402
+
+
+def _resource(ti=None, abl=None, z0=None):
+    wr = {}
+    if ti is not None:
+        wr["turbulence_intensity"] = {"data": np.asarray(ti, dtype=float)}
+    if abl is not None:
+        wr["ABL_height"] = {"data": np.asarray(abl, dtype=float)}
+    if z0 is not None:
+        wr["z0"] = {"data": np.asarray(z0, dtype=float)}
+    return {"wind_resource": wr}
+
+
+def test_fuga_atmosphere_derives_z0_from_ti():
+    # Neutral inversion: z0 = zhub * exp(-1/TI). Mean TI 0.10 at hub 78.
+    z0, zi, zeta0, ti = _fuga_atmosphere(
+        _resource(ti=np.full(50, 0.10), abl=np.full(50, 600.0)), {}, 78.0
+    )
+    assert zeta0 == 0.0
+    assert zi == 600.0  # from ABL_height
+    assert ti == pytest.approx(0.10)
+    assert z0 == pytest.approx(78.0 * np.exp(-1 / 0.10), rel=1e-3)
+
+
+def test_fuga_atmosphere_defaults_without_resource():
+    z0, zi, zeta0, ti = _fuga_atmosphere(None, {}, 78.0)
+    assert z0 == 0.03 and zi == 500.0 and ti is None
+
+
+def test_fuga_atmosphere_config_overrides_site():
+    z0, zi, _, _ = _fuga_atmosphere(
+        _resource(ti=np.full(10, 0.10)), {"z0": 0.001, "zi": 800.0}, 78.0
+    )
+    assert z0 == 0.001 and zi == 800.0
+
+
+def test_fuga_z0_sweep_spans_distribution_and_is_sorted():
+    rng = np.random.default_rng(0)
+    ti = np.clip(rng.normal(0.10, 0.03, 5000), 0.03, 0.25)
+    z0s = _fuga_z0_sweep(_resource(ti=ti), {"n_z0": 5}, 78.0, 0.0, 0.03)
+    assert len(z0s) >= 2
+    assert z0s == sorted(z0s)
+    # all physical: clamp keeps z0 within ~[1e-5, 0.3] m
+    assert z0s[0] >= 1e-5 and z0s[-1] <= 0.31
+
+
+def test_fuga_z0_sweep_clamps_high_ti_to_physical_z0():
+    # All-high TI must not produce absurd roughness (TI 0.30 -> z0 ~2.8 m).
+    z0s = _fuga_z0_sweep(_resource(ti=np.full(200, 0.30)), {"n_z0": 5}, 78.0, 0.0, 0.5)
+    assert max(z0s) <= 0.31
+
+
+def test_fuga_z0_sweep_single_when_n1_or_no_ti():
+    assert _fuga_z0_sweep(
+        _resource(ti=np.full(10, 0.1)), {"n_z0": 1}, 78.0, 0.0, 0.04
+    ) == [0.04]
+    assert _fuga_z0_sweep(None, {"n_z0": 5}, 78.0, 0.0, 0.04) == [0.04]
+
+
+def test_fuga_z0_sweep_explicit_z0_overrides():
+    z0s = _fuga_z0_sweep(
+        _resource(ti=np.full(10, 0.1)), {"z0": [0.01, 0.05]}, 78.0, 0.0, 0.04
+    )
+    assert z0s == [0.01, 0.05]
