@@ -280,7 +280,10 @@ def test_heterogeneous_wind_rose_grid():
     ws_999 = A_vals * (-np.log(0.001)) ** (1.0 / k_vals)
     min_su = np.min(speedup)
     ws_max_ref = np.max(ws_999) / max(min_su, 0.1)
-    ws_range = np.arange(0, np.ceil(ws_max_ref) + 0.5, 0.5)
+    # ws grid starts at 0.5 (not 0): WIFA drops the degenerate ws=0 reference
+    # case, which breaks the WeightedSum superposition (see
+    # test_weibull_ws_grid_excludes_zero_for_weightedsum).
+    ws_range = np.arange(0.5, np.ceil(ws_max_ref) + 0.5, 0.5)
 
     # Compute sub-sector wd (same logic as WIFA)
     wd_sectors = dat["wd"].values
@@ -806,6 +809,124 @@ def test_weibull_speedup_dim_ordering(tmp_path):
 
     # Both orderings must produce identical AEP
     npt.assert_allclose(aep_wd_first, aep_wt_first, rtol=1e-6)
+
+
+def test_weibull_ws_grid_excludes_zero_for_weightedsum(tmp_path):
+    """Regression: the auto-generated Weibull ws grid must exclude ws=0.
+
+    When no explicit ``wind_speed`` is given, ``_construct_weibull_site``
+    builds a reference ws grid.  It used to start at 0 m/s.  A ws=0 flow case
+    carries zero energy for every model, but it is degenerate for the
+    ``WeightedSum`` superposition (Zong 2020), whose convection-velocity
+    iteration divides by the convection speed and is undefined at zero wind
+    speed.  Including ws=0 silently corrupted the WeightedSum AEP — collapsing
+    the apparent wake loss (e.g. Zong fell to ~3.5 % while the near-identical
+    LinearSum Niayifar stayed at ~8 %).  LinearSum and the other superpositions
+    were unaffected, so the bug only surfaced on the distributions path with
+    Weighted superposition.
+
+    Guards both the grid (ws[0] > 0) and the behaviour (Weighted must not
+    diverge from Linear for an otherwise-identical Zong farm).
+    """
+    from conftest import _TURBINE
+    from wifa.pywake_api import (
+        construct_site,
+        create_turbines,
+    )
+
+    n_wd, n_wt = 4, 5
+    wd_vals = [0.0, 90.0, 180.0, 270.0]
+    A = [[9.0] * n_wt for _ in range(n_wd)]
+    k = [[2.0] * n_wt for _ in range(n_wd)]
+    freq = [[1.0 / n_wd] * n_wt for _ in range(n_wd)]
+    ti = [[0.06] * n_wt for _ in range(n_wd)]
+
+    def make_system(superposition, rotor):
+        return {
+            "name": "ws0-regression",
+            "site": {
+                "name": "Test site",
+                "boundaries": {
+                    "polygons": [
+                        {"x": [-90, 5000, 5000, -90], "y": [90, 90, -90, -90]}
+                    ]
+                },
+                "energy_resource": {
+                    "name": "Test resource",
+                    "wind_resource": {
+                        # NOTE: deliberately NO "wind_speed" -> auto ws grid
+                        "wind_direction": wd_vals,
+                        "wind_turbine": list(range(n_wt)),
+                        "reference_height": 119.0,
+                        "weibull_a": {
+                            "data": A,
+                            "dims": ["wind_direction", "wind_turbine"],
+                        },
+                        "weibull_k": {
+                            "data": k,
+                            "dims": ["wind_direction", "wind_turbine"],
+                        },
+                        "sector_probability": {
+                            "data": freq,
+                            "dims": ["wind_direction", "wind_turbine"],
+                        },
+                        "turbulence_intensity": {
+                            "data": ti,
+                            "dims": ["wind_direction", "wind_turbine"],
+                        },
+                    },
+                },
+            },
+            "wind_farm": {
+                "name": "Test farm",
+                "layouts": [
+                    {
+                        "coordinates": {
+                            # 5-turbine row at 5D spacing -> strong aligned wakes
+                            "x": [i * 5 * _TURBINE["rotor_diameter"] for i in range(5)],
+                            "y": [0.0] * 5,
+                        }
+                    }
+                ],
+                "turbines": _TURBINE,
+            },
+            "attributes": {
+                "flow_model": {"name": "pywake"},
+                "analysis": {
+                    "wind_deficit_model": {
+                        "name": "Zong2020",
+                        "wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004},
+                    },
+                    "deflection_model": {"name": "None"},
+                    "turbulence_model": {"name": "CrespoHernandez"},
+                    "superposition_model": {
+                        "ws_superposition": superposition,
+                        "ti_superposition": "Squared",
+                    },
+                    "rotor_averaging": {"name": rotor},
+                    "blockage_model": {"name": "None"},
+                    "axial_induction_model": "Madsen",
+                },
+            },
+        }
+
+    # 1. The constructed ws grid must not contain a 0 m/s reference case.
+    weighted = make_system("Weighted", "none")
+    turbine, _types, hub_heights = create_turbines(weighted["wind_farm"])
+    x = weighted["wind_farm"]["layouts"][0]["coordinates"]["x"]
+    site_data = construct_site(
+        weighted, weighted["site"]["energy_resource"], hub_heights, x
+    )
+    ws_grid = np.asarray(site_data["ws"])
+    assert ws_grid[0] > 0.0, f"ws grid must exclude 0; starts at {ws_grid[0]}"
+
+    # 2. Behaviour: WeightedSum must not collapse relative to LinearSum on the
+    #    same Zong farm (pre-fix the Weighted AEP was inflated by the ws=0 bug).
+    aep_weighted = run_pywake(weighted, output_dir=str(tmp_path / "weighted"))
+    aep_linear = run_pywake(
+        make_system("Linear", "Center"), output_dir=str(tmp_path / "linear")
+    )
+    npt.assert_allclose(aep_weighted, aep_linear, rtol=0.03)
 
 
 # if __name__ == "__main__":
