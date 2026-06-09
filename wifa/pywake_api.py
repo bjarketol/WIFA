@@ -623,7 +623,13 @@ def _construct_weibull_site(resource_dat, hub_heights, x_positions, n_subsector=
             ws_max_ref = ws_max_local / max(min_speedup, 0.1)
         else:
             ws_max_ref = ws_max_local
-        ws = np.arange(0, np.ceil(ws_max_ref) + 0.5, 0.5)
+        # Start at the first nonzero bin: a ws=0 reference case carries zero
+        # energy for every model, but it is a degenerate flow case for the
+        # WeightedSum superposition (Zong), whose convection-velocity iteration
+        # divides by the convection speed and is undefined at zero wind speed.
+        # Including ws=0 silently corrupts the WeightedSum AEP (collapsing the
+        # apparent wake loss); dropping it is harmless for all other models.
+        ws = np.arange(0.5, np.ceil(ws_max_ref) + 0.5, 0.5)
 
         # -- Wind direction sub-sectors ---------------------------------------
         # Strip 360° wrap-around before computing sub-sectors
