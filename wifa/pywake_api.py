@@ -752,7 +752,13 @@ def _interpolate_with_min(heights, values, target_height, min_val=0.02):
         )
 
 
-def configure_wake_model(system_dat, rotor_diameter, hub_height, resource_dat=None):
+def configure_wake_model(
+    system_dat,
+    rotor_diameter,
+    hub_height,
+    resource_dat=None,
+    turbine_geometries=None,
+):
     """Configure the wake model components based on system configuration.
 
     Args:
@@ -762,6 +768,10 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height, resource_dat=No
         resource_dat: Optional energy_resource dict; lets FUGA derive its LUT
             roughness/inversion height from the site (z0 from TI, zi from
             ABL_height) instead of using defaults.
+        turbine_geometries: Optional list of (rotor_diameter, hub_height) for
+            every turbine type; FUGA builds one LUT set per geometry so mixed
+            farms interpolate over d_h. Defaults to the single
+            (rotor_diameter, hub_height).
 
     Returns:
         dict with keys: wake_model_class, deficit_args, deflection_model,
@@ -781,7 +791,12 @@ def configure_wake_model(system_dat, rotor_diameter, hub_height, resource_dat=No
     blockage_data = get_with_default(analysis, "blockage_model", DEFAULTS)
 
     wake_model_class, deficit_args, deficit_post_attrs = _configure_deficit_model(
-        wind_deficit_data, analysis, rotor_diameter, hub_height, resource_dat
+        wind_deficit_data,
+        analysis,
+        rotor_diameter,
+        hub_height,
+        resource_dat,
+        turbine_geometries,
     )
     deflection_model = _configure_deflection_model(deflection_data)
     turbulence_model = _configure_turbulence_model(turbulence_data)
@@ -865,16 +880,25 @@ def _fuga_default_lut_dir():
     )
 
 
-def _mean_resource_field(resource_dat, key):
-    """Finite mean of a windIO wind_resource field (dict-with-'data' or array)."""
+def _resource_field_array(resource_dat, key):
+    """Finite values of a windIO wind_resource field (dict-with-'data' or array).
+
+    Returns a 1-D numpy array, or None if the field is absent/empty.
+    """
     if resource_dat is None:
         return None
     field = resource_dat.get("wind_resource", {}).get(key)
     if field is None:
         return None
     data = np.asarray(field["data"] if isinstance(field, dict) else field, dtype=float)
-    data = data[np.isfinite(data)]
-    return float(np.mean(data)) if data.size else None
+    data = data[np.isfinite(data)].ravel()
+    return data if data.size else None
+
+
+def _mean_resource_field(resource_dat, key):
+    """Finite mean of a windIO wind_resource field, or None."""
+    data = _resource_field_array(resource_dat, key)
+    return float(np.mean(data)) if data is not None else None
 
 
 def _fuga_atmosphere(resource_dat, fuga_cfg, hub_height):
@@ -902,6 +926,87 @@ def _fuga_atmosphere(resource_dat, fuga_cfg, hub_height):
     if z0 is None:
         z0 = 0.03  # open-farmland fallback if neither z0 nor TI is available
     return float(z0), float(zi), zeta0, ti
+
+
+def _fuga_z0_sweep(resource_dat, fuga_cfg, hub_height, zeta0, z0_single):
+    """z0 values for a TI-faithful multi-LUT, spanning the site TI distribution.
+
+    Fuga reads TI off the LUT roughness, so a single mean-TI LUT evaluates the
+    wake at loss(mean TI) and misses the low-TI tail that drives the deepest
+    wakes. A sweep of LUTs across z0 lets FugaDeficit interpolate z0 = z0(TI)
+    per flow case at run time, so the farm loss is integrated over the TI
+    distribution instead of taken at its mean (cf. the GCL free-stream-TI gap).
+
+    Returns a sorted list of distinct z0. Falls back to ``[z0_single]`` when TI
+    data is unavailable, z0 is pinned in config, or n_z0 <= 1. Out-of-range TI
+    is handled by FugaDeficit's bounds='limit' (clamped to the nearest LUT).
+    """
+    from py_wake.utils import fuga_utils
+
+    if fuga_cfg.get("z0") is not None:
+        z0s = fuga_cfg["z0"]
+        z0s = z0s if isinstance(z0s, (list, tuple)) else [z0s]
+        return sorted({float(z) for z in z0s})
+
+    n = int(fuga_cfg.get("n_z0", 5))
+    ti = _resource_field_array(resource_dat, "turbulence_intensity")
+    if n <= 1 or ti is None:
+        return [z0_single]
+    ti = ti[ti > 0]
+    if ti.size == 0:
+        return [z0_single]
+    lo, hi = np.quantile(
+        ti, [fuga_cfg.get("ti_qlo", 0.05), fuga_cfg.get("ti_qhi", 0.95)]
+    )
+    # Clamp to a TI band that keeps the neutral-inversion z0 physical: the
+    # mapping z0 = zhub*exp(-1/TI) sends high TI to absurd roughness (TI 0.30 ->
+    # z0 ~2.8 m, well outside Fuga's linearisation). The low-TI tail drives the
+    # deepest, most TI-sensitive wakes, so cover it; high-TI cases saturate to
+    # shallow wakes and clamp to the roughest LUT via bounds='limit'. Band
+    # [0.03, 0.18] keeps z0 in ~[1e-5, 0.3] m.
+    ti_lo = float(fuga_cfg.get("ti_min", 0.03))
+    ti_hi = float(fuga_cfg.get("ti_max", 0.18))
+    lo, hi = float(np.clip(lo, ti_lo, ti_hi)), float(np.clip(hi, ti_lo, ti_hi))
+
+    def _z0(ti_val):
+        return round(float(np.ravel(fuga_utils.z0(ti_val, hub_height, zeta0))[0]), 8)
+
+    if hi <= lo:
+        # Whole TI distribution sits at/over a clamp bound -> a single LUT at
+        # the clamped TI (still physical), not the unclamped mean-TI z0.
+        return [_z0(hi)]
+    return sorted({_z0(t) for t in np.linspace(lo, hi, n)})
+
+
+def _ensure_fuga_luts(
+    *, folder, zeta0, nkz0, nbeta, geometries, z0_list, zi, lut_vars, nx, ny
+):
+    """Generate/reuse a LUT for every (geometry, z0) pair; return the path list.
+
+    All LUTs share the costly preLUT (which depends only on zeta0/nkz0/nbeta),
+    so extra z0 values and turbine geometries add only the cheap per-LUT stage.
+    FugaDeficit/FugaMultiLUTDeficit interpolate the resulting set over d_h
+    (turbine geometry) and z0 (per-flow-case TI).
+    """
+    paths = []
+    for diameter, zhub in geometries:
+        for z0 in z0_list:
+            paths.append(
+                _ensure_fuga_lut(
+                    folder=folder,
+                    zeta0=zeta0,
+                    nkz0=nkz0,
+                    nbeta=nbeta,
+                    diameter=diameter,
+                    zhub=zhub,
+                    z0=z0,
+                    zi=zi,
+                    lut_vars=lut_vars,
+                    nx=nx,
+                    ny=ny,
+                )
+            )
+    return paths
 
 
 def _ensure_fuga_lut(
@@ -962,7 +1067,12 @@ def _ensure_fuga_lut(
 
 
 def _configure_deficit_model(
-    wind_deficit_data, analysis, rotor_diameter, hub_height, resource_dat=None
+    wind_deficit_data,
+    analysis,
+    rotor_diameter,
+    hub_height,
+    resource_dat=None,
+    turbine_geometries=None,
 ):
     """Configure the wind deficit model.
 
@@ -1103,20 +1213,26 @@ def _configure_deficit_model(
         # use_effective_ws (it always uses the free-stream-referenced deficit).
         deficit_args.pop("use_effective_ws", None)
         fuga_cfg = wind_deficit_cfg.get("fuga", {}) or {}
-        z0, zi, zeta0, _ti = _fuga_atmosphere(resource_dat, fuga_cfg, hub_height)
-        deficit_args["LUT_path"] = _ensure_fuga_lut(
+        z0_single, zi, zeta0, _ti = _fuga_atmosphere(resource_dat, fuga_cfg, hub_height)
+        # A z0 sweep across the site TI distribution + a LUT per turbine
+        # geometry; FugaDeficit interpolates z0 (per-flow-case TI) and d_h at
+        # run time. Degenerates to a single LUT for one geometry + n_z0<=1.
+        z0_list = _fuga_z0_sweep(resource_dat, fuga_cfg, hub_height, zeta0, z0_single)
+        geometries = turbine_geometries or [(rotor_diameter, hub_height)]
+        lut_paths = _ensure_fuga_luts(
             folder=fuga_cfg.get("cache_dir", _fuga_default_lut_dir()),
             zeta0=zeta0,
             nkz0=int(fuga_cfg.get("nkz0", 8)),
             nbeta=int(fuga_cfg.get("nbeta", 32)),
-            diameter=rotor_diameter,
-            zhub=hub_height,
-            z0=z0,
+            geometries=geometries,
+            z0_list=z0_list,
             zi=zi,
             lut_vars=fuga_cfg.get("lut_vars", ["UL"]),
             nx=int(fuga_cfg.get("nx", 2048)),
             ny=int(fuga_cfg.get("ny", 512)),
         )
+        # Single LUT -> plain path; multiple -> list (FugaDeficit globs/lists).
+        deficit_args["LUT_path"] = lut_paths[0] if len(lut_paths) == 1 else lut_paths
 
     else:
         raise NotImplementedError(f"Wake model '{model_name}' is not supported")
@@ -1554,16 +1670,25 @@ def run_pywake(yaml_input, output_dir="output"):
     site = site_data["site"]
 
     # Step 4: Configure wake model
-    # Use first turbine's dimensions for FUGA LUT if needed
-    first_hh = list(hub_heights.values())[0]
-    # Get rotor diameter from farm data
+    # Collect every turbine geometry so FUGA can build a LUT set per type
+    # (mixed farms interpolate over d_h); the first one drives single-type paths.
     if "turbines" in farm_dat:
-        rd = farm_dat["turbines"]["rotor_diameter"]
+        geometries = [
+            (
+                farm_dat["turbines"]["rotor_diameter"],
+                farm_dat["turbines"]["hub_height"],
+            )
+        ]
     else:
-        first_key = list(farm_dat["turbine_types"].keys())[0]
-        rd = farm_dat["turbine_types"][first_key]["rotor_diameter"]
+        geometries = [
+            (t["rotor_diameter"], t["hub_height"])
+            for t in farm_dat["turbine_types"].values()
+        ]
+    rd, first_hh = geometries[0]
 
-    wake_config = configure_wake_model(system_dat, rd, first_hh, resource_dat)
+    wake_config = configure_wake_model(
+        system_dat, rd, first_hh, resource_dat, geometries
+    )
 
     # Step 5: Run simulation
     sim_results = run_simulation(
