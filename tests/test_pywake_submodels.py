@@ -1023,3 +1023,69 @@ def test_fuga_atmosphere_ignores_list_z0():
         _resource(ti=np.full(10, 0.10)), {"z0": [1e-4, 1e-2]}, 78.0
     )
     assert isinstance(z0, float)  # derived from TI, not the list
+
+
+# ---------------------------------------------------------------------------
+# Fuga mixed turbine geometries (LUT generation intercepted; no pyfuga)
+#
+# Regression for mixed-rotor-diameter/hub-height layouts (neighbor farms):
+# single-hub-height LUTs at different hub heights turn FugaMultiLUTDeficit's
+# merged table all-NaN (xarray cannot interpolate a size-1 z axis), which
+# surfaced as zero production at every waked turbine. Mixed layouts must get
+# LUTs spanning all hub heights, one shared x/y grid, and a z_lst pinning the
+# merged z axis to the hub heights.
+# ---------------------------------------------------------------------------
+import wifa.pywake_api as _pywake_api  # noqa: E402
+
+
+def _call_fuga(monkeypatch, turbine_geometries=None):
+    """Call the FUGA deficit branch with _ensure_fuga_luts intercepted."""
+    captured = {}
+
+    def fake_ensure_luts(**kwargs):
+        captured.update(kwargs)
+        n = len(kwargs["geometries"]) * len(kwargs["z0_list"])
+        return [f"/fake/lut_{i}.nc" for i in range(n)]
+
+    monkeypatch.setattr(_pywake_api, "_ensure_fuga_luts", fake_ensure_luts)
+    analysis = {
+        "wind_deficit_model": {"name": "FUGA", "fuga": {"z0": 0.03, "n_z0": 1}}
+    }
+    _, args, _ = _configure_deficit_model(
+        {"name": "FUGA"}, analysis, _RD, _HH, turbine_geometries=turbine_geometries
+    )
+    return args, captured
+
+
+def test_fuga_mixed_geometries_span_hub_heights_and_share_grid(monkeypatch):
+    args, luts = _call_fuga(monkeypatch, [(80.0, 80.0), (100.0, 90.0)])
+    # Every LUT spans all hub heights so the merged z axis has no NaN slices.
+    assert luts["zlow"] == 80.0 and luts["zhigh"] == 90.0
+    # One shared x/y grid (finest natural resolution: min diameter / 4, / 16).
+    assert luts["dx"] == 20.0 and luts["dy"] == 5.0
+    # The merged z axis is pinned to exactly the hub heights.
+    assert args["z_lst"] == [80.0, 90.0]
+    assert isinstance(args["LUT_path"], list) and len(args["LUT_path"]) == 2
+
+
+def test_fuga_mixed_diameters_same_hub_share_grid_only(monkeypatch):
+    args, luts = _call_fuga(monkeypatch, [(80.0, 80.0), (100.0, 80.0)])
+    assert luts["dx"] == 20.0 and luts["dy"] == 5.0
+    # Same hub height everywhere: single-level LUTs stay valid, no z axis.
+    assert "zlow" not in luts and "z_lst" not in args
+
+
+def test_fuga_single_geometry_keeps_hub_level_lut(monkeypatch):
+    args, luts = _call_fuga(monkeypatch, None)
+    # Unchanged cheap path: per-geometry defaults, single plain LUT path.
+    assert "zlow" not in luts and "dx" not in luts
+    assert "z_lst" not in args
+    assert isinstance(args["LUT_path"], str)
+
+
+def test_fuga_duplicate_geometries_deduped(monkeypatch):
+    # Two turbine types sharing one geometry must not produce duplicate d_h
+    # coordinates (they break FugaMultiLUTDeficit's merge) nor a second LUT.
+    args, luts = _call_fuga(monkeypatch, [(80.0, 80.0), (80.0, 80.0)])
+    assert luts["geometries"] == [(80.0, 80.0)]
+    assert isinstance(args["LUT_path"], str)

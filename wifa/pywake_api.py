@@ -983,7 +983,22 @@ def _fuga_z0_sweep(resource_dat, fuga_cfg, hub_height, zeta0, z0_single):
 
 
 def _ensure_fuga_luts(
-    *, folder, zeta0, nkz0, nbeta, geometries, z0_list, zi, lut_vars, nx, ny
+    *,
+    folder,
+    zeta0,
+    nkz0,
+    nbeta,
+    geometries,
+    z0_list,
+    zi,
+    lut_vars,
+    nx,
+    ny,
+    zlow=None,
+    zhigh=None,
+    dx=None,
+    dy=None,
+    n_cpu=None,
 ):
     """Generate/reuse a LUT for every (geometry, z0) pair; return the path list.
 
@@ -991,6 +1006,13 @@ def _ensure_fuga_luts(
     so extra z0 values and turbine geometries add only the cheap per-LUT stage.
     FugaDeficit/FugaMultiLUTDeficit interpolate the resulting set over d_h
     (turbine geometry) and z0 (per-flow-case TI).
+
+    zlow/zhigh/dx/dy default to each geometry's own hub height and D/4, D/16.
+    Mixed-geometry layouts must pass a shared zlow/zhigh (spanning every hub
+    height) and a shared dx/dy so FugaMultiLUTDeficit can merge the LUTs onto
+    one z/x/y grid: merging single-height LUTs at different hub heights turns
+    the whole table NaN (xarray cannot interpolate a size-1 z axis), which
+    surfaced as zero power at every cross-type waked turbine.
     """
     paths = []
     for diameter, zhub in geometries:
@@ -1008,15 +1030,36 @@ def _ensure_fuga_luts(
                     lut_vars=lut_vars,
                     nx=nx,
                     ny=ny,
+                    zlow=zlow,
+                    zhigh=zhigh,
+                    dx=dx,
+                    dy=dy,
+                    n_cpu=n_cpu,
                 )
             )
     return paths
 
 
 def _ensure_fuga_lut(
-    *, folder, zeta0, nkz0, nbeta, diameter, zhub, z0, zi, lut_vars, nx, ny
+    *,
+    folder,
+    zeta0,
+    nkz0,
+    nbeta,
+    diameter,
+    zhub,
+    z0,
+    zi,
+    lut_vars,
+    nx,
+    ny,
+    zlow=None,
+    zhigh=None,
+    dx=None,
+    dy=None,
+    n_cpu=None,
 ):
-    """Generate (or reuse a cached) hub-height Fuga LUT; return its path.
+    """Generate (or reuse a cached) Fuga LUT; return its path.
 
     The LUT filename encodes every physical/grid parameter, so an existing file
     with the right name is a valid cache hit. pyfuga reuses the costly preLUT
@@ -1029,9 +1072,16 @@ def _ensure_fuga_lut(
     folder.mkdir(parents=True, exist_ok=True)
     # pyfuga's own defaults; pass explicitly so the cache-probe path built by
     # get_luts_path matches the filename get_luts actually writes.
-    dx, dy = diameter / 4, diameter / 16
-    lut_vars = list(lut_vars)
+    if dx is None:
+        dx = diameter / 4
+    if dy is None:
+        dy = diameter / 16
     # zlow == zhigh == zhub -> single hub-height level (the cheap path).
+    if zlow is None:
+        zlow = zhub
+    if zhigh is None:
+        zhigh = zhub
+    lut_vars = list(lut_vars)
     lut_path = get_luts_path(
         folder,
         zeta0,
@@ -1041,8 +1091,8 @@ def _ensure_fuga_lut(
         zhub,
         z0,
         zi,
-        zhub,
-        zhub,
+        zlow,
+        zhigh,
         lut_vars,
         nx,
         ny,
@@ -1059,13 +1109,14 @@ def _ensure_fuga_lut(
             zhub=zhub,
             z0=z0,
             zi=zi,
-            zlow=zhub,
-            zhigh=zhub,
+            zlow=zlow,
+            zhigh=zhigh,
             lut_vars=lut_vars,
             nx=nx,
             ny=ny,
             dx=dx,
             dy=dy,
+            n_cpu=n_cpu,
         )
     return str(lut_path)
 
@@ -1223,6 +1274,27 @@ def _configure_deficit_model(
         # run time. Degenerates to a single LUT for one geometry + n_z0<=1.
         z0_list = _fuga_z0_sweep(resource_dat, fuga_cfg, hub_height, zeta0, z0_single)
         geometries = turbine_geometries or [(rotor_diameter, hub_height)]
+        # Dedupe: two turbine types with the same geometry share one LUT, and
+        # duplicate d_h coordinates would break FugaMultiLUTDeficit's merge.
+        geometries = list(dict.fromkeys((float(d), float(h)) for d, h in geometries))
+        hub_heights = sorted({h for _, h in geometries})
+        diameters = sorted({d for d, _ in geometries})
+        # Mixed hub heights: every LUT must span all hub heights (a source
+        # turbine's wake is evaluated at each target's hub height), and mixed
+        # diameters need one shared x/y grid; otherwise FugaMultiLUTDeficit's
+        # merge yields NaN deficits -> zero power at cross-type waked turbines.
+        mixed_grid = {}
+        if len(hub_heights) > 1:
+            mixed_grid["zlow"] = hub_heights[0]
+            mixed_grid["zhigh"] = hub_heights[-1]
+            # Interpolate the merged LUTs at exactly the hub heights; pyfuga's
+            # log-spaced z levels differ per z0, so without this the z-union
+            # across a z0 sweep would reintroduce NaN edge cells.
+            deficit_args["z_lst"] = hub_heights
+        if len(diameters) > 1:
+            # Finest natural resolution; identical x/y coords across LUTs.
+            mixed_grid["dx"] = diameters[0] / 4
+            mixed_grid["dy"] = diameters[0] / 16
         lut_paths = _ensure_fuga_luts(
             folder=fuga_cfg.get("cache_dir", _fuga_default_lut_dir()),
             zeta0=zeta0,
@@ -1234,6 +1306,8 @@ def _configure_deficit_model(
             lut_vars=fuga_cfg.get("lut_vars", ["UL"]),
             nx=int(fuga_cfg.get("nx", 2048)),
             ny=int(fuga_cfg.get("ny", 512)),
+            n_cpu=fuga_cfg.get("n_cpu"),
+            **mixed_grid,
         )
         # Single LUT -> plain path; multiple -> list (FugaDeficit globs/lists).
         deficit_args["LUT_path"] = lut_paths[0] if len(lut_paths) == 1 else lut_paths
@@ -1459,7 +1533,9 @@ def _configure_blockage_model(blockage_data, deficit_args):
     if normalized in SIMPLE_BLOCKAGE_MODELS:
         return SIMPLE_BLOCKAGE_MODELS[normalized]()
     if normalized == "fuga":
-        return FugaDeficit(deficit_args["LUT_path"])
+        return FugaDeficit(
+            deficit_args["LUT_path"], z_lst=deficit_args.get("z_lst")
+        )
     raise NotImplementedError(f"Blockage model '{name}' is not supported")
 
 
