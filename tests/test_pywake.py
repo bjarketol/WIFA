@@ -895,7 +895,7 @@ def test_weibull_ws_grid_excludes_zero_for_weightedsum(tmp_path):
                 "analysis": {
                     "wind_deficit_model": {
                         "name": "Zong2020",
-                        "wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004},
+                        "wake_expansion_coefficient": {"k_a": 0.004, "k_b": 0.38},
                     },
                     "deflection_model": {"name": "None"},
                     "turbulence_model": {"name": "CrespoHernandez"},

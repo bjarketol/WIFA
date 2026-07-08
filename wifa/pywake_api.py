@@ -1183,45 +1183,63 @@ def _configure_deficit_model(
         "supergaussian2023",
     }
 
+    # windIO convention: k = k_a + k_b * TI (k_a constant, k_b multiplies TI).
+    # PyWake's a-parametrized deficits compute k = a[0] * TI + a[1], so the
+    # windIO pair maps to a = [k_b, k_a]. Scalar-k deficits take k_a and cannot
+    # represent a nonzero k_b.
     if normalized in ("jensen", "nojlocaldeficit"):
         wake_model_class = NOJLocalDeficit
-        if "k_b" in wake_expansion:
-            deficit_args["a"] = [wake_expansion.get("k_a", 0), wake_expansion["k_b"]]
+        if "k_a" in wake_expansion or "k_b" in wake_expansion:
+            deficit_args["a"] = [
+                wake_expansion.get("k_b", 0) or 0,
+                wake_expansion.get("k_a", 0) or 0,
+            ]
 
     elif normalized in ("jensen1983", "nojdeficit"):
         wake_model_class = NOJDeficit
         deficit_args.pop("use_effective_ws", None)
         # NOJDeficit takes a scalar k. windIO's wake_expansion_coefficient has
-        # no scalar `k` field, so accept k_b (schema-valid) as well as `k`.
+        # no scalar `k` field, so accept k_a (the constant) as well as `k`.
         if "k" in wake_expansion:
             deficit_args["k"] = wake_expansion["k"]
-        elif "k_b" in wake_expansion:
-            deficit_args["k"] = wake_expansion["k_b"]
+        elif "k_a" in wake_expansion:
+            deficit_args["k"] = wake_expansion["k_a"]
+        if wake_expansion.get("k_b"):
+            warnings.warn(
+                f"{model_name} takes a constant wake expansion k (= k_a); "
+                f"the TI coefficient k_b={wake_expansion['k_b']} is ignored."
+            )
 
     elif normalized in GAUSSIAN_MODELS:
         wake_model_class = GAUSSIAN_MODELS[normalized]
         if normalized in A_PARAM_MODELS:
-            # Niayifar, Zong, Carbajofuertes use a=[k_a, k_b]
+            # Niayifar, Zong, Carbajofuertes: k = k_a + k_b*TI -> a=[k_b, k_a]
             if "k" in wake_expansion:
                 warnings.warn(
-                    f"{model_name} uses a=[k_a, k_b] for wake expansion, not scalar k. "
-                    f"Scalar 'k' is ignored; specify k_a/k_b instead."
+                    f"{model_name} uses k_a/k_b (k = k_a + k_b*TI) for wake "
+                    f"expansion, not scalar k. Scalar 'k' is ignored."
                 )
-            if "k_b" in wake_expansion:
-                if "k_a" not in wake_expansion:
+            if "k_a" in wake_expansion or "k_b" in wake_expansion:
+                if "k_b" not in wake_expansion:
                     warnings.warn(
-                        f"k_a not specified for {model_name}, defaulting to 0"
+                        f"k_b not specified for {model_name}, defaulting to 0 "
+                        f"(TI-independent wake expansion)"
                     )
                 deficit_args["a"] = [
-                    wake_expansion.get("k_a", 0),
-                    wake_expansion["k_b"],
+                    wake_expansion.get("k_b", 0) or 0,
+                    wake_expansion.get("k_a", 0) or 0,
                 ]
         else:
-            # Bastankhah2014 uses k (scalar)
-            if "k_b" in wake_expansion:
-                deficit_args["k"] = wake_expansion["k_b"]
+            # Bastankhah2014 uses k (scalar) = the windIO constant k_a
+            if "k_a" in wake_expansion:
+                deficit_args["k"] = wake_expansion["k_a"]
             elif "k" in wake_expansion:
                 deficit_args["k"] = wake_expansion["k"]
+            if wake_expansion.get("k_b"):
+                warnings.warn(
+                    f"{model_name} takes a constant wake expansion k (= k_a); "
+                    f"the TI coefficient k_b={wake_expansion['k_b']} is ignored."
+                )
         # ceps maps to the deficit's near-wake epsilon coefficient. Bastankhah,
         # Niayifar and Carbajofuertes name it `ceps`; Zong names it `eps_coeff`.
         if "ceps" in wind_deficit_cfg:

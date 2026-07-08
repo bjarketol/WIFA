@@ -178,29 +178,31 @@ def test_configure_deficit_model_bastankhah2014_params():
     assert args["ceps"] == 0.2
 
 
-def test_configure_deficit_model_bastankhah2014_k_b():
-    """Verify k_b wake expansion is used when present."""
-    _, args = _call_deficit(
-        "Bastankhah2014",
-        {"wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004}},
-    )
+def test_configure_deficit_model_bastankhah2014_k_a():
+    """The windIO constant k_a is Bastankhah2014's scalar k; a nonzero TI
+    coefficient k_b cannot be represented and warns."""
+    with pytest.warns(UserWarning, match="k_b=0.38 is ignored"):
+        _, args = _call_deficit(
+            "Bastankhah2014",
+            {"wake_expansion_coefficient": {"k_a": 0.004, "k_b": 0.38}},
+        )
     assert args["k"] == 0.004
 
 
-def test_configure_deficit_model_jensen_k_b():
-    """Verify Jensen k_a/k_b expansion params."""
+def test_configure_deficit_model_jensen_k_a_k_b():
+    """Jensen: windIO k = k_a + k_b*TI maps to PyWake a = [k_b, k_a]."""
     _, args = _call_deficit(
         "Jensen",
-        {"wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004}},
+        {"wake_expansion_coefficient": {"k_a": 0.004, "k_b": 0.38}},
     )
     assert args["a"] == [0.38, 0.004]
 
 
-def test_configure_deficit_model_nojlocaldeficit_k_b():
-    """Verify NOJLocalDeficit k_a/k_b expansion params."""
+def test_configure_deficit_model_nojlocaldeficit_k_a_k_b():
+    """NOJLocalDeficit: windIO k = k_a + k_b*TI maps to PyWake a = [k_b, k_a]."""
     _, args = _call_deficit(
         "NOJLocalDeficit",
-        {"wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004}},
+        {"wake_expansion_coefficient": {"k_a": 0.004, "k_b": 0.38}},
     )
     assert args["a"] == [0.38, 0.004]
 
@@ -216,12 +218,12 @@ def test_configure_deficit_model_jensen_1983_k():
     assert "use_effective_ws" not in args
 
 
-def test_configure_deficit_model_jensen_1983_k_b():
-    """Jensen_1983 (NOJDeficit) accepts k via k_b, since windIO's
-    wake_expansion_coefficient has no scalar k field."""
+def test_configure_deficit_model_jensen_1983_k_a():
+    """Jensen_1983 (NOJDeficit) takes its scalar k from windIO's constant k_a,
+    since the wake_expansion_coefficient schema has no scalar k field."""
     cls, args = _call_deficit(
         "Jensen_1983",
-        {"wake_expansion_coefficient": {"k_a": 0.0, "k_b": 0.1}},
+        {"wake_expansion_coefficient": {"k_a": 0.1, "k_b": 0.0}},
     )
     assert cls is NOJDeficit
     assert args["k"] == 0.1
@@ -233,8 +235,8 @@ def test_configure_deficit_model_gaussian_params_niayifar():
         "Niayifar2016",
         {
             "wake_expansion_coefficient": {
-                "k_a": 0.38,
-                "k_b": 0.004,
+                "k_a": 0.004,
+                "k_b": 0.38,
                 "free_stream_ti": False,
             },
             "ceps": 0.3,
@@ -267,8 +269,8 @@ def test_configure_deficit_model_bastankhah2014_no_effective_ti():
 
 
 def test_configure_deficit_model_a_param_warns_on_scalar_k():
-    """Verify warning when scalar k is provided for a=[k_a, k_b] models."""
-    with pytest.warns(UserWarning, match="uses a="):
+    """Verify warning when scalar k is provided for k_a/k_b models."""
+    with pytest.warns(UserWarning, match="uses k_a/k_b"):
         _, args = _call_deficit(
             "Niayifar2016", {"wake_expansion_coefficient": {"k": 0.05}}
         )
@@ -276,11 +278,12 @@ def test_configure_deficit_model_a_param_warns_on_scalar_k():
     assert "a" not in args
 
 
-def test_configure_deficit_model_a_param_warns_on_missing_k_a():
-    """Verify warning when k_b is provided without k_a."""
-    with pytest.warns(UserWarning, match="k_a not specified"):
+def test_configure_deficit_model_a_param_warns_on_missing_k_b():
+    """Verify warning when only the constant k_a is given to a TI-dependent
+    expansion model (k_b defaults to 0)."""
+    with pytest.warns(UserWarning, match="k_b not specified"):
         _, args = _call_deficit(
-            "Zong2020", {"wake_expansion_coefficient": {"k_b": 0.004}}
+            "Zong2020", {"wake_expansion_coefficient": {"k_a": 0.004}}
         )
     assert args["a"] == [0, 0.004]
 
@@ -297,8 +300,8 @@ def test_configure_deficit_model_a_param_warns_on_missing_k_a():
             "Niayifar2016",
             {
                 "wake_expansion_coefficient": {
-                    "k_a": 0.38,
-                    "k_b": 0.004,
+                    "k_a": 0.004,
+                    "k_b": 0.38,
                     "free_stream_ti": False,
                 },
                 "ceps": 0.3,
@@ -309,8 +312,8 @@ def test_configure_deficit_model_a_param_warns_on_missing_k_a():
             "Zong2020",
             {
                 "wake_expansion_coefficient": {
-                    "k_a": 0.38,
-                    "k_b": 0.004,
+                    "k_a": 0.004,
+                    "k_b": 0.38,
                     "free_stream_ti": True,
                 }
             },
@@ -318,12 +321,12 @@ def test_configure_deficit_model_a_param_warns_on_missing_k_a():
         ),
         (
             "Jensen",
-            {"wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004}},
+            {"wake_expansion_coefficient": {"k_a": 0.004, "k_b": 0.38}},
             NOJLocalDeficit,
         ),
         (
             "NOJLocalDeficit",
-            {"wake_expansion_coefficient": {"k_a": 0.38, "k_b": 0.004}},
+            {"wake_expansion_coefficient": {"k_a": 0.004, "k_b": 0.38}},
             NOJLocalDeficit,
         ),
         (

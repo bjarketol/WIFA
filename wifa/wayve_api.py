@@ -656,19 +656,21 @@ def wake_model_setup(analysis_dat, debug_mode=False):
         # Read wake model settings #
         wm_dat = analysis_dat["wind_deficit_model"]
         k_dat = wm_dat["wake_expansion_coefficient"]
-        # k, k_a, k_b, ceps
+        # windIO convention: k = k_a + k_b * TI. wayve's Lanzilao computes
+        # kwake = ka * TI + kb, so the pair maps swapped: ka=k_b, kb=k_a.
+        # A scalar k is a constant expansion -> kb, with no TI term.
         if "k_a" in k_dat and "k_b" in k_dat and "ceps" in wm_dat:
-            k_a = k_dat["k_a"]
-            k_b = k_dat["k_b"]
+            ti_coef = k_dat["k_b"]
+            k_const = k_dat["k_a"]
             ceps = wm_dat["ceps"]
         elif "k" in k_dat and "ceps" in wm_dat:
-            k_a = k_dat["k"]
-            k_b = 0.0
+            ti_coef = 0.0
+            k_const = k_dat["k"]
             ceps = wm_dat["ceps"]
         else:
             raise ValueError("Wake spreading parameter not specified!")
         # Use wake merging method of Lanzilao and Meyers (2021)
-        wake_model = Lanzilao(ka=k_a, kb=k_b, eps_beta=ceps)
+        wake_model = Lanzilao(ka=ti_coef, kb=k_const, eps_beta=ceps)
     elif wake_tool == "foxes":
         require("foxes")
         from foxes import ModelBook
