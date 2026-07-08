@@ -100,5 +100,126 @@ def test_wake_tool_defaults_to_wayve():
     assert type(wm).__name__ == "Lanzilao"
 
 
+def _scalar_resource(ti):
+    """Minimal single-point (no `height`) wind resource for flow_io_abl."""
+    return {
+        "wind_speed": {"data": [9.0]},
+        "wind_direction": {"data": [270.0]},
+        "turbulence_intensity": {"data": [ti]},
+        "z0": {"data": [0.03]},
+    }
+
+
+def test_scalar_resource_ti_is_a_fraction():
+    """windIO carries TI as a fraction. The scalar branch used to divide it by
+    100 (and read it only when `z0` happened to be present), collapsing the
+    TI-proportional wake expansion by two orders of magnitude."""
+    from wifa.wayve_api import flow_io_abl
+
+    abl = flow_io_abl(_scalar_resource(0.08), 0, zh=78.0, h1=156.0)
+    assert abl.TI == pytest.approx(0.08)
+
+
+def test_scalar_resource_ti_read_without_z0():
+    """TI must be read whenever it is present, not only when `z0` is."""
+    from wifa.wayve_api import flow_io_abl
+
+    resource = _scalar_resource(0.08)
+    del resource["z0"]
+    abl = flow_io_abl(resource, 0, zh=78.0, h1=156.0)
+    assert abl.TI == pytest.approx(0.08)
+
+
+def test_scalar_resource_ti_defaults_when_absent():
+    from wifa.wayve_api import flow_io_abl
+
+    resource = _scalar_resource(0.08)
+    del resource["turbulence_intensity"]
+    abl = flow_io_abl(resource, 0, zh=78.0, h1=156.0)
+    assert abl.TI == pytest.approx(0.04)
+
+
+def _timeseries_system(wind_speeds, subset):
+    """Single-turbine system whose wind speed differs at every timestep."""
+    n = len(wind_speeds)
+    return {
+        "site": {
+            "energy_resource": {
+                "wind_resource": {
+                    "time": list(range(n)),
+                    "wind_speed": {"data": list(wind_speeds)},
+                    "wind_direction": {"data": [270.0] * n},
+                    "turbulence_intensity": {"data": [0.08] * n},
+                    "z0": {"data": [0.03] * n},
+                    "fc": {"data": [1.0e-4] * n},
+                }
+            }
+        },
+        "wind_farm": {
+            "layouts": [{"coordinates": {"x": [0.0], "y": [0.0]}}],
+            "turbines": {
+                "performance": {
+                    "power_curve": {
+                        "power_values": [0, 1e6, 3e6, 3e6],
+                        "power_wind_speeds": [3, 8, 12, 25],
+                    },
+                    "Ct_curve": {
+                        "Ct_values": [0.8, 0.8, 0.4, 0.2],
+                        "Ct_wind_speeds": [3, 8, 12, 25],
+                    },
+                },
+                "hub_height": 80.0,
+                "rotor_diameter": 80.0,
+            },
+        },
+        "attributes": {
+            "flow_model": {"name": "wayve"},
+            "analysis": {
+                "wind_deficit_model": {
+                    "wake_expansion_coefficient": {"k_a": 0.04, "k_b": 0.0},
+                    "ceps": 0.2,
+                },
+                "superposition_model": {"ws_superposition": "Product"},
+                "wm_coupling": {"method": "PB"},
+            },
+            "model_outputs_specification": {
+                "output_folder": "output",
+                "run_configuration": {
+                    "times_run": {"all_occurences": False, "subset": subset}
+                },
+                "turbine_outputs": {
+                    "turbine_nc_filename": "turbine_data.nc",
+                    "output_variables": ["rotor_effective_velocity"],
+                },
+            },
+        },
+    }
+
+
+def test_times_run_subset_selects_the_requested_rows(tmp_path):
+    """Regression: the subsetted timestamps were re-enumerated from 0, so the
+    ABL was built from rows 0..n-1 of the wind resource while being *labelled*
+    with the requested timestamps — silently simulating the wrong states."""
+    import xarray as xr
+
+    from wifa.wayve_api import run_wayve
+
+    wind_speeds = [6.0, 9.0, 12.0]
+    subset = [2]
+    # debug_mode skips the APM solve: the wake model still sees the full ABL.
+    run_wayve(
+        _timeseries_system(wind_speeds, subset),
+        output_dir=tmp_path,
+        debug_mode=True,
+    )
+
+    ds = xr.load_dataset(tmp_path / "turbine_data.nc")
+    assert ds["states"].values.tolist() == subset
+    # A lone turbine is unwaked, so its rotor-effective velocity is the
+    # background speed of the *requested* state (12 m/s), not of row 0 (6 m/s).
+    rews = float(ds["rotor_effective_velocity"].isel(states=0, turbine=0))
+    assert rews == pytest.approx(wind_speeds[subset[0]], rel=0.02)
+
+
 if __name__ == "__main__":
     test_wayve_4wts()

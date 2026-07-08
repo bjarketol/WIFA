@@ -96,8 +96,13 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     ######################
     # Read output settings
     ######################
-    # Select timestamps
-    times = resource_dat["wind_resource"]["time"]
+    # Select timestamps. `time_indices` are positions into the *full* wind
+    # resource arrays; they must be carried alongside the timestamp labels,
+    # because flow_io_abl() indexes the full arrays. Enumerating the subsetted
+    # timestamps instead would simulate rows 0..n-1 while labelling them with
+    # the requested timestamps.
+    all_times = resource_dat["wind_resource"]["time"]
+    time_indices = list(range(len(all_times)))
     run_config = system_dat["attributes"]["model_outputs_specification"][
         "run_configuration"
     ]
@@ -105,8 +110,8 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
         "all_occurences", True
     ):
         if "subset" in run_config["times_run"]:
-            subset = run_config["times_run"]["subset"]
-            times = [times[i] for i in subset]
+            time_indices = list(run_config["times_run"]["subset"])
+    times = [all_times[i] for i in time_indices]
     # Get turbine variables to output
     turbine_nc_filename = "turbine_data.nc"
     turbine_output_variables = ["power", "rotor_effective_velocity"]
@@ -116,7 +121,11 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
         ]
         if "turbine_nc_filename" in turb_out_dat:
             turbine_nc_filename = turb_out_dat["turbine_nc_filename"]
-        if "turbine_output_variables" in turb_out_dat:
+        # The schema (and every other WIFA engine) calls this `output_variables`;
+        # `turbine_output_variables` is kept as a fallback for legacy yamls.
+        if "output_variables" in turb_out_dat:
+            turbine_output_variables = turb_out_dat["output_variables"]
+        elif "turbine_output_variables" in turb_out_dat:
             turbine_output_variables = turb_out_dat["turbine_output_variables"]
     # Check flow field output specification
     flow_nc_filename = "flow_field.nc"
@@ -174,10 +183,11 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     ds_list = []
     ds_ff_list = []
     # Loop over timeseries
-    for time_index, time in enumerate(times):
+    for run_index, time_index in enumerate(time_indices):
+        time = times[run_index]
         if debug_mode:
             # Print timestep
-            print(f"time {time_index + 1}/{len(times)}")
+            print(f"time {run_index + 1}/{len(times)}")
         try:
             # Set up ABL
             abl = flow_io_abl(resource_dat["wind_resource"], time_index, hh, h1)
@@ -756,10 +766,12 @@ def flow_io_abl(wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True):
         ust = 0.666
         if "friction_velocity" in wind_resource_dat.keys():
             ust = wind_resource_dat["friction_velocity"]["data"][time_index]
-        # Turbulence intensity
+        # Turbulence intensity. windIO carries TI as a fraction (as does the
+        # vertical-profile branch below, and the 0.04 default just above), so
+        # it is used as-is. Guard on the variable actually being read.
         TI = 0.04
-        if "z0" in wind_resource_dat.keys():
-            TI = wind_resource_dat["turbulence_intensity"]["data"][time_index] / 100.0
+        if "turbulence_intensity" in wind_resource_dat.keys():
+            TI = wind_resource_dat["turbulence_intensity"]["data"][time_index]
         # Capping inversion information
         h = 1.5e3
         dh = 100.0
