@@ -62,5 +62,43 @@ def test_wayve_scalar_k_is_constant_expansion():
     assert wm.kb == 0.05
 
 
+_LANZILAO_ANALYSIS = {
+    "wind_deficit_model": {
+        "wake_expansion_coefficient": {"k_a": 0.004, "k_b": 0.38},
+        "ceps": 0.2,
+    }
+}
+
+
+def test_wake_tool_read_from_wm_coupling():
+    """The windIO schema nests `wake_tool` under `wm_coupling` (a top-level
+    `analysis.wake_tool` fails validation). Reading only the analysis level made
+    the foxes coupling unreachable from any schema-valid file."""
+    from wifa.wayve_api import wake_model_setup
+
+    analysis = {**_LANZILAO_ANALYSIS, "wm_coupling": {"wake_tool": "wayve"}}
+    wm = wake_model_setup(analysis)
+    assert type(wm).__name__ == "Lanzilao"
+
+    analysis = {**_LANZILAO_ANALYSIS, "wm_coupling": {"wake_tool": "nonsense"}}
+    with pytest.raises(NotImplementedError, match="nonsense"):
+        wake_model_setup(analysis)
+
+
+def test_wake_tool_analysis_level_fallback():
+    """Legacy hand-written yamls put `wake_tool` at the analysis level."""
+    from wifa.wayve_api import wake_model_setup
+
+    with pytest.raises(NotImplementedError, match="nonsense"):
+        wake_model_setup({**_LANZILAO_ANALYSIS, "wake_tool": "nonsense"})
+
+
+def test_wake_tool_defaults_to_wayve():
+    from wifa.wayve_api import wake_model_setup
+
+    wm = wake_model_setup(dict(_LANZILAO_ANALYSIS))
+    assert type(wm).__name__ == "Lanzilao"
+
+
 if __name__ == "__main__":
     test_wayve_4wts()

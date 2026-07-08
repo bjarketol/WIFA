@@ -648,10 +648,13 @@ def wake_model_setup(analysis_dat, debug_mode=False):
         Lanzilao,
     )
 
-    # WM tool
-    wake_tool = analysis_dat.get(
-        "wake_tool", "wayve"
-    )  # updated by Jonas -TODO update this according to updated schema
+    # WM tool. The windIO schema places `wake_tool` inside `wm_coupling`; a
+    # top-level `analysis.wake_tool` is rejected by validation (the schema sets
+    # additionalProperties: false). Older hand-written yamls put it at the
+    # analysis level, so keep reading that as a fallback.
+    wake_tool = analysis_dat.get("wm_coupling", {}).get(
+        "wake_tool", analysis_dat.get("wake_tool", "wayve")
+    )
     if wake_tool == "wayve":
         # Read wake model settings #
         wm_dat = analysis_dat["wind_deficit_model"]
@@ -680,15 +683,18 @@ def wake_model_setup(analysis_dat, debug_mode=False):
 
         verbosity = 1 if debug_mode else 0
 
+        # foxes' Dict takes its own label as `_name`; a plain `name=` kwarg is
+        # stored as a *data* key and would be forwarded into the foxes
+        # Algorithm constructor (TypeError: unexpected keyword argument 'name').
         algo_dict = Dict(
             algo_type="Downwind",
             wake_models=[],
             verbosity=verbosity,
-            name="wayve.algorithm",
+            _name="wayve.algorithm",
         )
 
-        ana_dict = Dict(analysis_dat, name="analysis")
-        idict = Dict(algorithm=algo_dict, name="wayve")
+        ana_dict = Dict(analysis_dat, _name="analysis")
+        idict = Dict(algorithm=algo_dict, _name="wayve")
         mbook = ModelBook()
 
         _read_analysis(ana_dict, idict, mbook=mbook, verbosity=verbosity)
