@@ -628,6 +628,80 @@ def test_configure_blockage_model_unknown():
         _configure_blockage_model({"name": "UnknownBlockage"}, {})
 
 
+@pytest.mark.parametrize(
+    "name,expected_class",
+    [
+        ("SelfSimilarityDeficit2020", SelfSimilarityDeficit2020),
+        ("SelfSimilarityDeficit", SelfSimilarityDeficit),
+        ("RankineHalfBody", RankineHalfBody),
+        ("Rathmann", Rathmann),
+        ("VortexCylinder", VortexCylinder),
+        ("VortexDipole", VortexDipole),
+        ("HybridInduction", HybridInduction),
+    ],
+)
+def test_configure_blockage_model_ground_mirror(name, expected_class):
+    model = _configure_blockage_model({"name": name, "ground_mirror": True}, {})
+    assert isinstance(model, expected_class)
+    assert isinstance(model.groundModel, Mirror)
+
+
+def test_configure_blockage_model_no_ground_mirror_by_default():
+    model = _configure_blockage_model({"name": "SelfSimilarityDeficit2020"}, {})
+    assert model.groundModel is None
+
+    model = _configure_blockage_model(
+        {"name": "SelfSimilarityDeficit2020", "ground_mirror": False}, {}
+    )
+    assert model.groundModel is None
+
+
+def test_configure_blockage_model_ground_mirror_fuga_warns(tmp_path):
+    # FUGA LUTs already include the ground; the flag must warn and be ignored.
+    # A real LUT is not needed to hit the warning path, but FugaDeficit
+    # requires a valid path, so only the warning is asserted before the
+    # constructor fails on the dummy path.
+    with pytest.warns(UserWarning, match="ground_mirror is ignored for FUGA"):
+        try:
+            _configure_blockage_model(
+                {"name": "FUGA", "ground_mirror": True},
+                {"LUT_path": str(tmp_path / "missing.nc")},
+            )
+        except Exception:
+            pass
+
+
+def test_configure_blockage_model_ground_mirror_increases_deficit():
+    # Physics sanity check: the image rotor must increase the upstream
+    # blockage deficit relative to the unmirrored model.
+    import numpy as np
+    from py_wake.deficit_models.no_wake import NoWakeDeficit
+    from py_wake.examples.data.hornsrev1 import V80
+    from py_wake.site._site import UniformSite
+    from py_wake.wind_farm_models.engineering_models import All2AllIterative
+
+    site = UniformSite([1], ti=0.06)
+    wt = V80()
+
+    def upstream_ws(cfg):
+        wfm = All2AllIterative(
+            site,
+            wt,
+            NoWakeDeficit(),
+            blockage_deficitModel=_configure_blockage_model(cfg, {}),
+        )
+        # second turbine acts as a probe 3D upstream (wd=270 blows along +x)
+        sim_res = wfm([0, -240], [0, 0], wd=270, ws=10)
+        return sim_res.WS_eff.sel(wt=1).item()
+
+    ws_plain = upstream_ws({"name": "SelfSimilarityDeficit2020"})
+    ws_mirror = upstream_ws(
+        {"name": "SelfSimilarityDeficit2020", "ground_mirror": True}
+    )
+    assert ws_mirror < ws_plain < 10.0
+    assert np.isclose(ws_plain, ws_mirror, atol=0.1)  # small correction, same order
+
+
 # ---------------------------------------------------------------------------
 # get_with_default preserves extra user keys
 # ---------------------------------------------------------------------------

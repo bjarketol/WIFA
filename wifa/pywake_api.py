@@ -37,7 +37,11 @@ DEFAULTS = {
     "rotor_averaging": {
         "name": "Center",
     },
-    "blockage_model": {"name": None, "ss_alpha": 0.8888888888888888},
+    "blockage_model": {
+        "name": None,
+        "ss_alpha": 0.8888888888888888,
+        "ground_mirror": False,
+    },
 }
 
 
@@ -1534,6 +1538,23 @@ def _configure_blockage_model(blockage_data, deficit_args):
     if normalized == "none":
         return None
 
+    # The analytic blockage models are calibrated without ground effects and
+    # allow flow through the ground; ground_mirror enforces the slip boundary
+    # condition with an image rotor (unlike wake models, which are calibrated
+    # including ground effects and must not be mirrored).
+    ground_model = None
+    if blockage_data.get("ground_mirror", False):
+        if normalized == "fuga":
+            warnings.warn(
+                "blockage_model.ground_mirror is ignored for FUGA: the Fuga "
+                "LUTs come from a linearized RANS solver that already includes "
+                "the ground."
+            )
+        else:
+            from py_wake.ground_models.ground_models import Mirror
+
+            ground_model = Mirror()
+
     # Models that take no constructor arguments
     SIMPLE_BLOCKAGE_MODELS = {
         "selfsimilaritydeficit": SelfSimilarityDeficit,
@@ -1546,10 +1567,11 @@ def _configure_blockage_model(blockage_data, deficit_args):
 
     if normalized == "selfsimilaritydeficit2020":
         return SelfSimilarityDeficit2020(
-            ss_alpha=blockage_data.get("ss_alpha", 0.8888888888888888)
+            ss_alpha=blockage_data.get("ss_alpha", 0.8888888888888888),
+            groundModel=ground_model,
         )
     if normalized in SIMPLE_BLOCKAGE_MODELS:
-        return SIMPLE_BLOCKAGE_MODELS[normalized]()
+        return SIMPLE_BLOCKAGE_MODELS[normalized](groundModel=ground_model)
     if normalized == "fuga":
         return FugaDeficit(
             deficit_args["LUT_path"], z_lst=deficit_args.get("z_lst")
