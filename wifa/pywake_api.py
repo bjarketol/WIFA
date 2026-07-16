@@ -1529,6 +1529,7 @@ def _configure_blockage_model(blockage_data, deficit_args):
     )
     from py_wake.deficit_models.fuga import FugaDeficit
     from py_wake.deficit_models.rathmann import Rathmann
+    from py_wake.superposition_models import LinearSum
 
     name = blockage_data["name"]
     if name is None:
@@ -1565,13 +1566,24 @@ def _configure_blockage_model(blockage_data, deficit_args):
         "hybridinduction": HybridInduction,
     }
 
+    # Sum blockage deficits (across turbines, and real+image when mirrored)
+    # linearly: potential-flow induction superposes linearly, and pyWake
+    # otherwise falls back to the *wake* superposition model — SquaredSum
+    # (e.g. the TurbOPark recipe) asserts on the speed-up (negative deficit)
+    # regions every blockage model produces.
+    blockage_superposition = LinearSum()
+
     if normalized == "selfsimilaritydeficit2020":
         return SelfSimilarityDeficit2020(
             ss_alpha=blockage_data.get("ss_alpha", 0.8888888888888888),
             groundModel=ground_model,
+            superpositionModel=blockage_superposition,
         )
     if normalized in SIMPLE_BLOCKAGE_MODELS:
-        return SIMPLE_BLOCKAGE_MODELS[normalized](groundModel=ground_model)
+        return SIMPLE_BLOCKAGE_MODELS[normalized](
+            groundModel=ground_model,
+            superpositionModel=blockage_superposition,
+        )
     if normalized == "fuga":
         return FugaDeficit(
             deficit_args["LUT_path"], z_lst=deficit_args.get("z_lst")

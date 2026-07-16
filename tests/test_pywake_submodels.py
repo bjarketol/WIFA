@@ -702,6 +702,36 @@ def test_configure_blockage_model_ground_mirror_increases_deficit():
     assert np.isclose(ws_plain, ws_mirror, atol=0.1)  # small correction, same order
 
 
+def test_ground_mirror_works_with_squared_wake_superposition():
+    # Regression: Mirror without an explicit superposition falls back to the
+    # wind farm model's superposition. With SquaredSum (e.g. the TurbOPark
+    # recipe) that asserts on the speed-up (negative deficit) regions every
+    # blockage model produces ("SquaredSum only works for deficit - not
+    # speedups"). The mirror must therefore sum real+image linearly.
+    from py_wake.deficit_models.utils import ct2a_madsen
+    from py_wake.examples.data.hornsrev1 import V80
+    from py_wake.site._site import UniformSite
+    from py_wake.superposition_models import SquaredSum
+    from py_wake.turbulence_models.stf import STF2017TurbulenceModel
+    from py_wake.wind_farm_models.engineering_models import All2AllIterative
+    from py_wake.deficit_models.gaussian import TurboGaussianDeficit
+
+    site = UniformSite([1], ti=0.06)
+    wt = V80()
+    wfm = All2AllIterative(
+        site,
+        wt,
+        TurboGaussianDeficit(ct2a=ct2a_madsen),
+        superpositionModel=SquaredSum(),
+        turbulenceModel=STF2017TurbulenceModel(),
+        blockage_deficitModel=_configure_blockage_model(
+            {"name": "VortexCylinder", "ground_mirror": True}, {}
+        ),
+    )
+    sim_res = wfm([0, 400], [0, 0], wd=270, ws=10)
+    assert (sim_res.WS_eff < 10.0).all()
+
+
 # ---------------------------------------------------------------------------
 # get_with_default preserves extra user keys
 # ---------------------------------------------------------------------------
