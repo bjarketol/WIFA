@@ -742,7 +742,14 @@ def flow_io_abl(wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True):
     kappa = 0.41  # Von Karman constant
     omega = 7.2921159e-5  # angular speed of the Earth [rad/s]
     # Basic atmospheric scalars #
-    air_density = 1.225  # Hard-coded for now
+    # Operating air density. The APM velocity solution does not depend on it
+    # (see wayve's power_turbines docstring); it linearly scales the reported
+    # turbine power — the Cp curve itself stays referenced to the standard
+    # 1.225 kg/m3 of the windIO power curve (read_turbine_type) — and is
+    # forwarded to foxes as FV.RHO by the foxes coupling.
+    air_density = 1.225
+    if "air_density" in wind_resource_dat.keys():
+        air_density = wind_resource_dat["air_density"]["data"][time_index]
     # Surface roughness
     z0 = 1.0e-1
     if "z0" in wind_resource_dat.keys():

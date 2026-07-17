@@ -139,6 +139,29 @@ def test_scalar_resource_ti_defaults_when_absent():
     assert abl.TI == pytest.approx(0.04)
 
 
+def test_scalar_resource_air_density_is_per_state():
+    """A per-state `air_density` in the wind resource sets abl.rho, which
+    linearly scales the reported turbine power (the APM velocity solution
+    does not depend on it)."""
+    from wifa.wayve_api import flow_io_abl
+
+    resource = _scalar_resource(0.08)
+    resource["air_density"] = {"data": [1.29, 1.11]}
+    resource["wind_speed"]["data"].append(9.0)
+    resource["wind_direction"]["data"].append(270.0)
+    resource["turbulence_intensity"]["data"].append(0.08)
+    resource["z0"]["data"].append(0.03)
+    assert flow_io_abl(resource, 0, zh=78.0, h1=156.0).rho == pytest.approx(1.29)
+    assert flow_io_abl(resource, 1, zh=78.0, h1=156.0).rho == pytest.approx(1.11)
+
+
+def test_scalar_resource_air_density_defaults_when_absent():
+    from wifa.wayve_api import flow_io_abl
+
+    abl = flow_io_abl(_scalar_resource(0.08), 0, zh=78.0, h1=156.0)
+    assert abl.rho == pytest.approx(1.225)
+
+
 def _timeseries_system(wind_speeds, subset):
     """Single-turbine system whose wind speed differs at every timestep."""
     n = len(wind_speeds)
