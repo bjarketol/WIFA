@@ -227,6 +227,23 @@ def dict_to_site(resource_dict):
     from windIO import dict_to_netcdf
 
     resource_ds = dict_to_netcdf(resource_dict)
+
+    if "probability" in resource_ds:
+        # windIO histogram resource. Producers that follow the windkit/WAsP
+        # convention write ``probability`` as the per-sector *conditional*
+        # distribution over wind speed (sums to 1 per wind_direction slice)
+        # with the direction marginal in ``sector_probability``; pyWake's
+        # ``P`` is the *joint* distribution over (wd, ws).  Multiply the two
+        # when both are present; a bare ``probability`` is taken as already
+        # joint (matching py_wake.utils.ieawind37_utils).
+        if "sector_probability" in resource_ds:
+            resource_ds["P"] = (
+                resource_ds["probability"] * resource_ds["sector_probability"]
+            )
+            resource_ds = resource_ds.drop_vars(["probability", "sector_probability"])
+        else:
+            resource_ds = resource_ds.rename({"probability": "P"})
+
     rename_map = {
         "height": "h",
         "weibull_a": "Weibull_A",
@@ -311,6 +328,8 @@ def construct_site(system_dat, resource_dat, hub_heights, x_positions):
         )
     elif "weibull_k" in wind_resource:
         result = _construct_weibull_site(resource_dat, hub_heights, x_positions)
+    elif "probability" in wind_resource:
+        result = _construct_histogram_site(resource_dat, hub_heights, x_positions)
     else:
         result = {
             "site": dict_to_site(wind_resource),
@@ -564,6 +583,94 @@ def _construct_timeseries_site(system_dat, resource_dat, hub_heights, x_position
     }
 
 
+def _coord_values(coord):
+    """Extract a windIO coordinate as a float array.
+
+    windIO permits coordinates either as plain arrays or as
+    ``{"data": ..., "dims": ...}`` mappings.
+    """
+    if isinstance(coord, dict):
+        coord = coord["data"]
+    return np.asarray(coord, dtype=float)
+
+
+def _subsector_wind_directions(wd_raw, n_subsector):
+    """Split each wind-direction sector into ``n_subsector`` sub-directions.
+
+    Strips a trailing 360° wrap-around value first.  Refinement requires at
+    least 4 sectors (equidistant, full circle); otherwise the sector centers
+    are returned unchanged.
+    """
+    wd_sectors = np.asarray(wd_raw, dtype=float)
+    if len(wd_sectors) > 1 and np.isclose(wd_sectors[-1], 360.0):
+        wd_sectors = wd_sectors[:-1]
+    if n_subsector > 1 and len(wd_sectors) >= 4:
+        n_sectors = len(wd_sectors)
+        sector_width = 360.0 / n_sectors
+        subsector_width = sector_width / n_subsector
+        offsets = np.linspace(
+            -sector_width / 2 + subsector_width / 2,
+            sector_width / 2 - subsector_width / 2,
+            n_subsector,
+        )
+        return np.sort(
+            (wd_sectors[:, np.newaxis] + offsets[np.newaxis, :]).ravel() % 360
+        )
+    return wd_sectors
+
+
+def _construct_histogram_site(resource_dat, hub_heights, x_positions, n_subsector=5):
+    """Construct site from a (wind_direction × wind_speed) histogram resource.
+
+    Internal helper for construct_site().
+
+    The windIO resource carries ``probability`` on a shared wind-speed bin
+    grid; dict_to_site() builds the joint pyWake ``P`` from it (multiplying
+    in ``sector_probability`` when present).  Flow cases: pyWake cannot
+    interpolate a ws-dependent ``P`` onto foreign wind speeds, so the
+    histogram bin centers are used verbatim; wind directions are refined to
+    sub-sectors (as in the Weibull path) — XRSite interpolates ``P``
+    circularly over wd and rescales by the sub-sector width.
+
+    Parameters
+    ----------
+    resource_dat : dict
+        Energy resource dictionary from windIO.
+    hub_heights : dict
+        Mapping of turbine type names to hub heights.
+    x_positions : list
+        Turbine x positions (for operating array sizing).
+    n_subsector : int
+        Number of sub-directions per wind direction sector.  Default 5
+        (matching the Weibull path).
+    """
+    wind_resource = resource_dat["wind_resource"]
+
+    ws = _coord_values(wind_resource["wind_speed"])
+    wd = _subsector_wind_directions(
+        _coord_values(wind_resource["wind_direction"]), n_subsector
+    )
+
+    if "turbulence_intensity" in wind_resource:
+        # dict_to_site carries the resource TI into site.ds, which
+        # run_simulation prefers over this entry; kept for interface parity
+        # with the Weibull path.
+        TI = wind_resource["turbulence_intensity"]["data"]
+    else:
+        TI = 0.06  # default when TI is absent from wind resource
+
+    return {
+        "site": dict_to_site(wind_resource),
+        "ws": ws,
+        "wd": wd,
+        "TI": TI,
+        "timeseries": False,
+        "operating": np.ones((len(x_positions), 1)),
+        "additional_heights": [],
+        "cases_idx": np.ones(1).astype(bool),
+    }
+
+
 def _construct_weibull_site(resource_dat, hub_heights, x_positions, n_subsector=5):
     """Construct site from Weibull distribution data.
 
@@ -637,24 +744,7 @@ def _construct_weibull_site(resource_dat, hub_heights, x_positions, n_subsector=
         ws = np.arange(0.5, np.ceil(ws_max_ref) + 0.5, 0.5)
 
         # -- Wind direction sub-sectors ---------------------------------------
-        # Strip 360° wrap-around before computing sub-sectors
-        wd_sectors = np.asarray(wd_raw, dtype=float)
-        if len(wd_sectors) > 1 and np.isclose(wd_sectors[-1], 360.0):
-            wd_sectors = wd_sectors[:-1]
-        if n_subsector > 1 and len(wd_sectors) >= 4:
-            n_sectors = len(wd_sectors)
-            sector_width = 360.0 / n_sectors
-            subsector_width = sector_width / n_subsector
-            offsets = np.linspace(
-                -sector_width / 2 + subsector_width / 2,
-                sector_width / 2 - subsector_width / 2,
-                n_subsector,
-            )
-            wd = np.sort(
-                (wd_sectors[:, np.newaxis] + offsets[np.newaxis, :]).ravel() % 360
-            )
-        else:
-            wd = wd_sectors
+        wd = _subsector_wind_directions(wd_raw, n_subsector)
     else:
         # Explicit wind_speed provided: use original wd as-is
         wd = wd_raw
@@ -1585,9 +1675,7 @@ def _configure_blockage_model(blockage_data, deficit_args):
             superpositionModel=blockage_superposition,
         )
     if normalized == "fuga":
-        return FugaDeficit(
-            deficit_args["LUT_path"], z_lst=deficit_args.get("z_lst")
-        )
+        return FugaDeficit(deficit_args["LUT_path"], z_lst=deficit_args.get("z_lst"))
     raise NotImplementedError(f"Blockage model '{name}' is not supported")
 
 
