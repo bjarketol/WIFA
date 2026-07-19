@@ -1275,6 +1275,7 @@ def _configure_deficit_model(
         "gcl",
         "supergaussian",
         "supergaussian2023",
+        "eddyviscosity",
     }
 
     # windIO convention: k = k_a + k_b * TI (k_a constant, k_b multiplies TI).
@@ -1367,6 +1368,19 @@ def _configure_deficit_model(
 
     elif normalized == "gcl":
         wake_model_class = GCLDeficit
+
+    elif normalized == "eddyviscosity":
+        # Only on pyWake's unmerged EV branch (cj_add_eddy_viscosity_model);
+        # import lazily so the released pyWake keeps working without it.
+        from py_wake.deficit_models.eddy_viscosity import EddyViscosityDeficitModel
+
+        wake_model_class = EddyViscosityDeficitModel
+        # EV (Ainslie 1988) references deficits to the free-stream wind speed
+        # and combines them with MaxSum (the WindFarmer convention), so unlike
+        # the analytic deficits use_effective_ws defaults to False.
+        deficit_args["use_effective_ws"] = wind_deficit_cfg.get(
+            "use_effective_ws", False
+        )
 
     elif normalized == "bastankhah2016":
         raise NotImplementedError(
@@ -1528,6 +1542,16 @@ def _configure_turbulence_model(turbulence_data):
         return CrespoHernandez()
     if normalized == "gcl":
         return GCLTurbulence()
+    if normalized in ("quartonandainslie", "modifiedquartonandainslie"):
+        # Only on pyWake's unmerged EV branch; the Hassan (1992) modified
+        # variant is the one the EV bundle uses. It carries its own added-TI
+        # combination (SqrMaxSum default); windIO's ti_superposition is not
+        # consulted on the pyWake path.
+        from py_wake.turbulence_models.quarton_and_ainslie import (
+            ModifiedQuartonAndAinslieTurbulenceModel,
+        )
+
+        return ModifiedQuartonAndAinslieTurbulenceModel()
     raise NotImplementedError(f"Turbulence model '{name}' is not supported")
 
 
@@ -1604,6 +1628,14 @@ def _configure_rotor_averaging(rotor_avg_data):
         return PolarGridRotorAvg()
     if normalized == "cgi":
         return CGIRotorAvg(n=rotor_avg_data.get("n", 4))
+    if normalized == "simplifiedgaussian":
+        # Only on pyWake's unmerged EV branch: the LUT-based line average
+        # across the rotor that the EV bundle pairs with its deficit.
+        from py_wake.rotor_avg_models.simplified_gaussian_rotor_average_model import (
+            SimplifiedGaussianRotorAverageModel,
+        )
+
+        return SimplifiedGaussianRotorAverageModel()
     raise NotImplementedError(f"Rotor averaging model '{name}' is not supported")
 
 
