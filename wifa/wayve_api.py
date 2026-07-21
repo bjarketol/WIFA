@@ -80,6 +80,17 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     if h1 < h1_min:
         raise UserWarning("Lower layer height too low, please specify a higher value")
 
+    # Optional ABL-setup knobs (analysis.abl_setup), forwarded to flow_io_abl:
+    # geostrophic-wind mode and capping-inversion fit settings.
+    abl_setup = analysis_dat.get("abl_setup", {})
+    abl_kwargs = {}
+    if "Gmode" in abl_setup:
+        abl_kwargs["gmode"] = abl_setup["Gmode"]
+    if "dh_max" in abl_setup:
+        abl_kwargs["dh_max"] = abl_setup["dh_max"]
+    if "serz" in abl_setup:
+        abl_kwargs["serz"] = bool(abl_setup["serz"])
+
     ##################
     # Other APM components
     ##################
@@ -190,7 +201,9 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
             print(f"time {run_index + 1}/{len(times)}")
         try:
             # Set up ABL
-            abl = flow_io_abl(resource_dat["wind_resource"], time_index, hh, h1)
+            abl = flow_io_abl(
+                resource_dat["wind_resource"], time_index, hh, h1, **abl_kwargs
+            )
             # Set up APM from components
             model = APM(grid, forcing, abl, mfp, pressure)
             # Use a fixed-point iteration solver with a relaxation factor of 0.7
@@ -715,7 +728,9 @@ def wake_model_setup(analysis_dat, debug_mode=False):
     return wake_model
 
 
-def flow_io_abl(wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True):
+def flow_io_abl(
+    wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True, gmode="avg"
+):
     """
     Method to set up an ABL object based on FLOW IO
 
@@ -733,6 +748,15 @@ def flow_io_abl(wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True):
         Maximum depth of the inversion layer used in the inversion curve fitting procedure (default: None)
     serz (optional): boolean
         Whether the surface-extended version of the RZ model is used (default: True)
+    gmode (optional): str
+        How the free-atmosphere (geostrophic) velocity is derived from
+        height-resolved wind resources with mesoscale surface scalars
+        (see wayve's ``abl_setup.mesoscale_based``): "h1" (at the inversion
+        center), "h2" (at the inversion top), "avg" (profile average between
+        the inversion and 5 km; needs profiles reaching 5 km), or "trop"
+        (average to the tropopause; needs profiles reaching the stratosphere).
+        Ignored by the scalar and turbulence-profile input paths.
+        (default: "avg")
     """
     # Atmospheric state setup
     from wayve.abl.abl import ABL
@@ -806,60 +830,181 @@ def flow_io_abl(wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True):
         vs = np.array(wind_resource_dat["wind_speed"]["data"][time_index])
         wds = np.array(wind_resource_dat["wind_direction"]["data"][time_index])
         ths = np.array(wind_resource_dat["potential_temperature"]["data"][time_index])
-        TIs = np.array(wind_resource_dat["turbulence_intensity"]["data"][time_index])
-        # Interpolate TI
-        TI = np.interp(zh, zs, TIs)
+        # Turbulence intensity: height-resolved profile or one value per state
+        TIs = np.atleast_1d(
+            np.array(wind_resource_dat["turbulence_intensity"]["data"][time_index])
+        )
+        TI = np.interp(zh, zs, TIs) if TIs.size > 1 else float(TIs[0])
         # Velocity components
         us = -vs * np.sin(np.deg2rad(wds))
         vs = -vs * np.cos(np.deg2rad(wds))
         # Check available inputs
-        if "k" in wind_resource_dat.keys():  # RANS-like inputs
-            tkes = np.array(wind_resource_dat["k"]["data"][time_index])
-            eps = np.array(wind_resource_dat["epsilon"]["data"][time_index])
-            # Eddy viscosity
-            C_mu = 0.09  # k-epsilon model value
-            nus = C_mu * np.divide(
-                np.square(tkes), eps, out=np.zeros_like(tkes), where=eps != 0
-            )
-            # Momentum fluxes
-            dudz = np.gradient(us, zs, edge_order=2)
-            dvdz = np.gradient(vs, zs, edge_order=2)
-            tauxs = nus * dudz
-            tauys = nus * dvdz
-        else:  # Shear stress profile directly available
-            tauxs = np.array(wind_resource_dat["tau_x"]["data"][time_index])
-            tauys = np.array(wind_resource_dat["tau_y"]["data"][time_index])
-            nus = None
-        # Total momentum flux
-        taus = np.sqrt(np.square(tauxs) + np.square(tauys))
-        # Friction velocity
-        ust = taus[0]  # Assume friction velocity is not given explicitly
-        # Estimate boundary layer height based on momentum flux #
-        f_tau = interp1d(taus, zs)
-        blh = f_tau(0.01 * ust)
-        # Capping inversion information
-        if (
-            "thermal_stratification" in wind_resource_dat.keys()
-            and "capping_inversion"
-            in wind_resource_dat["thermal_stratification"].keys()
+        if "k" in wind_resource_dat.keys() or "tau_x" in wind_resource_dat.keys():
+            # Turbulence profiles provided directly (LES/RANS-like inputs)
+            if "k" in wind_resource_dat.keys():  # RANS-like inputs
+                tkes = np.array(wind_resource_dat["k"]["data"][time_index])
+                eps = np.array(wind_resource_dat["epsilon"]["data"][time_index])
+                # Eddy viscosity
+                C_mu = 0.09  # k-epsilon model value
+                nus = C_mu * np.divide(
+                    np.square(tkes), eps, out=np.zeros_like(tkes), where=eps != 0
+                )
+                # Momentum fluxes
+                dudz = np.gradient(us, zs, edge_order=2)
+                dvdz = np.gradient(vs, zs, edge_order=2)
+                tauxs = nus * dudz
+                tauys = nus * dvdz
+            else:  # Shear stress profile directly available
+                tauxs = np.array(wind_resource_dat["tau_x"]["data"][time_index])
+                tauys = np.array(wind_resource_dat["tau_y"]["data"][time_index])
+                nus = None
+            # Total momentum flux
+            taus = np.sqrt(np.square(tauxs) + np.square(tauys))
+            # Friction velocity
+            ust = taus[0]  # Assume friction velocity is not given explicitly
+            # Estimate boundary layer height based on momentum flux #
+            f_tau = interp1d(taus, zs)
+            blh = f_tau(0.01 * ust)
+            # Capping inversion information
+            if (
+                "thermal_stratification" in wind_resource_dat.keys()
+                and "capping_inversion"
+                in wind_resource_dat["thermal_stratification"].keys()
+            ):
+                thermal_data = wind_resource_dat["thermal_stratification"]
+                ci_data = thermal_data["capping_inversion"]
+                th0 = 293.15
+                h = ci_data["ABL_height"]["data"][time_index]
+                dh = ci_data["dH"]["data"][time_index]
+                dth = ci_data["dtheta"]["data"][time_index]
+                dthdz = ci_data["lapse_rate"]["data"][time_index]
+                inv_bottom, inv_top = h - dh / 2, h + dh / 2
+            else:
+                inv_bottom, h, inv_top, th0, dth, dthdz = ci_fitting(
+                    zs, ths, l_mo, blh, dh_max=dh_max, serz=serz
+                )
+            # Geostrophic wind speed
+            z = np.linspace(h, 15.0e3, 1000)
+            _trapezoid = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+            U3 = _trapezoid(np.interp(z, zs, us), z) / (15.0e3 - h)
+            V3 = _trapezoid(np.interp(z, zs, vs), z) / (15.0e3 - h)
+        elif (
+            "friction_velocity" in wind_resource_dat.keys()
+            and "boundary_layer_height" in wind_resource_dat.keys()
         ):
-            thermal_data = wind_resource_dat["thermal_stratification"]
-            ci_data = thermal_data["capping_inversion"]
-            th0 = 293.15
-            h = ci_data["ABL_height"]["data"][time_index]
-            dh = ci_data["dH"]["data"][time_index]
-            dth = ci_data["dtheta"]["data"][time_index]
-            dthdz = ci_data["lapse_rate"]["data"][time_index]
-            inv_bottom, inv_top = h - dh / 2, h + dh / 2
+            # Mesoscale/reanalysis-style inputs (e.g. ERA5): u/v/theta profiles
+            # plus surface scalars (ust, blh, L_MO) instead of turbulence
+            # profiles — wayve's abl_setup.mesoscale_based() territory.
+            ust = wind_resource_dat["friction_velocity"]["data"][time_index]
+            blh = wind_resource_dat["boundary_layer_height"]["data"][time_index]
+            if zs[-1] >= 12.0e3:
+                # Profiles reach the stratosphere: use wayve's full setup,
+                # including the tropopause two-line fit.
+                from wayve.abl.abl_setup import mesoscale_based
+
+                lat = np.rad2deg(np.arcsin(fc / (2.0 * omega)))
+                return mesoscale_based(
+                    zs,
+                    us,
+                    vs,
+                    ths,
+                    ust,
+                    blh,
+                    l_mo,
+                    lat,
+                    h1,
+                    z0=(z0 if "z0" in wind_resource_dat.keys() else None),
+                    TI=TI,
+                    rho=air_density,
+                    dh_max=(300.0 if dh_max is None else dh_max),
+                    Gmode=gmode,
+                    serz=serz,
+                )
+            # Truncated profiles (reanalysis subsets often stop below the
+            # tropopause, e.g. ERA5 levels 96-137 end near 6 km): run the same
+            # core setup but skip mesoscale_based's unconditional tropopause
+            # fit, which would feed a garbage stratosphere into the ABL.  The
+            # ABL then keeps its defaults (h_strat=10 km, Uinf/Vinf=U3/V3,
+            # Ninf=N), and Gmode is restricted to what the data supports.
+            stable = 0.0 < l_mo < 100
+            # Capping inversion: an explicit windIO block wins over the fit
+            if (
+                "thermal_stratification" in wind_resource_dat.keys()
+                and "capping_inversion"
+                in wind_resource_dat["thermal_stratification"].keys()
+            ):
+                ci_data = wind_resource_dat["thermal_stratification"][
+                    "capping_inversion"
+                ]
+                h = ci_data["ABL_height"]["data"][time_index]
+                dh = ci_data["dH"]["data"][time_index]
+                dth = ci_data["dtheta"]["data"][time_index]
+                dthdz = ci_data["lapse_rate"]["data"][time_index]
+                inv_bottom, inv_top = h - dh / 2, h + dh / 2
+                th0 = np.interp(h, zs, ths)
+            else:
+                inv_bottom, h, inv_top, th0, dth, dthdz = ci_fitting(
+                    zs,
+                    ths,
+                    l_mo,
+                    blh,
+                    dh_max=(300.0 if dh_max is None else dh_max),
+                    serz=serz,
+                )
+            # Momentum flux and eddy viscosity profiles from surface scalars
+            # (same closure as mesoscale_based: stable turbulence extends to
+            # blh, convective turbulence to the inversion)
+            tau = np.zeros(zs.shape)
+            nus = np.zeros(zs.shape)
+            if stable:
+                m = zs <= blh
+                tau[m] = ust**2 * (1 - zs[m] / blh) ** 1.5
+                nus[m] = kappa * ust * zs[m] * (1 - zs[m] / blh) ** 2
+            else:
+                m = zs <= h
+                tau[m] = ust**2 * (1 - zs[m] / h)
+                nus[m] = kappa * ust * zs[m] * (1 - zs[m] / h) ** 2
+            # Geostrophic wind from the profile, restricted to the data range
+            if gmode == "trop":
+                raise UserWarning(
+                    "Gmode 'trop' needs profiles reaching the stratosphere; "
+                    f"these stop at {zs[-1]:.0f} m"
+                )
+            if gmode == "avg" and zs[-1] < 5.0e3:
+                warnings.warn(
+                    f"Gmode 'avg' averages the wind up to 5 km but the "
+                    f"profiles stop at {zs[-1]:.0f} m; falling back to 'h2' "
+                    "(wind at the inversion top)"
+                )
+                gmode = "h2"
+            if gmode == "h1":
+                U3 = np.interp(h, zs, us)
+                V3 = np.interp(h, zs, vs)
+            elif gmode == "h2":
+                U3 = np.interp(inv_top, zs, us)
+                V3 = np.interp(inv_top, zs, vs)
+            elif gmode == "avg":
+                z = np.linspace(h, 5.0e3, 1000)
+                _trapezoid = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+                U3 = _trapezoid(np.interp(z, zs, us), z) / (5.0e3 - h)
+                V3 = _trapezoid(np.interp(z, zs, vs), z) / (5.0e3 - h)
+            else:
+                raise UserWarning(f"Gmode '{gmode}' unknown")
+            # Momentum flux aligned with the geostrophic wind (as in
+            # mesoscale_based)
+            tau_angle = np.arctan2(V3, U3)
+            tauxs = np.cos(tau_angle) * tau
+            tauys = np.sin(tau_angle) * tau
+            # Log-law surface roughness estimate when not provided
+            if "z0" not in wind_resource_dat.keys():
+                z0 = zs[0] / np.exp(kappa * np.hypot(us[0], vs[0]) / ust)
         else:
-            inv_bottom, h, inv_top, th0, dth, dthdz = ci_fitting(
-                zs, ths, l_mo, blh, dh_max=dh_max, serz=serz
+            raise UserWarning(
+                "Vertical-profile wind resource needs either turbulence "
+                "profiles ('k'/'epsilon' or 'tau_x'/'tau_y') or mesoscale "
+                "surface scalars ('friction_velocity' and "
+                "'boundary_layer_height')"
             )
-        # Geostrophic wind speed
-        z = np.linspace(h, 15.0e3, 1000)
-        _trapezoid = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
-        U3 = _trapezoid(np.interp(z, zs, us), z) / (15.0e3 - h)
-        V3 = _trapezoid(np.interp(z, zs, vs), z) / (15.0e3 - h)
     # Upper layer thickness
     h2 = h - h1
     if (
