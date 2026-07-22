@@ -933,6 +933,25 @@ def wake_model_setup(analysis_dat, debug_mode=False):
         _read_analysis(ana_dict, idict, mbook=mbook, verbosity=verbosity)
 
         wake_model = FoxesWakeModel(mbook=mbook, **idict["algorithm"])
+        # wayve@e87780a overrides background_flow_direction with logic
+        # identical to the base class but a broken lazy import (e_spanwise
+        # from wake_models.wake_model_tools instead of forcing_tools), which
+        # crashes every foxes-coupled solve. Rebind the base implementation
+        # while the import is broken; this self-disables on a fixed wayve.
+        try:
+            from wayve.forcing.wind_farms.wake_model_coupling.wake_models.wake_model_tools import (  # noqa: F401
+                e_spanwise,
+            )
+        except ImportError:
+            import types
+
+            from wayve.forcing.wind_farms.wake_model_coupling.wake_model_interface import (
+                UniDirectionalSelfSimilar,
+            )
+
+            wake_model.background_flow_direction = types.MethodType(
+                UniDirectionalSelfSimilar.background_flow_direction, wake_model
+            )
     else:
         raise NotImplementedError(f"Wake tool '{wake_tool}' not implemented!")
     return wake_model
