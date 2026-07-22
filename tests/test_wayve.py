@@ -116,7 +116,7 @@ def test_scalar_resource_ti_is_a_fraction():
     TI-proportional wake expansion by two orders of magnitude."""
     from wifa.wayve_api import flow_io_abl
 
-    abl = flow_io_abl(_scalar_resource(0.08), 0, zh=78.0, h1=156.0)
+    abl, _ = flow_io_abl(_scalar_resource(0.08), 0, zh=78.0, h1=156.0)
     assert abl.TI == pytest.approx(0.08)
 
 
@@ -126,7 +126,7 @@ def test_scalar_resource_ti_read_without_z0():
 
     resource = _scalar_resource(0.08)
     del resource["z0"]
-    abl = flow_io_abl(resource, 0, zh=78.0, h1=156.0)
+    abl, _ = flow_io_abl(resource, 0, zh=78.0, h1=156.0)
     assert abl.TI == pytest.approx(0.08)
 
 
@@ -135,7 +135,7 @@ def test_scalar_resource_ti_defaults_when_absent():
 
     resource = _scalar_resource(0.08)
     del resource["turbulence_intensity"]
-    abl = flow_io_abl(resource, 0, zh=78.0, h1=156.0)
+    abl, _ = flow_io_abl(resource, 0, zh=78.0, h1=156.0)
     assert abl.TI == pytest.approx(0.04)
 
 
@@ -151,14 +151,14 @@ def test_scalar_resource_air_density_is_per_state():
     resource["wind_direction"]["data"].append(270.0)
     resource["turbulence_intensity"]["data"].append(0.08)
     resource["z0"]["data"].append(0.03)
-    assert flow_io_abl(resource, 0, zh=78.0, h1=156.0).rho == pytest.approx(1.29)
-    assert flow_io_abl(resource, 1, zh=78.0, h1=156.0).rho == pytest.approx(1.11)
+    assert flow_io_abl(resource, 0, zh=78.0, h1=156.0)[0].rho == pytest.approx(1.29)
+    assert flow_io_abl(resource, 1, zh=78.0, h1=156.0)[0].rho == pytest.approx(1.11)
 
 
 def test_scalar_resource_air_density_defaults_when_absent():
     from wifa.wayve_api import flow_io_abl
 
-    abl = flow_io_abl(_scalar_resource(0.08), 0, zh=78.0, h1=156.0)
+    abl, _ = flow_io_abl(_scalar_resource(0.08), 0, zh=78.0, h1=156.0)
     assert abl.rho == pytest.approx(1.225)
 
 
@@ -246,3 +246,229 @@ def test_times_run_subset_selects_the_requested_rows(tmp_path):
 
 if __name__ == "__main__":
     test_wayve_4wts()
+
+
+# ---------------------------------------------------------------------------
+# Solver-frame rotation (westerly normalization) and profile-resolving
+# free atmosphere
+# ---------------------------------------------------------------------------
+
+_CT_CURVE = {
+    "Ct_values": [0.8, 0.8, 0.4, 0.2],
+    "Ct_wind_speeds": [3, 8, 12, 25],
+}
+_POWER_CURVE = {
+    "power_values": [0, 1e6, 3e6, 3e6],
+    "power_wind_speeds": [3, 8, 12, 25],
+}
+
+
+def _solver_system(x, y, wind_resource, flow_field=None, layers_description=None):
+    """Multi-turbine system for full (non-debug) APM solves on a small grid."""
+    analysis = {
+        "wind_deficit_model": {
+            "wake_expansion_coefficient": {"k_a": 0.04, "k_b": 0.0},
+            "ceps": 0.2,
+        },
+        "superposition_model": {"ws_superposition": "Product"},
+        "wm_coupling": {"method": "PB"},
+        "apm_grid": {"Lx": 1.0e5, "Ly": 1.0e5, "dx": 1.0e3},
+    }
+    if layers_description is not None:
+        analysis["layers_description"] = layers_description
+    outputs = {
+        "output_folder": "output",
+        "run_configuration": {"times_run": {"all_occurences": True}},
+        "turbine_outputs": {
+            "turbine_nc_filename": "turbine_data.nc",
+            "output_variables": ["power", "rotor_effective_velocity"],
+        },
+    }
+    if flow_field is not None:
+        outputs["flow_field"] = flow_field
+    return {
+        "site": {"energy_resource": {"wind_resource": wind_resource}},
+        "wind_farm": {
+            "layouts": [{"coordinates": {"x": list(x), "y": list(y)}}],
+            "turbines": {
+                "performance": {"power_curve": _POWER_CURVE, "Ct_curve": _CT_CURVE},
+                "hub_height": 80.0,
+                "rotor_diameter": 80.0,
+            },
+        },
+        "attributes": {
+            "flow_model": {"name": "wayve"},
+            "analysis": analysis,
+            "model_outputs_specification": outputs,
+        },
+    }
+
+
+def _scalar_wind_resource(wd, n=1):
+    return {
+        "time": list(range(n)),
+        "wind_speed": {"data": [9.0] * n},
+        "wind_direction": {"data": [float(wd)] * n},
+        "turbulence_intensity": {"data": [0.08] * n},
+        "z0": {"data": [0.03] * n},
+        "fc": {"data": [1.0e-4] * n},
+    }
+
+
+def _flow_field_spec(x_bounds, y_bounds, n):
+    return {
+        "report": True,
+        "flow_nc_filename": "flow_field.nc",
+        "output_variables": ["wind_speed", "wind_direction"],
+        "z_planes": {
+            "xy_sampling": "grid",
+            "x_bounds": list(x_bounds),
+            "y_bounds": list(y_bounds),
+            "Nx": n[0],
+            "Ny": n[1],
+            "z_sampling": "hub_heights",
+        },
+    }
+
+
+def test_scalar_resource_is_solver_frame_aligned():
+    """The ABL comes out with the hub-height wind along +x (wayve's westerly
+    convention) for any input direction, and the undone rotation is
+    reported."""
+    import numpy as np
+
+    from wifa.wayve_api import flow_io_abl
+
+    resource = _scalar_resource(0.08)
+    resource["wind_direction"]["data"] = [225.0]
+    abl, rotation = flow_io_abl(resource, 0, zh=78.0, h1=156.0)
+    assert rotation == pytest.approx(np.deg2rad(45.0))
+    u_hub = np.interp(78.0, abl.zs, abl.us)
+    v_hub = np.interp(78.0, abl.zs, abl.vs)
+    assert u_hub > 0.0
+    assert v_hub == pytest.approx(0.0, abs=1.0e-8 * u_hub)
+
+
+@pytest.fixture(scope="module")
+def _rotation_pair(tmp_path_factory):
+    """Two physically identical cases: a westerly-aligned turbine row, and the
+    same row (and grids) rotated 90 degrees with a southerly wind."""
+    import xarray as xr
+
+    from wifa.wayve_api import run_wayve
+
+    span = 400.0
+    ff_a = _flow_field_spec((-1000.0, 1800.0), (-1200.0, 1200.0), (15, 13))
+    ff_b = _flow_field_spec((-1200.0, 1200.0), (-1000.0, 1800.0), (13, 15))
+    system_a = _solver_system(
+        [0.0, span, 2 * span], [0.0, 0.0, 0.0], _scalar_wind_resource(270.0), ff_a
+    )
+    system_b = _solver_system(
+        [0.0, 0.0, 0.0], [0.0, span, 2 * span], _scalar_wind_resource(180.0), ff_b
+    )
+    out_a = tmp_path_factory.mktemp("wayve_rot_a")
+    out_b = tmp_path_factory.mktemp("wayve_rot_b")
+    run_wayve(system_a, output_dir=out_a)
+    run_wayve(system_b, output_dir=out_b)
+    return {
+        "turbines_a": xr.load_dataset(out_a / "turbine_data.nc"),
+        "turbines_b": xr.load_dataset(out_b / "turbine_data.nc"),
+        "flow_a": xr.load_dataset(out_a / "flow_field.nc"),
+        "flow_b": xr.load_dataset(out_b / "flow_field.nc"),
+    }
+
+
+def test_rotational_invariance_of_turbine_outputs(_rotation_pair):
+    """A southerly case with the layout turned 90 degrees is the same physical
+    system as the westerly case, so per-turbine outputs must match. Before the
+    solver-frame rotation, the gravity-wave solve saw the farm footprint (and
+    any anisotropic grid) at the wrong angle for non-westerly states."""
+    import numpy as np
+
+    power_a = _rotation_pair["turbines_a"]["power"].values
+    power_b = _rotation_pair["turbines_b"]["power"].values
+    assert np.all(np.isfinite(power_a)) and np.all(power_a > 0.0)
+    np.testing.assert_allclose(power_b, power_a, rtol=1.0e-6)
+    rews_a = _rotation_pair["turbines_a"]["rotor_effective_velocity"].values
+    rews_b = _rotation_pair["turbines_b"]["rotor_effective_velocity"].values
+    np.testing.assert_allclose(rews_b, rews_a, rtol=1.0e-6)
+    # Downstream turbines are waked in both frames
+    assert power_a[0, 0] > power_a[0, -1]
+
+
+def test_flow_field_is_reported_in_the_earth_frame(_rotation_pair):
+    """flow_field.nc stays on the requested east/north grid: the southerly
+    case reports ~180 deg background flow, with the wake north (downstream)
+    of the farm."""
+    import numpy as np
+
+    ds = _rotation_pair["flow_b"].isel(states=0, z=0)
+    # Upstream (south) edge, away from the farm axis: background direction
+    wd_upstream = float(ds["wind_direction"].sel(x=-1200.0, y=-1000.0, method="nearest"))
+    assert wd_upstream % 360.0 == pytest.approx(180.0, abs=3.0)
+    # The deepest deficit sits downstream of the last turbine (north)
+    ws = ds["wind_speed"]
+    loc = ws.argmin(dim=["x", "y"])
+    assert float(ws.y[int(loc["y"])]) > 800.0
+    assert abs(float(ws.x[int(loc["x"])])) < 400.0
+
+
+def test_flow_fields_map_onto_each_other_under_rotation(_rotation_pair):
+    """The southerly flow field equals the westerly one rotated by 90 deg:
+    ws_b(x, y) == ws_a(y, -x) on the matching grids."""
+    import numpy as np
+
+    ws_a = _rotation_pair["flow_a"]["wind_speed"].isel(states=0, z=0).values
+    ws_b = _rotation_pair["flow_b"]["wind_speed"].isel(states=0, z=0).values
+    # grids: a is (15 x, 13 y), b is (13 x, 15 y); earth point (x, y) in b
+    # maps to solver/earth point (y, -x) in a; x_b symmetric -> index flip
+    mapped = np.transpose(ws_a)[::-1, :]
+    np.testing.assert_allclose(ws_b, mapped, rtol=1.0e-6)
+    wd_a = _rotation_pair["flow_a"]["wind_direction"].isel(states=0, z=0).values
+    wd_b = _rotation_pair["flow_b"]["wind_direction"].isel(states=0, z=0).values
+    mapped_wd = (np.transpose(wd_a)[::-1, :] - 90.0) % 360.0
+    np.testing.assert_allclose(wd_b % 360.0, mapped_wd, rtol=0, atol=1.0e-6)
+
+
+def test_xy_points_matches_xy_plane():
+    """_xy_plane_points on an axis-aligned meshgrid reproduces wayve's
+    xy_plane exactly (it mirrors the same code with the meshgrid hoisted
+    out) — the guard against drift between the fork helper and wayve."""
+    import numpy as np
+
+    from wayve.apm import APM
+    from wayve.grid.grid import Stat2Dgrid
+    from wayve.momentum_flux_parametrizations import FrictionCoefficients
+    from wayve.solvers import FixedPointIteration
+
+    from wayve.pressure.gravity_waves.gravity_waves import Uniform
+
+    from wifa.wayve_api import _xy_plane_points, flow_io_abl, wf_setup
+
+    system = _solver_system(
+        [0.0, 400.0, 800.0], [0.0, 0.0, 0.0], _scalar_wind_resource(270.0)
+    )
+    farm_dat = system["wind_farm"]
+    analysis_dat = system["attributes"]["analysis"]
+    resource = system["site"]["energy_resource"]["wind_resource"]
+    abl, rotation = flow_io_abl(resource, 0, zh=80.0, h1=160.0)
+    assert rotation == pytest.approx(0.0)
+    wind_farm, forcing, _, _ = wf_setup(farm_dat, analysis_dat, 1.0e3, rotation=rotation)
+    grid = Stat2Dgrid(1.0e5, 100, 1.0e5, 100)
+    model = APM(grid, forcing, abl, FrictionCoefficients(), Uniform(dynamic=True, rotating=False))
+    model.solve(method=FixedPointIteration(tol=5.0e-3, relax=0.7))
+    coupling = wind_farm.coupling
+    wake_model = coupling.wake_model
+    u_bg_evaluator = coupling.set_up_u_bg_evaluator(abl)
+    apm_evaluator = coupling.apm_evaluator
+    xs = np.linspace(-2000.0, 4000.0, 25)
+    ys = np.linspace(-1500.0, 1500.0, 21)
+    ref = wake_model.xy_plane(
+        wind_farm, abl, u_bg_evaluator, apm_evaluator, xs, ys, 80.0
+    )
+    Xs, Ys = np.meshgrid(xs, ys, indexing="ij")
+    new = _xy_plane_points(
+        wake_model, wind_farm, abl, u_bg_evaluator, apm_evaluator, Xs, Ys, 80.0
+    )
+    for ref_field, new_field in zip(ref, new):
+        np.testing.assert_array_equal(new_field, ref_field)

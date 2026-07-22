@@ -19,7 +19,6 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     from wayve.apm import APM
     from wayve.grid.grid import Stat2Dgrid
     from wayve.momentum_flux_parametrizations import FrictionCoefficients
-    from wayve.pressure.gravity_waves.gravity_waves import NonUniform, Uniform
     from wayve.solvers import FixedPointIteration
 
     #####################
@@ -97,6 +96,8 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     # Momentum flux parametrization
     mfp = FrictionCoefficients()
     # Pressure feedback parametrization
+    from wayve.pressure.gravity_waves.gravity_waves import NonUniform, Uniform
+
     pressure = Uniform(dynamic=True, rotating=False)
     if "layers_description" in analysis_dat:
         if "number_of_fa_layers" in analysis_dat["layers_description"]:
@@ -200,10 +201,17 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
             # Print timestep
             print(f"time {run_index + 1}/{len(times)}")
         try:
-            # Set up ABL
-            abl = flow_io_abl(
+            # Set up ABL (solver frame: hub-height wind along +x)
+            abl, rotation = flow_io_abl(
                 resource_dat["wind_resource"], time_index, hh, h1, **abl_kwargs
             )
+            # Rebuild the wind farm in the solver frame: wayve's gravity-wave
+            # solve assumes westerly flow, so the layout turns with the wind.
+            wind_farm, forcing, wf_offset_x, wf_offset_y = wf_setup(
+                farm_dat, analysis_dat, L_filter, debug_mode, rotation=rotation
+            )
+            coupling = wind_farm.coupling
+            wake_model = coupling.wake_model
             # Set up APM from components
             model = APM(grid, forcing, abl, mfp, pressure)
             # Use a fixed-point iteration solver with a relaxation factor of 0.7
@@ -243,18 +251,31 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
                 # Output arrays
                 wind_speed = np.zeros([len(x_ff), len(y_ff), len(z_ff)])
                 wind_dir = np.zeros([len(x_ff), len(y_ff), len(z_ff)])
+                # Query points: the requested earth-frame grid, rotated into
+                # the solver frame (where the farm sits and the wind blows
+                # along +x). Evaluating the rotated points directly keeps the
+                # output on the requested grid with no regridding.
+                c, s = np.cos(rotation), np.sin(rotation)
+                x_e, y_e = np.meshgrid(
+                    x_ff - wf_offset_x, y_ff - wf_offset_y, indexing="ij"
+                )
+                x_q = c * x_e + s * y_e
+                y_q = c * y_e - s * x_e
                 # Loop over z-planes
                 for k, z_k in enumerate(z_ff):
-                    # Get velocities
-                    u_bg, v_bg, u_wm, v_wm = wake_model.xy_plane(
+                    # Get velocities (solver frame)
+                    u_bg, v_bg, u_wm, v_wm = _xy_plane_points(
+                        wake_model,
                         wind_farm,
                         abl,
                         u_bg_evaluator,
                         apm_evaluator,
-                        x_ff - wf_offset_x,
-                        y_ff - wf_offset_y,
+                        x_q,
+                        y_q,
                         z_k,
                     )
+                    # Rotate velocity vectors back to the earth frame
+                    u_wm, v_wm = c * u_wm - s * v_wm, s * u_wm + c * v_wm
                     # Convert to speed and direction
                     wind_speed[:, :, k] = np.sqrt(np.square(u_wm) + np.square(v_wm))
                     wind_dir[:, :, k] = np.rad2deg(
@@ -292,6 +313,162 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
         ds_ff_full = xr.concat(ds_ff_list, dim="states")
         output_fn = Path(output_dir) / flow_nc_filename
         ds_ff_full.to_netcdf(output_fn)
+
+
+def _xy_plane_points(wake_model, wind_farm, abl, u_bg_evaluator, apm_evaluator, Xs, Ys, z):
+    """Evaluate the coupled flow at arbitrary (x, y) coordinate arrays.
+
+    Mirror of wayve 2.0.0's ``xy_plane`` methods (Lanzilao and foxes wake
+    models) with the axis-aligned ``meshgrid(xs, ys)`` replaced by
+    caller-provided 2-D coordinate arrays, so a rotated (solver-frame) grid
+    can be evaluated directly — every operation downstream of the meshgrid is
+    pointwise in the coordinates. Returns ``(u_bg, v_bg, u_wm, v_wm)`` with
+    the shape of ``Xs``. Equivalence with ``xy_plane`` on axis-aligned grids
+    is pinned by a regression test.
+    """
+    Nx, Ny = Xs.shape
+    Nz = 1
+    zs = np.array([z])
+    if hasattr(wake_model, "_algo"):  # foxes coupling
+        from foxes import Engine
+        from foxes.utils import wd2uv
+        import foxes.variables as FV
+
+        locations = np.stack(
+            [np.ravel(Xs), np.ravel(Ys), np.full(Xs.size, float(z))], axis=1
+        )
+        with Engine.new(**wake_model._engine_pars):
+            point_results = wake_model._algo.calc_points(
+                wake_model._farm_results,
+                locations[None],
+                outputs=[FV.AMB_WS, FV.WS, FV.WD],
+            )
+        amb_uv = wd2uv(
+            point_results[FV.WD].to_numpy()[0], point_results[FV.AMB_WS].to_numpy()[0]
+        )
+        uv = wd2uv(
+            point_results[FV.WD].to_numpy()[0], point_results[FV.WS].to_numpy()[0]
+        )
+        amb_uv = amb_uv.reshape(Nx, Ny, 2)
+        uv = uv.reshape(Nx, Ny, 2)
+        return amb_uv[..., 0], amb_uv[..., 1], uv[..., 0], uv[..., 1]
+
+    # Lanzilao (UniDirectionalSelfSimilar) path
+    from wayve.forcing.wind_farms.wake_model_coupling.wake_models.lanzilao_merging import (
+        array_of_matrices,
+        dot_matrix_vec_arrays,
+    )
+    from wayve.forcing.wind_farms.wake_model_coupling.wake_models.wake_model_tools import (
+        evaluate_TI,
+    )
+
+    # Get the turbine thrust coefficients
+    _, Ct, _ = wake_model.get_St_Ct_et(wind_farm, abl, u_bg_evaluator, apm_evaluator)
+    # Get wind farm information
+    turbines = wind_farm.turbines
+    Nt = wind_farm.Nturb
+    xloc = np.array([turbines[k].x for k in range(Nt)])
+    yloc = np.array([turbines[k].y for k in range(Nt)])
+    # Ambient TI
+    TI_inf = abl.TI
+    # Get turbine direction (streamwise)
+    e_str, e_span = wake_model.background_flow_direction(wind_farm, abl)
+    theta_str = np.arctan2(e_str[1], e_str[0])
+    # Sort turbines along wind direction
+    order = wake_model.sort_turbines(wind_farm, e_str)
+    # Turbine direction evaluation
+    if wake_model.wake_deflection:  # Base turbine direction on APM velocity
+        u_1, v_1, h_1 = apm_evaluator(xloc, yloc)
+        theta_turb = np.array([np.arctan2(v_1[i], u_1[i]) for i in range(Nt)])
+    else:
+        theta_turb = np.array([theta_str for _ in range(Nt)])
+    # Vector normal (t) and parallel (p) to rotor
+    ets = np.array(
+        [np.array([np.cos(theta_turb[i]), np.sin(theta_turb[i])]) for i in order]
+    )
+    eps = np.array(
+        [np.array([-np.sin(theta_turb[i]), np.cos(theta_turb[i])]) for i in order]
+    )
+    # Sort turbines along wind direction - for TI
+    xloc_sort = np.array([xloc[i] for i in order])
+    yloc_sort = np.array([yloc[i] for i in order])
+    D_sort = np.array([turbines[i].D for i in order])
+    Ct_sort = Ct[order]
+    theta_turb_sort = np.array([theta_turb[i] for i in order])
+    et_sort = np.array([ets[i, :] for i in order])
+    ep_sort = np.array([eps[i, :] for i in order])
+    # Evaluate TI at turbine locations
+    TI = evaluate_TI(
+        Nt,
+        et_sort,
+        ep_sort,
+        order,
+        xloc_sort,
+        yloc_sort,
+        D_sort,
+        Ct_sort,
+        TI_inf,
+        theta_turb_sort,
+        wake_model.ka,
+        wake_model.kb,
+    )
+    # Set up output
+    if wake_model.wake_deflection:
+        W_comb = np.zeros((Nx, Ny, Nz, 2)) + e_str[None, None, None, :]
+    else:
+        W_comb = np.ones((Nx, Ny, Nz))
+    for turb in range(Nt):
+        if Ct[turb] != 0.0:
+            # Evaluate W_t
+            W_t = type(wake_model).wake_function(
+                Nx,
+                Ny,
+                Nz,
+                Xs,
+                Ys,
+                zs,
+                TI[turb],
+                Ct[turb],
+                xloc[turb],
+                yloc[turb],
+                turbines[turb].D,
+                turbines[turb].zh,
+                theta_turb[turb],
+                ka=wake_model.ka,
+                kb=wake_model.kb,
+                ind=wake_model.induction,
+                mirr=wake_model.mirrored,
+            )
+            if wake_model.wake_deflection:
+                # Matrix of current turbine
+                et = ets[turb]
+                ep = eps[turb]
+                A_t = array_of_matrices(1 - W_t, np.outer(et, et)) + np.outer(ep, ep)
+                # Update wake deficit field
+                W_comb = dot_matrix_vec_arrays(A_t, W_comb)
+            else:
+                W_comb *= 1 - W_t
+    # Wake deficit in main flow direction
+    if wake_model.wake_deflection:
+        wake_deficit = np.inner(e_str, W_comb)
+    else:
+        wake_deficit = W_comb
+    # Evaluate background velocities
+    locations = np.stack(
+        [np.ravel(Xs), np.ravel(Ys), np.full(Xs.size, float(z))], axis=1
+    )
+    vel_bg = u_bg_evaluator(locations)
+    u_bg = np.reshape(vel_bg[:, 0], (Nx, Ny, Nz))
+    v_bg = np.reshape(vel_bg[:, 1], (Nx, Ny, Nz))
+    # Split up into streamwise and spanwise components
+    str_bg = u_bg * e_str[0] + v_bg * e_str[1]
+    span_bg = u_bg * e_span[0] + v_bg * e_span[1]
+    # Add wakes
+    str_wm = np.multiply(str_bg, wake_deficit)
+    # Convert to u and v components
+    u_wm = str_wm * e_str[0] + span_bg * e_span[0]
+    v_wm = str_wm * e_str[1] + span_bg * e_span[1]
+    return u_bg[:, :, 0], v_bg[:, :, 0], u_wm[:, :, 0], v_wm[:, :, 0]
 
 
 def nieuwstadt83_profiles(zh, v, wd, z0=1.0e-1, h=1.5e3, fc=1.0e-4, ust=0.666):
@@ -546,7 +723,7 @@ def read_turbine_type(turb_dat):
     return hh, rd, ct_curve, cp_curve
 
 
-def wf_setup(farm_dat, analysis_dat, L_filter=1.0e3, debug_mode=False):
+def wf_setup(farm_dat, analysis_dat, L_filter=1.0e3, debug_mode=False, rotation=0.0):
     # WAYVE imports
     from wayve.forcing.apm_forcing import ForcingComposite
     from wayve.forcing.wind_farms.dispersive_stresses import DispersiveStresses
@@ -556,14 +733,21 @@ def wf_setup(farm_dat, analysis_dat, L_filter=1.0e3, debug_mode=False):
     ####################
     # Set up WindFarm object
     ####################
-    # Get x and y positions
-    x = farm_dat["layouts"][0]["coordinates"]["x"]
-    y = farm_dat["layouts"][0]["coordinates"]["y"]
+    # Get x and y positions. Copy: this is called once per state now (the
+    # solver-frame rotation differs per state), so farm_dat must stay pristine.
+    x = np.asarray(farm_dat["layouts"][0]["coordinates"]["x"], dtype=float)
+    y = np.asarray(farm_dat["layouts"][0]["coordinates"]["y"], dtype=float)
     # Reposition to be at grid center
     wf_offset_x = np.mean(x)
     wf_offset_y = np.mean(y)
-    x -= wf_offset_x
-    y -= wf_offset_y
+    x = x - wf_offset_x
+    y = y - wf_offset_y
+    # Rotate the layout into the solver frame (see flow_io_abl: the ABL is
+    # built with the hub-height wind along +x, wayve's westerly convention,
+    # so the layout must turn with it to keep the wind-relative geometry).
+    if rotation != 0.0:
+        c, s = np.cos(rotation), np.sin(rotation)
+        x, y = c * x + s * y, c * y - s * x
     # Number of turbines
     Nt = len(x)
     # Get turbine types
@@ -757,6 +941,20 @@ def flow_io_abl(
         (average to the tropopause; needs profiles reaching the stratosphere).
         Ignored by the scalar and turbulence-profile input paths.
         (default: "avg")
+
+    Returns
+    -------
+    abl: wayve.abl.abl.ABL
+        Atmospheric state in the *solver frame*: the hub-height wind blows
+        along +x (wayve's westerly convention, which its gravity-wave
+        machinery and anisotropic grids assume). Vertical veer is preserved
+        as spanwise components.
+    rotation: float
+        Angle (radians, counterclockwise) of the earth-frame hub-height flow
+        vector measured from east. Rotating earth-frame coordinates by
+        ``-rotation`` maps them into the solver frame (``wf_setup`` does this
+        to the layout); rotating solver-frame vectors by ``+rotation`` maps
+        results back to earth.
     """
     # Atmospheric state setup
     from wayve.abl.abl import ABL
@@ -793,6 +991,11 @@ def flow_io_abl(
         # Wind speed and direction
         v = wind_resource_dat["wind_speed"]["data"][time_index]
         wd = wind_resource_dat["wind_direction"]["data"][time_index]
+        # Solver-frame normalization: build the profile as if the wind were
+        # westerly (the Ekman veer relative to the hub-height direction is
+        # unchanged) and report the rotation undone by doing so.
+        rotation = np.deg2rad(270.0 - wd)
+        wd = 270.0
         # Friction velocity
         ust = 0.666
         if "friction_velocity" in wind_resource_dat.keys():
@@ -830,6 +1033,17 @@ def flow_io_abl(
         vs = np.array(wind_resource_dat["wind_speed"]["data"][time_index])
         wds = np.array(wind_resource_dat["wind_direction"]["data"][time_index])
         ths = np.array(wind_resource_dat["potential_temperature"]["data"][time_index])
+        # Solver-frame normalization: shift the direction profile so the
+        # hub-height wind is westerly (flow along +x). Shifting the input
+        # keeps the veer and makes everything derived below (velocity
+        # components, Gmode geostrophic wind, momentum-flux alignment) land
+        # in the solver frame consistently — without wayve's ABL.rotate(),
+        # whose momentum-flux rotation is broken in wayve 2.0.0. Unwrap
+        # first so interpolation across the 0/360 seam is safe.
+        wds = np.rad2deg(np.unwrap(np.deg2rad(wds)))
+        wd_hub = np.interp(zh, zs, wds)
+        rotation = np.deg2rad(270.0 - wd_hub)
+        wds = wds + (270.0 - wd_hub)
         # Turbulence intensity: height-resolved profile or one value per state
         TIs = np.atleast_1d(
             np.array(wind_resource_dat["turbulence_intensity"]["data"][time_index])
@@ -857,6 +1071,10 @@ def flow_io_abl(
             else:  # Shear stress profile directly available
                 tauxs = np.array(wind_resource_dat["tau_x"]["data"][time_index])
                 tauys = np.array(wind_resource_dat["tau_y"]["data"][time_index])
+                # Explicit stress components are earth-frame vectors: rotate
+                # them into the solver frame along with the velocities.
+                c_r, s_r = np.cos(rotation), np.sin(rotation)
+                tauxs, tauys = c_r * tauxs + s_r * tauys, c_r * tauys - s_r * tauxs
                 nus = None
             # Total momentum flux
             taus = np.sqrt(np.square(tauxs) + np.square(tauys))
@@ -903,6 +1121,8 @@ def flow_io_abl(
                 from wayve.abl.abl_setup import mesoscale_based
 
                 lat = np.rad2deg(np.arcsin(fc / (2.0 * omega)))
+                # us/vs are already solver-frame (see above), so the ABL
+                # comes out westerly-aligned without further rotation.
                 return mesoscale_based(
                     zs,
                     us,
@@ -919,7 +1139,7 @@ def flow_io_abl(
                     dh_max=(300.0 if dh_max is None else dh_max),
                     Gmode=gmode,
                     serz=serz,
-                )
+                ), rotation
             # Truncated profiles (reanalysis subsets often stop below the
             # tropopause, e.g. ERA5 levels 96-137 end near 6 km): run the same
             # core setup but skip mesoscale_based's unconditional tropopause
@@ -1039,7 +1259,7 @@ def flow_io_abl(
         ust=ust,
         inv_bottom=inv_bottom,
         inv_top=inv_top,
-    )
+    ), rotation
 
 
 def run():
