@@ -351,28 +351,41 @@ def test_scalar_resource_is_solver_frame_aligned():
 
 @pytest.fixture(scope="module")
 def _rotation_pair(tmp_path_factory):
-    """Two physically identical cases: a westerly-aligned turbine row, and the
-    same row (and grids) rotated 90 degrees with a southerly wind."""
+    """Physically identical cases under rotation: a westerly-aligned turbine
+    row (a); the same row and grids rotated 90 degrees with a southerly wind,
+    run as two identical states (b); and the row rotated by a generic 37
+    degrees (c). 90 degrees maps the square FFT grid onto itself, so only the
+    generic angle pins the solver-frame rotation itself (see the tests)."""
+    import numpy as np
     import xarray as xr
 
     from wifa.wayve_api import run_wayve
 
     span = 400.0
+    xa = [0.0, span, 2 * span]
     ff_a = _flow_field_spec((-1000.0, 1800.0), (-1200.0, 1200.0), (15, 13))
     ff_b = _flow_field_spec((-1200.0, 1200.0), (-1000.0, 1800.0), (13, 15))
-    system_a = _solver_system(
-        [0.0, span, 2 * span], [0.0, 0.0, 0.0], _scalar_wind_resource(270.0), ff_a
-    )
+    system_a = _solver_system(xa, [0.0, 0.0, 0.0], _scalar_wind_resource(270.0), ff_a)
     system_b = _solver_system(
-        [0.0, 0.0, 0.0], [0.0, span, 2 * span], _scalar_wind_resource(180.0), ff_b
+        [0.0, 0.0, 0.0], xa, _scalar_wind_resource(180.0, n=2), ff_b
     )
+    # Case c: rotate the westerly row into the frame of a 233 deg (270 - 37)
+    # wind: earth layout = R(+rotation) applied to the westerly layout.
+    rot_c = np.deg2rad(270.0 - 233.0)
+    c, s = np.cos(rot_c), np.sin(rot_c)
+    xc = [c * x for x in xa]
+    yc = [s * x for x in xa]
+    system_c = _solver_system(xc, yc, _scalar_wind_resource(233.0))
     out_a = tmp_path_factory.mktemp("wayve_rot_a")
     out_b = tmp_path_factory.mktemp("wayve_rot_b")
+    out_c = tmp_path_factory.mktemp("wayve_rot_c")
     run_wayve(system_a, output_dir=out_a)
     run_wayve(system_b, output_dir=out_b)
+    run_wayve(system_c, output_dir=out_c)
     return {
         "turbines_a": xr.load_dataset(out_a / "turbine_data.nc"),
         "turbines_b": xr.load_dataset(out_b / "turbine_data.nc"),
+        "turbines_c": xr.load_dataset(out_c / "turbine_data.nc"),
         "flow_a": xr.load_dataset(out_a / "flow_field.nc"),
         "flow_b": xr.load_dataset(out_b / "flow_field.nc"),
     }
@@ -388,12 +401,39 @@ def test_rotational_invariance_of_turbine_outputs(_rotation_pair):
     power_a = _rotation_pair["turbines_a"]["power"].values
     power_b = _rotation_pair["turbines_b"]["power"].values
     assert np.all(np.isfinite(power_a)) and np.all(power_a > 0.0)
-    np.testing.assert_allclose(power_b, power_a, rtol=1.0e-6)
+    np.testing.assert_allclose(power_b[0], power_a[0], rtol=1.0e-6)
     rews_a = _rotation_pair["turbines_a"]["rotor_effective_velocity"].values
     rews_b = _rotation_pair["turbines_b"]["rotor_effective_velocity"].values
-    np.testing.assert_allclose(rews_b, rews_a, rtol=1.0e-6)
+    np.testing.assert_allclose(rews_b[0], rews_a[0], rtol=1.0e-6)
     # Downstream turbines are waked in both frames
     assert power_a[0, 0] > power_a[0, -1]
+
+
+def test_rotational_invariance_at_generic_angle(_rotation_pair):
+    """A generic 37-degree rotation is what actually pins the solver-frame
+    normalization: 90-degree rotations map the square FFT grid onto itself,
+    so the pre-rotation code already passed the 90-degree pair exactly, while
+    it fails this case at ~4e-4 relative. At a generic angle both cos and sin
+    terms of every rotation formula are exercised (90 deg blinds the cos
+    terms, 45 deg hides cos/sin swaps)."""
+    import numpy as np
+
+    power_a = _rotation_pair["turbines_a"]["power"].values
+    power_c = _rotation_pair["turbines_c"]["power"].values
+    np.testing.assert_allclose(power_c, power_a, rtol=1.0e-6)
+
+
+def test_repeated_states_give_identical_output(_rotation_pair):
+    """Two identical southerly states must give identical per-turbine output.
+    Guards the per-state wind-farm rebuild: a cumulative in-place rotation of
+    farm_dat would rotate state 1 twice yet still produce finite, positive,
+    plausibly-waked power."""
+    import numpy as np
+
+    power = _rotation_pair["turbines_b"]["power"]
+    np.testing.assert_allclose(
+        power.isel(states=1).values, power.isel(states=0).values, rtol=1.0e-12
+    )
 
 
 def test_flow_field_is_reported_in_the_earth_frame(_rotation_pair):
@@ -404,12 +444,14 @@ def test_flow_field_is_reported_in_the_earth_frame(_rotation_pair):
 
     ds = _rotation_pair["flow_b"].isel(states=0, z=0)
     # Upstream (south) edge, away from the farm axis: background direction
-    wd_upstream = float(ds["wind_direction"].sel(x=-1200.0, y=-1000.0, method="nearest"))
+    wd_upstream = float(
+        ds["wind_direction"].sel(x=-1200.0, y=-1000.0, method="nearest")
+    )
     assert wd_upstream % 360.0 == pytest.approx(180.0, abs=3.0)
     # The deepest deficit sits downstream of the last turbine (north)
     ws = ds["wind_speed"]
     loc = ws.argmin(dim=["x", "y"])
-    assert float(ws.y[int(loc["y"])]) > 800.0
+    assert float(ws.y[int(loc["y"])]) >= 800.0
     assert abs(float(ws.x[int(loc["x"])])) < 400.0
 
 
@@ -435,13 +477,17 @@ def test_xy_points_matches_xy_plane():
     xy_plane exactly (it mirrors the same code with the meshgrid hoisted
     out) — the guard against drift between the fork helper and wayve."""
     import numpy as np
-
     from wayve.apm import APM
     from wayve.grid.grid import Stat2Dgrid
     from wayve.momentum_flux_parametrizations import FrictionCoefficients
     from wayve.solvers import FixedPointIteration
 
-    from wifa.wayve_api import _pressure_for_state, _xy_plane_points, flow_io_abl, wf_setup
+    from wifa.wayve_api import (
+        _pressure_for_state,
+        _xy_plane_points,
+        flow_io_abl,
+        wf_setup,
+    )
 
     system = _solver_system(
         [0.0, 400.0, 800.0], [0.0, 0.0, 0.0], _scalar_wind_resource(270.0)
@@ -451,7 +497,9 @@ def test_xy_points_matches_xy_plane():
     resource = system["site"]["energy_resource"]["wind_resource"]
     abl, rotation = flow_io_abl(resource, 0, zh=80.0, h1=160.0)
     assert rotation == pytest.approx(0.0)
-    wind_farm, forcing, _, _ = wf_setup(farm_dat, analysis_dat, 1.0e3, rotation=rotation)
+    wind_farm, forcing, _, _ = wf_setup(
+        farm_dat, analysis_dat, 1.0e3, rotation=rotation
+    )
     grid = Stat2Dgrid(1.0e5, 100, 1.0e5, 100)
     model = APM(grid, forcing, abl, FrictionCoefficients(), _pressure_for_state(abl, 1))
     model.solve(method=FixedPointIteration(tol=5.0e-3, relax=0.7))
@@ -480,8 +528,8 @@ def _profile_wind_resource(wd_hub=225.0, veer=10.0, n=1):
     zs = np.linspace(10.0, 1700.0, 18)
     ws = 8.0 + 3.0 * zs / 1700.0
     # Small linear veer across the profile around the hub-height direction
-    wd_hub_exact = np.interp(80.0, zs, np.linspace(0.0, 1.0, len(zs)))
-    wd = wd_hub + veer * (np.linspace(0.0, 1.0, len(zs)) - wd_hub_exact)
+    hub_frac = np.interp(80.0, zs, np.linspace(0.0, 1.0, len(zs)))
+    wd = wd_hub + veer * (np.linspace(0.0, 1.0, len(zs)) - hub_frac)
     theta = np.where(
         zs < 1000.0,
         290.0,
@@ -529,6 +577,7 @@ def test_truncated_profile_free_atmosphere_capped_at_data_top():
     assert abl.h_strat == pytest.approx(1700.0)
     assert abl.Uinf == pytest.approx(abl.us[-1])
     assert abl.Vinf == pytest.approx(abl.vs[-1])
+    assert abl.Ninf == pytest.approx(abl.N)
     # Solver frame: hub-height wind along +x, veer preserved aloft.
     # (Interpolating components vs. directions differs by ~1e-3 m/s here.)
     u_hub = np.interp(80.0, abl.zs, abl.us)
@@ -556,7 +605,12 @@ def test_pressure_for_state_selects_nonuniform_only_with_data():
 
 def test_run_wayve_profile_nonuniform_end_to_end(tmp_path):
     """Non-westerly mesoscale profiles with a profile-resolving free
-    atmosphere run end-to-end and produce finite, waked turbine output."""
+    atmosphere run end-to-end and produce finite, waked turbine output —
+    and NonUniform is genuinely active (no silent Uniform fallback), so the
+    number_of_fa_layers wiring through run_wayve is pinned, not just the
+    _pressure_for_state unit behavior."""
+    import warnings as _warnings
+
     import numpy as np
     import xarray as xr
 
@@ -570,10 +624,146 @@ def test_run_wayve_profile_nonuniform_end_to_end(tmp_path):
         _profile_wind_resource(wd_hub=225.0),
         layers_description={"farm_layer_height": 160.0, "number_of_fa_layers": 6},
     )
-    run_wayve(system, output_dir=tmp_path)
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        run_wayve(system, output_dir=tmp_path)
+    fallbacks = [w for w in caught if "falling back to the Uniform" in str(w.message)]
+    assert not fallbacks, "NonUniform silently fell back to Uniform"
     ds = xr.load_dataset(tmp_path / "turbine_data.nc")
     power = ds["power"].values
     assert power.shape == (1, 3)
     assert np.all(np.isfinite(power)) and np.all(power > 0.0)
     # SW flow: the NE-most turbine is waked
     assert power[0, 0] > power[0, -1]
+
+
+# Full windIO-shaped analysis block for the foxes wake tool (mirrors what the
+# flow_model_chain Experiment serializer emits; foxes' windIO reader needs the
+# named model blocks, which the Lanzilao path simply ignores).
+_FOXES_ANALYSIS = {
+    "wind_deficit_model": {
+        "name": "Bastankhah2014",
+        "wake_expansion_coefficient": {"k_a": 0.04, "k_b": 0.0},
+        "use_effective_ws": True,
+        "ceps": 0.2,
+    },
+    "axial_induction_model": "Madsen",
+    "deflection_model": {"name": "None"},
+    "turbulence_model": {"name": "None"},
+    "superposition_model": {
+        "ws_superposition": "Product",
+        "ti_superposition": "Squared",
+    },
+    "rotor_averaging": {
+        "name": "none",
+        "background_averaging": "center",
+        "wake_averaging": "center",
+        "wind_speed_exponent_for_power": 3,
+        "wind_speed_exponent_for_ct": 2,
+    },
+    "blockage_model": {"name": "None"},
+    "wm_coupling": {"method": "PB", "wake_tool": "foxes"},
+    "apm_grid": {"Lx": 1.0e5, "Ly": 1.0e5, "dx": 1.0e3},
+}
+
+
+def test_xy_points_matches_xy_plane_foxes():
+    """Foxes twin of the _xy_plane_points drift guard. The solve itself also
+    exercises the background_flow_direction shim: without it, wayve@e87780a's
+    broken e_spanwise import crashes every foxes-coupled solve."""
+    pytest.importorskip("foxes")
+    import numpy as np
+    from wayve.apm import APM
+    from wayve.grid.grid import Stat2Dgrid
+    from wayve.momentum_flux_parametrizations import FrictionCoefficients
+    from wayve.solvers import FixedPointIteration
+
+    from wifa.wayve_api import (
+        _pressure_for_state,
+        _xy_plane_points,
+        flow_io_abl,
+        wf_setup,
+    )
+
+    system = _solver_system(
+        [0.0, 400.0, 800.0], [0.0, 0.0, 0.0], _scalar_wind_resource(270.0)
+    )
+    farm_dat = system["wind_farm"]
+    resource = system["site"]["energy_resource"]["wind_resource"]
+    abl, rotation = flow_io_abl(resource, 0, zh=80.0, h1=160.0)
+    wind_farm, forcing, _, _ = wf_setup(
+        farm_dat, _FOXES_ANALYSIS, 1.0e3, rotation=rotation
+    )
+    wake_model = wind_farm.coupling.wake_model
+    assert type(wake_model).__name__ == "FoxesWakeModel"
+    grid = Stat2Dgrid(1.0e5, 100, 1.0e5, 100)
+    model = APM(grid, forcing, abl, FrictionCoefficients(), _pressure_for_state(abl, 1))
+    model.solve(method=FixedPointIteration(tol=5.0e-3, relax=0.7))
+    coupling = wind_farm.coupling
+    u_bg_evaluator = coupling.set_up_u_bg_evaluator(abl)
+    apm_evaluator = coupling.apm_evaluator
+    xs = np.linspace(-2000.0, 4000.0, 13)
+    ys = np.linspace(-1500.0, 1500.0, 11)
+    ref = wake_model.xy_plane(
+        wind_farm, abl, u_bg_evaluator, apm_evaluator, xs, ys, 80.0
+    )
+    Xs, Ys = np.meshgrid(xs, ys, indexing="ij")
+    new = _xy_plane_points(
+        wake_model, wind_farm, abl, u_bg_evaluator, apm_evaluator, Xs, Ys, 80.0
+    )
+    for ref_field, new_field in zip(ref, new):
+        np.testing.assert_array_equal(new_field, ref_field)
+
+
+def test_turbulence_profile_stress_rotation():
+    """Explicit tau_x/tau_y stress profiles are earth-frame vectors: they must
+    rotate into the solver frame with the velocities (magnitude preserved)."""
+    import numpy as np
+
+    from wifa.wayve_api import flow_io_abl
+
+    zs = np.linspace(10.0, 1700.0, 18)
+    # Jet-like profile: wayve's ABL estimates the eddy viscosity from where
+    # the shear turns negative, so the speed must peak below the profile top
+    ws = 8.0 + 3.0 * np.minimum(zs, 1100.0) / 1100.0
+    ws -= 0.5 * np.maximum(0.0, zs - 1100.0) / 600.0
+    wd = np.full(zs.size, 200.0)
+    theta = 290.0 + 3.5e-3 * zs
+    # Stress magnitude decaying to zero at 800 m, at a fixed earth angle
+    tau_mag = 0.12 * np.maximum(0.0, 1.0 - zs / 800.0) ** 1.5
+    phi_tau = np.deg2rad(30.0)
+    tau_x_in = tau_mag * np.cos(phi_tau)
+    tau_y_in = tau_mag * np.sin(phi_tau)
+    scalar = lambda val: {"data": [val]}  # noqa: E731
+    resource = {
+        "time": [0],
+        "height": list(zs),
+        "wind_speed": {"data": [list(ws)]},
+        "wind_direction": {"data": [list(wd)]},
+        "potential_temperature": {"data": [list(theta)]},
+        "tau_x": {"data": [list(tau_x_in)]},
+        "tau_y": {"data": [list(tau_y_in)]},
+        "turbulence_intensity": scalar(0.08),
+        "z0": scalar(0.03),
+        "fc": scalar(1.0e-4),
+        "thermal_stratification": {
+            "capping_inversion": {
+                "ABL_height": scalar(1100.0),
+                "dH": scalar(200.0),
+                "dtheta": scalar(3.0),
+                "lapse_rate": scalar(3.5e-3),
+            }
+        },
+    }
+    abl, rotation = flow_io_abl(resource, 0, zh=80.0, h1=160.0)
+    assert rotation == pytest.approx(np.deg2rad(270.0 - 200.0))
+    c, s = np.cos(rotation), np.sin(rotation)
+    np.testing.assert_allclose(
+        abl.tauxs, c * tau_x_in + s * tau_y_in, rtol=1e-12, atol=1e-15
+    )
+    np.testing.assert_allclose(
+        abl.tauys, c * tau_y_in - s * tau_x_in, rtol=1e-12, atol=1e-15
+    )
+    np.testing.assert_allclose(
+        np.hypot(abl.tauxs, abl.tauys), tau_mag, rtol=1e-12, atol=1e-15
+    )

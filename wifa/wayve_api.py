@@ -189,6 +189,8 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     #####################
     # Initialize crash counter
     crashes = 0
+    # NonUniform free-atmosphere tally (per-state fallback is warned once)
+    nonuniform_states = 0
     # List of datasets
     ds_list = []
     ds_ff_list = []
@@ -212,6 +214,8 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
             wake_model = coupling.wake_model
             # Pressure feedback for this state
             pressure = _pressure_for_state(abl, n_fa_layers)
+            if type(pressure).__name__ == "NonUniform":
+                nonuniform_states += 1
             # Set up APM from components
             model = APM(grid, forcing, abl, mfp, pressure)
             # Use a fixed-point iteration solver with a relaxation factor of 0.7
@@ -239,9 +243,8 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
                 turb_out_dict,
                 coords={"states": time, "turbine": range(Nt)},
             )
-            # Add to output list
-            ds_list.append(ds)
             # Flow field outputs #
+            ds_ff = None
             if report_flow and not debug_mode:
                 # Callables for flow evaluation
                 u_bg_evaluator = coupling.set_up_u_bg_evaluator(
@@ -276,10 +279,10 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
                     )
                     # Rotate velocity vectors back to the earth frame
                     u_wm, v_wm = c * u_wm - s * v_wm, s * u_wm + c * v_wm
-                    # Convert to speed and direction
+                    # Convert to speed and direction (wrapped to [0, 360))
                     wind_speed[:, :, k] = np.sqrt(np.square(u_wm) + np.square(v_wm))
-                    wind_dir[:, :, k] = np.rad2deg(
-                        np.pi / 2 - (np.arctan2(v_wm, u_wm) + np.pi)
+                    wind_dir[:, :, k] = (
+                        np.rad2deg(np.pi / 2 - (np.arctan2(v_wm, u_wm) + np.pi)) % 360.0
                     )
                 # Flow output dictionary
                 flow_out_dict = {}
@@ -292,7 +295,10 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
                     flow_out_dict,
                     coords={"states": time, "x": x_ff, "y": y_ff, "z": z_ff},
                 )
-                # Add to output list
+            # Append outputs together, so a flow-field failure cannot leave
+            # turbine_data.nc and flow_field.nc with different states axes.
+            ds_list.append(ds)
+            if ds_ff is not None:
                 ds_ff_list.append(ds_ff)
 
         except Exception as exc:
@@ -302,6 +308,12 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
             continue
     if debug_mode:
         print(f"crashes: {crashes}/{len(times)}")
+    if n_fa_layers > 1:
+        # Make the per-state Uniform/NonUniform closure mixture visible
+        print(
+            f"NonUniform free atmosphere: {nonuniform_states}/{len(times)} "
+            "states (the rest fell back to Uniform)"
+        )
 
     # Combine into total dataset
     output_dir = Path(output_dir)
@@ -323,7 +335,9 @@ def _pressure_for_state(abl, n_fa_layers):
     the inversion top and ``abl.h_strat`` into layers. That needs actual
     profile points in that range: truncated or synthetic profiles (e.g. the
     scalar branch's Nieuwstadt profile, which stops at the inversion) fall
-    back to the bulk Uniform closure with a warning.
+    back to the bulk Uniform closure with a warning. The warning text is
+    deliberately state-independent so Python's warning dedup collapses it on
+    long time series; run_wayve prints a per-run NonUniform/Uniform tally.
     """
     from wayve.pressure.gravity_waves.gravity_waves import NonUniform, Uniform
 
@@ -333,15 +347,16 @@ def _pressure_for_state(abl, n_fa_layers):
         if n_pts >= 2:
             return NonUniform(n_layers=n_fa_layers, order=1)
         warnings.warn(
-            f"number_of_fa_layers={n_fa_layers} requested but only {n_pts} "
-            f"profile point(s) lie between the inversion top ({h_min:.0f} m) "
-            f"and the profile top ({abl.h_strat:.0f} m); falling back to the "
-            "Uniform free atmosphere for this state"
+            "number_of_fa_layers requested but too few profile points lie "
+            "between the inversion top and the free-atmosphere top; falling "
+            "back to the Uniform free atmosphere for such states"
         )
     return Uniform(dynamic=True, rotating=False)
 
 
-def _xy_plane_points(wake_model, wind_farm, abl, u_bg_evaluator, apm_evaluator, Xs, Ys, z):
+def _xy_plane_points(
+    wake_model, wind_farm, abl, u_bg_evaluator, apm_evaluator, Xs, Ys, z
+):
     """Evaluate the coupled flow at arbitrary (x, y) coordinate arrays.
 
     Mirror of wayve 2.0.0's ``xy_plane`` methods (Lanzilao and foxes wake
@@ -350,15 +365,13 @@ def _xy_plane_points(wake_model, wind_farm, abl, u_bg_evaluator, apm_evaluator, 
     can be evaluated directly — every operation downstream of the meshgrid is
     pointwise in the coordinates. Returns ``(u_bg, v_bg, u_wm, v_wm)`` with
     the shape of ``Xs``. Equivalence with ``xy_plane`` on axis-aligned grids
-    is pinned by a regression test.
+    is pinned by regression tests for both wake-model paths.
     """
     Nx, Ny = Xs.shape
-    Nz = 1
-    zs = np.array([z])
     if hasattr(wake_model, "_algo"):  # foxes coupling
+        import foxes.variables as FV
         from foxes import Engine
         from foxes.utils import wd2uv
-        import foxes.variables as FV
 
         locations = np.stack(
             [np.ravel(Xs), np.ravel(Ys), np.full(Xs.size, float(z))], axis=1
@@ -388,6 +401,8 @@ def _xy_plane_points(wake_model, wind_farm, abl, u_bg_evaluator, apm_evaluator, 
         evaluate_TI,
     )
 
+    Nz = 1
+    zs = np.array([z])
     # Get the turbine thrust coefficients
     _, Ct, _ = wake_model.get_St_Ct_et(wind_farm, abl, u_bg_evaluator, apm_evaluator)
     # Get wind farm information
@@ -937,12 +952,16 @@ def wake_model_setup(analysis_dat, debug_mode=False):
         # identical to the base class but a broken lazy import (e_spanwise
         # from wake_models.wake_model_tools instead of forcing_tools), which
         # crashes every foxes-coupled solve. Rebind the base implementation
-        # while the import is broken; this self-disables on a fixed wayve.
+        # while the override still carries the broken import; probing the
+        # override's own source (rather than the import target) keeps the
+        # shim inert once upstream fixes or rewrites the method.
+        import inspect
+
         try:
-            from wayve.forcing.wind_farms.wake_model_coupling.wake_models.wake_model_tools import (  # noqa: F401
-                e_spanwise,
-            )
-        except ImportError:
+            bfd_src = inspect.getsource(FoxesWakeModel.background_flow_direction)
+        except (OSError, TypeError):
+            bfd_src = ""
+        if "wake_model_tools import e_spanwise" in bfd_src:
             import types
 
             from wayve.forcing.wind_farms.wake_model_coupling.wake_model_interface import (
@@ -1075,6 +1094,10 @@ def flow_io_abl(
     else:
         # Read out vertical profile
         zs = np.array(wind_resource_dat["height"])
+        if not np.all(np.diff(zs) > 0):
+            # np.interp silently returns garbage on unsorted abscissae, and
+            # the hub interpolation below now derives the whole solver frame.
+            raise UserWarning("wind resource 'height' must be strictly ascending")
         vs = np.array(wind_resource_dat["wind_speed"]["data"][time_index])
         wds = np.array(wind_resource_dat["wind_direction"]["data"][time_index])
         ths = np.array(wind_resource_dat["potential_temperature"]["data"][time_index])
@@ -1162,29 +1185,37 @@ def flow_io_abl(
             blh = wind_resource_dat["boundary_layer_height"]["data"][time_index]
             if zs[-1] >= 12.0e3:
                 # Profiles reach the stratosphere: use wayve's full setup,
-                # including the tropopause two-line fit.
+                # including the tropopause two-line fit. Note the radiating
+                # top-layer state differs from the truncated branch below:
+                # here Uinf/Vinf are means above the fitted tropopause and
+                # Ninf is the fitted stratospheric N, while the truncated
+                # branch uses the top-of-profile point and the inversion
+                # fit's free lapse rate.
                 from wayve.abl.abl_setup import mesoscale_based
 
                 lat = np.rad2deg(np.arcsin(fc / (2.0 * omega)))
                 # us/vs are already solver-frame (see above), so the ABL
                 # comes out westerly-aligned without further rotation.
-                return mesoscale_based(
-                    zs,
-                    us,
-                    vs,
-                    ths,
-                    ust,
-                    blh,
-                    l_mo,
-                    lat,
-                    h1,
-                    z0=(z0 if "z0" in wind_resource_dat.keys() else None),
-                    TI=TI,
-                    rho=air_density,
-                    dh_max=(300.0 if dh_max is None else dh_max),
-                    Gmode=gmode,
-                    serz=serz,
-                ), rotation
+                return (
+                    mesoscale_based(
+                        zs,
+                        us,
+                        vs,
+                        ths,
+                        ust,
+                        blh,
+                        l_mo,
+                        lat,
+                        h1,
+                        z0=(z0 if "z0" in wind_resource_dat.keys() else None),
+                        TI=TI,
+                        rho=air_density,
+                        dh_max=(300.0 if dh_max is None else dh_max),
+                        Gmode=gmode,
+                        serz=serz,
+                    ),
+                    rotation,
+                )
             # Truncated profiles (reanalysis subsets often stop below the
             # tropopause, e.g. ERA5 levels 96-137 end near 6 km): run the same
             # core setup but skip mesoscale_based's unconditional tropopause
@@ -1289,32 +1320,35 @@ def flow_io_abl(
     # no-data region where the profile splines just hold constants. Above
     # the cap sits the semi-infinite radiating layer with the top-of-profile
     # state (Uinf/Vinf) and the fitted free-atmosphere stratification (Ninf).
-    return ABL(
-        zs,
-        us,
-        vs,
-        ths,
-        tauxs,
-        tauys,
-        h1,
-        h2,
-        gprime,
-        N,
-        U3,
-        V3,
-        fc,
-        nus=nus,
-        rho=air_density,
-        TI=TI,
-        z0=z0,
-        ust=ust,
-        inv_bottom=inv_bottom,
-        inv_top=inv_top,
-        h_strat=min(10.0e3, zs[-1]),
-        Uinf=us[-1],
-        Vinf=vs[-1],
-        Ninf=N,
-    ), rotation
+    return (
+        ABL(
+            zs,
+            us,
+            vs,
+            ths,
+            tauxs,
+            tauys,
+            h1,
+            h2,
+            gprime,
+            N,
+            U3,
+            V3,
+            fc,
+            nus=nus,
+            rho=air_density,
+            TI=TI,
+            z0=z0,
+            ust=ust,
+            inv_bottom=inv_bottom,
+            inv_top=inv_top,
+            h_strat=min(10.0e3, zs[-1]),
+            Uinf=us[-1],
+            Vinf=vs[-1],
+            Ninf=N,
+        ),
+        rotation,
+    )
 
 
 def run():
