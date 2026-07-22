@@ -95,15 +95,13 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     ##################
     # Momentum flux parametrization
     mfp = FrictionCoefficients()
-    # Pressure feedback parametrization
-    from wayve.pressure.gravity_waves.gravity_waves import NonUniform, Uniform
-
-    pressure = Uniform(dynamic=True, rotating=False)
+    # Pressure feedback parametrization: >1 free-atmosphere layers selects
+    # the profile-resolving NonUniform gravity-wave closure. The object is
+    # built per state (_pressure_for_state), because whether the profile
+    # actually supports NonUniform depends on the per-state inversion fit.
+    n_fa_layers = 1
     if "layers_description" in analysis_dat:
-        if "number_of_fa_layers" in analysis_dat["layers_description"]:
-            n_layers = analysis_dat["layers_description"]["number_of_fa_layers"]
-            if n_layers > 1:
-                pressure = NonUniform(n_layers=n_layers, order=1)
+        n_fa_layers = analysis_dat["layers_description"].get("number_of_fa_layers", 1)
 
     ######################
     # Read output settings
@@ -212,6 +210,8 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
             )
             coupling = wind_farm.coupling
             wake_model = coupling.wake_model
+            # Pressure feedback for this state
+            pressure = _pressure_for_state(abl, n_fa_layers)
             # Set up APM from components
             model = APM(grid, forcing, abl, mfp, pressure)
             # Use a fixed-point iteration solver with a relaxation factor of 0.7
@@ -313,6 +313,32 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
         ds_ff_full = xr.concat(ds_ff_list, dim="states")
         output_fn = Path(output_dir) / flow_nc_filename
         ds_ff_full.to_netcdf(output_fn)
+
+
+def _pressure_for_state(abl, n_fa_layers):
+    """Build the gravity-wave pressure closure for one state.
+
+    ``n_fa_layers > 1`` requests wayve's NonUniform closure, which resolves
+    the free-atmosphere N(z) and wind shear by slicing the profile between
+    the inversion top and ``abl.h_strat`` into layers. That needs actual
+    profile points in that range: truncated or synthetic profiles (e.g. the
+    scalar branch's Nieuwstadt profile, which stops at the inversion) fall
+    back to the bulk Uniform closure with a warning.
+    """
+    from wayve.pressure.gravity_waves.gravity_waves import NonUniform, Uniform
+
+    if n_fa_layers > 1:
+        h_min = max(abl.H, abl.inv_top if abl.inv_top is not None else 0.0)
+        n_pts = int(np.sum((abl.zs > h_min) & (abl.zs < abl.h_strat)))
+        if n_pts >= 2:
+            return NonUniform(n_layers=n_fa_layers, order=1)
+        warnings.warn(
+            f"number_of_fa_layers={n_fa_layers} requested but only {n_pts} "
+            f"profile point(s) lie between the inversion top ({h_min:.0f} m) "
+            f"and the profile top ({abl.h_strat:.0f} m); falling back to the "
+            "Uniform free atmosphere for this state"
+        )
+    return Uniform(dynamic=True, rotating=False)
 
 
 def _xy_plane_points(wake_model, wind_farm, abl, u_bg_evaluator, apm_evaluator, Xs, Ys, z):
@@ -1144,8 +1170,9 @@ def flow_io_abl(
             # tropopause, e.g. ERA5 levels 96-137 end near 6 km): run the same
             # core setup but skip mesoscale_based's unconditional tropopause
             # fit, which would feed a garbage stratosphere into the ABL.  The
-            # ABL then keeps its defaults (h_strat=10 km, Uinf/Vinf=U3/V3,
-            # Ninf=N), and Gmode is restricted to what the data supports.
+            # free atmosphere is capped at the profile top instead (see the
+            # ABL constructor below), and Gmode is restricted to what the
+            # data supports.
             stable = 0.0 < l_mo < 100
             # Capping inversion: an explicit windIO block wins over the fit
             if (
@@ -1237,7 +1264,12 @@ def flow_io_abl(
     # gprime and N
     gprime = gravity * dth / th0
     N = np.sqrt(gravity * dthdz / th0)
-    # Set up ABL object
+    # Set up ABL object. The free atmosphere is capped at the top of the
+    # profile data: NonUniform's layer setup spans [inversion top, h_strat],
+    # and the default h_strat of 10 km would put most of its layers in a
+    # no-data region where the profile splines just hold constants. Above
+    # the cap sits the semi-infinite radiating layer with the top-of-profile
+    # state (Uinf/Vinf) and the fitted free-atmosphere stratification (Ninf).
     return ABL(
         zs,
         us,
@@ -1259,6 +1291,10 @@ def flow_io_abl(
         ust=ust,
         inv_bottom=inv_bottom,
         inv_top=inv_top,
+        h_strat=min(10.0e3, zs[-1]),
+        Uinf=us[-1],
+        Vinf=vs[-1],
+        Ninf=N,
     ), rotation
 
 

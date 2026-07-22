@@ -441,9 +441,7 @@ def test_xy_points_matches_xy_plane():
     from wayve.momentum_flux_parametrizations import FrictionCoefficients
     from wayve.solvers import FixedPointIteration
 
-    from wayve.pressure.gravity_waves.gravity_waves import Uniform
-
-    from wifa.wayve_api import _xy_plane_points, flow_io_abl, wf_setup
+    from wifa.wayve_api import _pressure_for_state, _xy_plane_points, flow_io_abl, wf_setup
 
     system = _solver_system(
         [0.0, 400.0, 800.0], [0.0, 0.0, 0.0], _scalar_wind_resource(270.0)
@@ -455,7 +453,7 @@ def test_xy_points_matches_xy_plane():
     assert rotation == pytest.approx(0.0)
     wind_farm, forcing, _, _ = wf_setup(farm_dat, analysis_dat, 1.0e3, rotation=rotation)
     grid = Stat2Dgrid(1.0e5, 100, 1.0e5, 100)
-    model = APM(grid, forcing, abl, FrictionCoefficients(), Uniform(dynamic=True, rotating=False))
+    model = APM(grid, forcing, abl, FrictionCoefficients(), _pressure_for_state(abl, 1))
     model.solve(method=FixedPointIteration(tol=5.0e-3, relax=0.7))
     coupling = wind_farm.coupling
     wake_model = coupling.wake_model
@@ -472,3 +470,110 @@ def test_xy_points_matches_xy_plane():
     )
     for ref_field, new_field in zip(ref, new):
         np.testing.assert_array_equal(new_field, ref_field)
+
+
+def _profile_wind_resource(wd_hub=225.0, veer=10.0, n=1):
+    """Truncated (1.7 km) mesoscale-style profile resource: winds/theta
+    profiles plus ERA5-style surface scalars and an explicit CI block."""
+    import numpy as np
+
+    zs = np.linspace(10.0, 1700.0, 18)
+    ws = 8.0 + 3.0 * zs / 1700.0
+    # Small linear veer across the profile around the hub-height direction
+    wd_hub_exact = np.interp(80.0, zs, np.linspace(0.0, 1.0, len(zs)))
+    wd = wd_hub + veer * (np.linspace(0.0, 1.0, len(zs)) - wd_hub_exact)
+    theta = np.where(
+        zs < 1000.0,
+        290.0,
+        np.where(
+            zs <= 1200.0,
+            290.0 + 3.0 * (zs - 1000.0) / 200.0,
+            293.0 + 3.5e-3 * (zs - 1200.0),
+        ),
+    )
+    per_state = lambda arr: {"data": [list(arr)] * n}  # noqa: E731
+    scalar = lambda val: {"data": [val] * n}  # noqa: E731
+    return {
+        "time": list(range(n)),
+        "height": list(zs),
+        "wind_speed": per_state(ws),
+        "wind_direction": per_state(wd),
+        "potential_temperature": per_state(theta),
+        "turbulence_intensity": scalar(0.08),
+        "air_density": scalar(1.2),
+        "z0": scalar(0.03),
+        "fc": scalar(1.0e-4),
+        "friction_velocity": scalar(0.35),
+        "boundary_layer_height": scalar(900.0),
+        "LMO": scalar(5.0e3),
+        "thermal_stratification": {
+            "capping_inversion": {
+                "ABL_height": scalar(1100.0),
+                "dH": scalar(200.0),
+                "dtheta": scalar(3.0),
+                "lapse_rate": scalar(3.5e-3),
+            }
+        },
+    }
+
+
+def test_truncated_profile_free_atmosphere_capped_at_data_top():
+    """The free atmosphere of a truncated profile is capped at the top of the
+    data: NonUniform's layers then span actual profile points instead of the
+    default 10 km tropopause (constant-fill splines above ~1.7 km)."""
+    import numpy as np
+
+    from wifa.wayve_api import flow_io_abl
+
+    abl, rotation = flow_io_abl(_profile_wind_resource(), 0, zh=80.0, h1=160.0)
+    assert abl.h_strat == pytest.approx(1700.0)
+    assert abl.Uinf == pytest.approx(abl.us[-1])
+    assert abl.Vinf == pytest.approx(abl.vs[-1])
+    # Solver frame: hub-height wind along +x, veer preserved aloft.
+    # (Interpolating components vs. directions differs by ~1e-3 m/s here.)
+    u_hub = np.interp(80.0, abl.zs, abl.us)
+    v_hub = np.interp(80.0, abl.zs, abl.vs)
+    assert u_hub > 0.0
+    assert v_hub == pytest.approx(0.0, abs=1.0e-3)
+    assert rotation == pytest.approx(np.deg2rad(270.0 - 225.0), abs=0.02)
+    assert np.abs(abl.vs).max() > 0.1  # veer survives the rotation
+
+
+def test_pressure_for_state_selects_nonuniform_only_with_data():
+    """NonUniform needs profile points between the inversion top and the
+    (capped) free-atmosphere top; scalar states fall back to Uniform."""
+    from wifa.wayve_api import _pressure_for_state, flow_io_abl
+
+    abl_profile, _ = flow_io_abl(_profile_wind_resource(), 0, zh=80.0, h1=160.0)
+    assert type(_pressure_for_state(abl_profile, 6)).__name__ == "NonUniform"
+    assert type(_pressure_for_state(abl_profile, 1)).__name__ == "Uniform"
+    # Scalar branch: the Nieuwstadt profile stops at the inversion -> no
+    # data-backed free atmosphere -> warn and fall back
+    abl_scalar, _ = flow_io_abl(_scalar_resource(0.08), 0, zh=78.0, h1=156.0)
+    with pytest.warns(UserWarning, match="falling back to the Uniform"):
+        assert type(_pressure_for_state(abl_scalar, 6)).__name__ == "Uniform"
+
+
+def test_run_wayve_profile_nonuniform_end_to_end(tmp_path):
+    """Non-westerly mesoscale profiles with a profile-resolving free
+    atmosphere run end-to-end and produce finite, waked turbine output."""
+    import numpy as np
+    import xarray as xr
+
+    from wifa.wayve_api import run_wayve
+
+    # Row aligned with the 225 deg flow (SW): downstream is to the NE
+    span = 400.0 / np.sqrt(2.0)
+    system = _solver_system(
+        [0.0, span, 2 * span],
+        [0.0, span, 2 * span],
+        _profile_wind_resource(wd_hub=225.0),
+        layers_description={"farm_layer_height": 160.0, "number_of_fa_layers": 6},
+    )
+    run_wayve(system, output_dir=tmp_path)
+    ds = xr.load_dataset(tmp_path / "turbine_data.nc")
+    power = ds["power"].values
+    assert power.shape == (1, 3)
+    assert np.all(np.isfinite(power)) and np.all(power > 0.0)
+    # SW flow: the NE-most turbine is waked
+    assert power[0, 0] > power[0, -1]
