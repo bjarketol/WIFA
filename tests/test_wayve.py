@@ -520,9 +520,15 @@ def test_xy_points_matches_xy_plane():
         np.testing.assert_array_equal(new_field, ref_field)
 
 
-def _profile_wind_resource(wd_hub=225.0, veer=10.0, n=1):
+def _profile_wind_resource(wd_hub=225.0, veer=10.0, n=1, spelling="flat"):
     """Truncated (1.7 km) mesoscale-style profile resource: winds/theta
-    profiles plus ERA5-style surface scalars and an explicit CI block."""
+    profiles plus ERA5-style surface scalars and an explicit CI block.
+
+    ``spelling`` selects how the capping inversion is written: ``"flat"``
+    (the windIO schema keys, which is what a netCDF ``!include`` can carry)
+    or ``"nested"`` (the older thermal_stratification block). The two must
+    produce identical ABL states — see
+    ``test_flat_and_nested_capping_inversion_agree``."""
     import numpy as np
 
     zs = np.linspace(10.0, 1700.0, 18)
@@ -541,6 +547,26 @@ def _profile_wind_resource(wd_hub=225.0, veer=10.0, n=1):
     )
     per_state = lambda arr: {"data": [list(arr)] * n}  # noqa: E731
     scalar = lambda val: {"data": [val] * n}  # noqa: E731
+    if spelling == "flat":
+        ci = {
+            "ABL_height": scalar(1100.0),
+            "capping_inversion_thickness": scalar(200.0),
+            "capping_inversion_strength": scalar(3.0),
+            "lapse_rate": scalar(3.5e-3),
+        }
+    elif spelling == "nested":
+        ci = {
+            "thermal_stratification": {
+                "capping_inversion": {
+                    "ABL_height": scalar(1100.0),
+                    "dH": scalar(200.0),
+                    "dtheta": scalar(3.0),
+                    "lapse_rate": scalar(3.5e-3),
+                }
+            }
+        }
+    else:
+        raise ValueError(f"unknown spelling {spelling!r}")
     return {
         "time": list(range(n)),
         "height": list(zs),
@@ -554,15 +580,102 @@ def _profile_wind_resource(wd_hub=225.0, veer=10.0, n=1):
         "friction_velocity": scalar(0.35),
         "boundary_layer_height": scalar(900.0),
         "LMO": scalar(5.0e3),
-        "thermal_stratification": {
-            "capping_inversion": {
-                "ABL_height": scalar(1100.0),
-                "dH": scalar(200.0),
-                "dtheta": scalar(3.0),
-                "lapse_rate": scalar(3.5e-3),
-            }
-        },
+        **ci,
     }
+
+
+def test_flat_and_nested_capping_inversion_agree():
+    """The two windIO spellings of the capping inversion must be the same input.
+
+    The flat keys are the windIO schema spelling (and what code_saturne's
+    adapter already reads); the nested thermal_stratification block is the
+    older one, kept so existing files keep working. A netCDF ``!include``
+    can only carry the flat one, so the whole point is that switching a file
+    over changes nothing about the atmosphere it describes.
+    """
+    import numpy as np
+
+    from wifa.wayve_api import flow_io_abl
+
+    flat, _ = flow_io_abl(_profile_wind_resource(spelling="flat"), 0, zh=80.0, h1=160.0)
+    nested, _ = flow_io_abl(
+        _profile_wind_resource(spelling="nested"), 0, zh=80.0, h1=160.0
+    )
+    # The four scalars drive exactly these: the upper-layer depth, the
+    # reduced gravity, the free-atmosphere stratification and the inversion
+    # bounds. Exact equality — the values travel through unchanged.
+    for field in ("H", "H2", "gprime", "N", "inv_bottom", "inv_top", "U1", "U2", "U3"):
+        assert getattr(flat, field) == getattr(nested, field), field
+    for field in ("zs", "us", "vs", "tauxs", "tauys"):
+        np.testing.assert_array_equal(
+            getattr(flat, field), getattr(nested, field), err_msg=field
+        )
+
+
+def test_capping_inversion_rejects_both_spellings_at_once():
+    """A file carrying both spellings is half-migrated; picking one silently
+    would pick a physics answer for the user."""
+    from wifa.wayve_api import capping_inversion_spelling
+
+    resource = _profile_wind_resource(spelling="flat")
+    resource |= {
+        k: v
+        for k, v in _profile_wind_resource(spelling="nested").items()
+        if k == "thermal_stratification"
+    }
+    with pytest.raises(ValueError, match="twice"):
+        capping_inversion_spelling(resource)
+
+
+@pytest.mark.parametrize(
+    "spelling, dropped",
+    [
+        ("flat", "capping_inversion_strength"),
+        ("flat", "ABL_height"),
+        ("nested", "dtheta"),
+    ],
+)
+def test_capping_inversion_rejects_a_partial_block(spelling, dropped):
+    """A partial block is not completed from defaults.
+
+    dtheta alone sets the amplitude of the gravity-wave forcing, so pairing a
+    real ABL_height with an invented one yields a result that looks fitted and
+    is not. (WIFA's code_saturne adapter does fill per-key defaults; that
+    behaviour is not copied here deliberately.)
+    """
+    from wifa.wayve_api import capping_inversion_spelling
+
+    resource = _profile_wind_resource(spelling=spelling)
+    if spelling == "flat":
+        del resource[dropped]
+    else:
+        del resource["thermal_stratification"]["capping_inversion"][dropped]
+    with pytest.raises(ValueError, match="Incomplete"):
+        capping_inversion_spelling(resource)
+
+
+def test_no_capping_inversion_falls_back_to_the_profile_fit():
+    """Omitting all four scalars is a valid, distinct request: fit the
+    inversion from the potential-temperature profile."""
+    from wifa.wayve_api import capping_inversion_spelling, flow_io_abl
+
+    resource = _profile_wind_resource(spelling="flat")
+    for key in (
+        "ABL_height",
+        "capping_inversion_thickness",
+        "capping_inversion_strength",
+        "lapse_rate",
+    ):
+        del resource[key]
+    assert capping_inversion_spelling(resource) is None
+
+    fitted, _ = flow_io_abl(resource, 0, zh=80.0, h1=160.0)
+    explicit, _ = flow_io_abl(
+        _profile_wind_resource(spelling="flat"), 0, zh=80.0, h1=160.0
+    )
+    # The fit finds the 1000-1200 m jump in the test profile, not the
+    # explicit block's 1100 +/- 100 m; if these agreed the test would be moot.
+    assert fitted.H != explicit.H
 
 
 def test_truncated_profile_free_atmosphere_capped_at_data_top():

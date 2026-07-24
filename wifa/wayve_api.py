@@ -187,6 +187,10 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     #####################
     # Perform model runs
     #####################
+    # Validate the capping-inversion spelling once, before the loop: an
+    # ambiguous or incomplete block is a defect of the file, and the loop's
+    # ``except Exception`` would otherwise report it as every state crashing.
+    capping_inversion_spelling(resource_dat["wind_resource"])
     # Initialize crash counter
     crashes = 0
     # NonUniform free-atmosphere tally (per-state fallback is warned once)
@@ -976,6 +980,111 @@ def wake_model_setup(analysis_dat, debug_mode=False):
     return wake_model
 
 
+# Capping inversion: the windIO energy-resource schema spells the four scalars
+# flat, and WIFA's own code_saturne adapter already reads them that way
+# (cs_launch_modules.py). The nested
+# ``thermal_stratification.capping_inversion`` block is the older spelling and
+# is still accepted, so files written against it keep working; it cannot be
+# expressed in a netCDF ``!include``, whose root group is flat.
+# Ordered (h, dH, dtheta, lapse_rate) — the tuple read_capping_inversion returns.
+_CI_FLAT_KEYS = (
+    "ABL_height",
+    "capping_inversion_thickness",
+    "capping_inversion_strength",
+    "lapse_rate",
+)
+_CI_NESTED_KEYS = ("ABL_height", "dH", "dtheta", "lapse_rate")
+
+
+def capping_inversion_spelling(wind_resource_dat):
+    """Which spelling this wind resource uses for the capping inversion.
+
+    Parameters
+    ----------
+    wind_resource_dat: dict
+        Wind resource data
+
+    Returns
+    -------
+    str or None
+        ``"flat"``, ``"nested"``, or None when no inversion is specified (the
+        caller then fits one from the potential-temperature profile, or falls
+        back to defaults).
+
+    Raises
+    ------
+    ValueError
+        If both spellings are present, or if either is incomplete. Both are
+        defects of the *file*, not of a single state, which is why this check
+        is separate from the per-state value read: ``run_wayve`` calls it once
+        before the state loop, whose ``except Exception`` would otherwise turn
+        a malformed file into a run where every state silently "crashed".
+
+        A partial block is rejected rather than completed from defaults: of the
+        four scalars, ``capping_inversion_strength`` alone sets the amplitude of
+        the gravity-wave forcing, so silently pairing a real ``ABL_height`` with
+        an invented dtheta yields a result that looks fitted and is not.
+    """
+    flat = [key for key in _CI_FLAT_KEYS if key in wind_resource_dat]
+    nested = wind_resource_dat.get("thermal_stratification", {}).get(
+        "capping_inversion"
+    )
+    if flat and nested is not None:
+        raise ValueError(
+            "Wind resource specifies the capping inversion twice: flat keys "
+            f"{sorted(flat)} and a nested thermal_stratification."
+            "capping_inversion block. Keep one (the flat keys are the windIO "
+            "schema spelling)."
+        )
+    if nested is not None:
+        missing = [key for key in _CI_NESTED_KEYS if key not in nested]
+        if missing:
+            raise ValueError(
+                "Incomplete thermal_stratification.capping_inversion block; "
+                f"missing {missing}. All of {list(_CI_NESTED_KEYS)} are required."
+            )
+        return "nested"
+    if not flat:
+        return None
+    if len(flat) != len(_CI_FLAT_KEYS):
+        raise ValueError(
+            f"Incomplete capping inversion: found {sorted(flat)}, missing "
+            f"{sorted(set(_CI_FLAT_KEYS) - set(flat))}. All four are required "
+            "(they are not completed from defaults; see "
+            "capping_inversion_spelling). Omit all four to fit the inversion "
+            "from the potential-temperature profile instead."
+        )
+    return "flat"
+
+
+def read_capping_inversion(wind_resource_dat, time_index):
+    """The capping inversion of one state, in either windIO spelling.
+
+    Parameters
+    ----------
+    wind_resource_dat: dict
+        Wind resource data
+    time_index: int
+        Index of the timestamp to read
+
+    Returns
+    -------
+    tuple or None
+        ``(h, dh, dth, dthdz)`` — inversion centre height [m], thickness [m],
+        strength [K] and free-atmosphere lapse rate [K/m] — or None when the
+        resource specifies no inversion.
+    """
+    spelling = capping_inversion_spelling(wind_resource_dat)
+    if spelling is None:
+        return None
+    if spelling == "nested":
+        block = wind_resource_dat["thermal_stratification"]["capping_inversion"]
+        return tuple(float(block[key]["data"][time_index]) for key in _CI_NESTED_KEYS)
+    return tuple(
+        float(wind_resource_dat[key]["data"][time_index]) for key in _CI_FLAT_KEYS
+    )
+
+
 def flow_io_abl(
     wind_resource_dat, time_index, zh, h1, dh_max=None, serz=True, gmode="avg"
 ):
@@ -1076,14 +1185,9 @@ def flow_io_abl(
         dth = 5.0
         dthdz = 2.0e-3
         th0 = 293.15
-        if "thermal_stratification" in wind_resource_dat.keys():
-            thermal_data = wind_resource_dat["thermal_stratification"]
-            if "capping_inversion" in thermal_data.keys():
-                ci_data = thermal_data["capping_inversion"]
-                h = ci_data["ABL_height"]["data"][time_index]
-                dh = ci_data["dH"]["data"][time_index]
-                dth = ci_data["dtheta"]["data"][time_index]
-                dthdz = ci_data["lapse_rate"]["data"][time_index]
+        ci = read_capping_inversion(wind_resource_dat, time_index)
+        if ci is not None:
+            h, dh, dth, dthdz = ci
         inv_bottom, inv_top = h - dh / 2, h + dh / 2
         # Nieuwstadt profiles for velocity and shear stress
         zs, us, vs, U3, V3, tauxs, tauys, nus = nieuwstadt83_profiles(
@@ -1152,18 +1256,10 @@ def flow_io_abl(
             f_tau = interp1d(taus, zs)
             blh = f_tau(0.01 * ust)
             # Capping inversion information
-            if (
-                "thermal_stratification" in wind_resource_dat.keys()
-                and "capping_inversion"
-                in wind_resource_dat["thermal_stratification"].keys()
-            ):
-                thermal_data = wind_resource_dat["thermal_stratification"]
-                ci_data = thermal_data["capping_inversion"]
+            ci = read_capping_inversion(wind_resource_dat, time_index)
+            if ci is not None:
                 th0 = 293.15
-                h = ci_data["ABL_height"]["data"][time_index]
-                dh = ci_data["dH"]["data"][time_index]
-                dth = ci_data["dtheta"]["data"][time_index]
-                dthdz = ci_data["lapse_rate"]["data"][time_index]
+                h, dh, dth, dthdz = ci
                 inv_bottom, inv_top = h - dh / 2, h + dh / 2
             else:
                 inv_bottom, h, inv_top, th0, dth, dthdz = ci_fitting(
@@ -1225,18 +1321,9 @@ def flow_io_abl(
             # data supports.
             stable = 0.0 < l_mo < 100
             # Capping inversion: an explicit windIO block wins over the fit
-            if (
-                "thermal_stratification" in wind_resource_dat.keys()
-                and "capping_inversion"
-                in wind_resource_dat["thermal_stratification"].keys()
-            ):
-                ci_data = wind_resource_dat["thermal_stratification"][
-                    "capping_inversion"
-                ]
-                h = ci_data["ABL_height"]["data"][time_index]
-                dh = ci_data["dH"]["data"][time_index]
-                dth = ci_data["dtheta"]["data"][time_index]
-                dthdz = ci_data["lapse_rate"]["data"][time_index]
+            ci = read_capping_inversion(wind_resource_dat, time_index)
+            if ci is not None:
+                h, dh, dth, dthdz = ci
                 inv_bottom, inv_top = h - dh / 2, h + dh / 2
                 th0 = np.interp(h, zs, ths)
             else:
