@@ -247,7 +247,9 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
             # geostrophic wind are often *fitted* here rather than given (see
             # flow_io_abl), so without these the atmosphere a run actually used
             # is unrecoverable from its outputs. Scalars, no turbine dim.
-            turb_out_dict |= _abl_diagnostics(abl, pressure)
+            diagnostics = _abl_diagnostics(abl, pressure)
+            assert not set(diagnostics) & set(turb_out_dict)
+            turb_out_dict |= diagnostics
             # NC setup
             ds = xr.Dataset(
                 turb_out_dict,
@@ -347,6 +349,10 @@ def _abl_diagnostics(abl, pressure):
     outputs, so record it alongside them: it is what makes a run reproducible
     and its inversion checkable against an independent boundary-layer height.
 
+    Names are prefixed ``abl_`` so they cannot collide with a turbine output:
+    ``air_density`` and ``turbulence_intensity`` are per-turbine fields in other
+    engines, and these share one dataset with them.
+
     Returned as ``{name: ([], value)}`` — scalars on the state axis, no turbine
     dimension.
     """
@@ -355,28 +361,39 @@ def _abl_diagnostics(abl, pressure):
     # temperature at the inversion; invert it to report dtheta itself.
     dtheta = abl.gprime * np.interp(abl.H, abl.zs, abl.ths) / gravity
     values = {
-        "ABL_height": abl.H,
-        "capping_inversion_thickness": abl.inv_top - abl.inv_bottom,
-        "capping_inversion_strength": dtheta,
-        "free_atmosphere_N": abl.N,
-        "geostrophic_wind_speed": abl.S3,
+        "abl_height": (abl.H, "m"),
+        "abl_capping_inversion_thickness": (abl.inv_top - abl.inv_bottom, "m"),
+        "abl_capping_inversion_strength": (dtheta, "K"),
+        "abl_free_atmosphere_N": (abl.N, "s-1"),
+        "abl_geostrophic_wind_speed": (abl.S3, "m s-1"),
         # Angle of the geostrophic wind in the solver frame, where the
         # hub-height wind lies along +x: the cross-isobar angle, not a
         # compass direction.
-        "geostrophic_veer": abl.WD3,
-        "friction_velocity": abl.utau,
-        "air_density": abl.rho,
-        "turbulence_intensity": abl.TI,
+        "abl_geostrophic_veer": (abl.WD3, "degree"),
+        # In the turbulence-profile branch wayve's ``utau`` carries the surface
+        # stress itself (m2 s-2), not its square root; everywhere else it is a
+        # velocity. Reported as wayve holds it.
+        "abl_friction_velocity": (abl.utau, "m s-1"),
+        "abl_air_density": (abl.rho, "kg m-3"),
+        "abl_turbulence_intensity": (abl.TI, "1"),
         # 1 when this state resolved the free atmosphere on the profile,
         # 0 when it fell back to the bulk closure.
-        "nonuniform_free_atmosphere": float(type(pressure).__name__ == "NonUniform"),
+        "abl_nonuniform_free_atmosphere": (
+            float(type(pressure).__name__ == "NonUniform"),
+            "1",
+        ),
     }
-    # Not every branch sets every scalar (a Nieuwstadt-profile ABL has no
-    # friction velocity of its own, for instance); write NaN rather than fail.
-    return {
-        name: ([], float("nan") if value is None else float(value))
-        for name, value in values.items()
-    }
+    # Reporting must not be able to cost a state its results: anything
+    # unexpected here (a None, a non-scalar) becomes NaN rather than an
+    # exception that the caller's `except Exception` would turn into a drop.
+    out = {}
+    for name, (value, units) in values.items():
+        try:
+            out[name] = ([], float(value))
+        except (TypeError, ValueError):
+            out[name] = ([], float("nan"))
+        out[name] = (*out[name], {"units": units})
+    return out
 
 
 def _pressure_for_state(abl, n_fa_layers):
@@ -1311,8 +1328,12 @@ def flow_io_abl(
             # Capping inversion information
             ci = read_capping_inversion(wind_resource_dat, time_index)
             if ci is not None:
-                th0 = 293.15
                 h, dh, dth, dthdz = ci
+                # Mixed-layer temperature from the profile the resource
+                # supplies, as every other branch does. A fixed 293.15 K here
+                # made the buoyancy jump g*dtheta/th0 disagree with the ABL's
+                # own theta profile by up to ~4% at realistic temperatures.
+                th0 = np.interp(h, zs, ths)
                 inv_bottom, inv_top = h - dh / 2, h + dh / 2
             else:
                 inv_bottom, h, inv_top, th0, dth, dthdz = ci_fitting(
