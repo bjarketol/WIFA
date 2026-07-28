@@ -95,10 +95,11 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
     ##################
     # Momentum flux parametrization
     mfp = FrictionCoefficients()
-    # Pressure feedback parametrization: >1 free-atmosphere layers selects
-    # the profile-resolving NonUniform gravity-wave closure. The object is
-    # built per state (_pressure_for_state), because whether the profile
-    # actually supports NonUniform depends on the per-state inversion fit.
+    # Pressure feedback parametrization: any value but 1 selects the
+    # profile-resolving NonUniform gravity-wave closure (<= 0 means "one
+    # sublayer per profile level"). The object is built per state
+    # (_pressure_for_state), because whether the profile actually supports
+    # NonUniform depends on the per-state inversion fit.
     n_fa_layers = 1
     if "layers_description" in analysis_dat:
         n_fa_layers = analysis_dat["layers_description"].get("number_of_fa_layers", 1)
@@ -242,6 +243,11 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
                     ["turbine"],
                     wind_farm.coupling.St,
                 )
+            # State-level ABL diagnostics. The capping inversion and the
+            # geostrophic wind are often *fitted* here rather than given (see
+            # flow_io_abl), so without these the atmosphere a run actually used
+            # is unrecoverable from its outputs. Scalars, no turbine dim.
+            turb_out_dict |= _abl_diagnostics(abl, pressure)
             # NC setup
             ds = xr.Dataset(
                 turb_out_dict,
@@ -312,7 +318,7 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
             continue
     if debug_mode:
         print(f"crashes: {crashes}/{len(times)}")
-    if n_fa_layers > 1:
+    if n_fa_layers != 1:
         # Make the per-state Uniform/NonUniform closure mixture visible
         print(
             f"NonUniform free atmosphere: {nonuniform_states}/{len(times)} "
@@ -331,21 +337,68 @@ def run_wayve(yamlFile, output_dir="output", debug_mode=False):
         ds_ff_full.to_netcdf(output_fn)
 
 
+def _abl_diagnostics(abl, pressure):
+    """Per-state record of the atmosphere the solver actually ran on.
+
+    ``flow_io_abl`` fits the capping inversion when the wind resource does not
+    state one, derives the geostrophic wind through ``Gmode``, and closes the
+    stress profile from surface scalars; ``_pressure_for_state`` then picks the
+    free-atmosphere closure per state. All of that is invisible in the turbine
+    outputs, so record it alongside them: it is what makes a run reproducible
+    and its inversion checkable against an independent boundary-layer height.
+
+    Returned as ``{name: ([], value)}`` — scalars on the state axis, no turbine
+    dimension.
+    """
+    gravity = 9.80665  # [m s-2], as in flow_io_abl
+    # gprime = g * dtheta / theta0, with theta0 the mixed-layer potential
+    # temperature at the inversion; invert it to report dtheta itself.
+    dtheta = abl.gprime * np.interp(abl.H, abl.zs, abl.ths) / gravity
+    values = {
+        "ABL_height": abl.H,
+        "capping_inversion_thickness": abl.inv_top - abl.inv_bottom,
+        "capping_inversion_strength": dtheta,
+        "free_atmosphere_N": abl.N,
+        "geostrophic_wind_speed": abl.S3,
+        # Angle of the geostrophic wind in the solver frame, where the
+        # hub-height wind lies along +x: the cross-isobar angle, not a
+        # compass direction.
+        "geostrophic_veer": abl.WD3,
+        "friction_velocity": abl.utau,
+        "air_density": abl.rho,
+        "turbulence_intensity": abl.TI,
+        # 1 when this state resolved the free atmosphere on the profile,
+        # 0 when it fell back to the bulk closure.
+        "nonuniform_free_atmosphere": float(type(pressure).__name__ == "NonUniform"),
+    }
+    # Not every branch sets every scalar (a Nieuwstadt-profile ABL has no
+    # friction velocity of its own, for instance); write NaN rather than fail.
+    return {
+        name: ([], float("nan") if value is None else float(value))
+        for name, value in values.items()
+    }
+
+
 def _pressure_for_state(abl, n_fa_layers):
     """Build the gravity-wave pressure closure for one state.
 
-    ``n_fa_layers > 1`` requests wayve's NonUniform closure, which resolves
-    the free-atmosphere N(z) and wind shear by slicing the profile between
-    the inversion top and ``abl.h_strat`` into layers. That needs actual
-    profile points in that range: truncated or synthetic profiles (e.g. the
-    scalar branch's Nieuwstadt profile, which stops at the inversion) fall
-    back to the bulk Uniform closure with a warning. The warning text is
-    deliberately state-independent so Python's warning dedup collapses it on
-    long time series; run_wayve prints a per-run NonUniform/Uniform tally.
+    Anything other than exactly 1 requests wayve's NonUniform closure, which
+    resolves the free-atmosphere N(z) and wind shear by slicing the profile
+    between the inversion top and ``abl.h_strat`` into layers. A value <= 0 is
+    wayve's own "use the ABL's vertical grid" setting: the sublayers follow the
+    profile levels themselves, so a reanalysis column resolves the free
+    atmosphere at the resolution it actually has instead of an arbitrary count.
+
+    Either way that needs actual profile points in that range: truncated or
+    synthetic profiles (e.g. the scalar branch's Nieuwstadt profile, which
+    stops at the inversion) fall back to the bulk Uniform closure with a
+    warning. The warning text is deliberately state-independent so Python's
+    warning dedup collapses it on long time series; run_wayve prints a per-run
+    NonUniform/Uniform tally.
     """
     from wayve.pressure.gravity_waves.gravity_waves import NonUniform, Uniform
 
-    if n_fa_layers > 1:
+    if n_fa_layers != 1:
         h_min = max(abl.H, abl.inv_top if abl.inv_top is not None else 0.0)
         n_pts = int(np.sum((abl.zs > h_min) & (abl.zs < abl.h_strat)))
         if n_pts >= 2:
