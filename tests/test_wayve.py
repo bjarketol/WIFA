@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 pytest.importorskip(
@@ -10,7 +11,7 @@ pytest.importorskip(
 from windIO import __path__ as wiop
 from windIO import validate as validate_yaml
 
-from wifa.wayve_api import run_wayve
+from wifa.wayve_api import read_turbine_type, run_wayve
 
 test_path = Path(os.path.dirname(__file__))
 windIO_path = Path(wiop[0])
@@ -880,3 +881,26 @@ def test_turbulence_profile_stress_rotation():
     np.testing.assert_allclose(
         np.hypot(abl.tauxs, abl.tauys), tau_mag, rtol=1e-12, atol=1e-15
     )
+
+
+def test_read_turbine_type_zero_outside_curves():
+    """Ct and Cp are zero outside the tabulated wind speeds, not extrapolated
+    (a curve padded to zero at cut-in/cut-out used to extrapolate to ~-100)."""
+    ws = [3.999, 4.0, 10.0, 20.0, 20.001]
+    turbine = {
+        "hub_height": 80.0,
+        "rotor_diameter": 80.0,
+        "performance": {
+            "power_curve": {
+                "power_wind_speeds": ws,
+                "power_values": [0.0, 3e4, 1e6, 2e6, 0.0],
+            },
+            "Ct_curve": {"Ct_wind_speeds": ws, "Ct_values": [0.0, 1.1, 0.7, 0.2, 0.0]},
+        },
+    }
+    _, _, ct_curve, cp_curve = read_turbine_type(turbine)
+
+    u = np.array([2.0, 3.5, 21.0, 25.0])
+    np.testing.assert_array_equal(ct_curve(u), 0.0)
+    np.testing.assert_array_equal(cp_curve(u), 0.0)
+    assert ct_curve(10.0) == pytest.approx(0.7)

@@ -832,9 +832,11 @@ def read_turbine_type(turb_dat):
         )
     else:
         raise Exception("Bad Power Curve")
-    # Ct and Cp curves
-    ct_curve = interp1d(ct_ws, ct, fill_value="extrapolate")
-    cp_curve = interp1d(cp_ws, cp, fill_value="extrapolate")
+    # Ct and Cp curves, zero outside the tabulated wind speeds (as foxes reads
+    # them).  Extrapolating a curve padded to zero just outside cut-in/cut-out
+    # gave thrust and power coefficients of order -100 beyond it.
+    ct_curve = interp1d(ct_ws, ct, bounds_error=False, fill_value=0.0)
+    cp_curve = interp1d(cp_ws, cp, bounds_error=False, fill_value=0.0)
     return hh, rd, ct_curve, cp_curve
 
 
