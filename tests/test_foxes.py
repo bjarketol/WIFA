@@ -142,7 +142,7 @@ def test_map_rotor_averaging_from_name():
         ]
 
     assert wake_averaging(system(name="area_overlap")) == "top_hat"
-    assert wake_averaging(system(name="gaussian_overlap")) == "axiwake6"
+    assert wake_averaging(system(name="gaussian_overlap")) == "gaussian"
     assert wake_averaging(system(name="center")) == "centre"
     assert wake_averaging(system(name="eq_grid")) == "auto"
     assert wake_averaging(system(name="area_overlap", wake_averaging="grid")) == "grid"
