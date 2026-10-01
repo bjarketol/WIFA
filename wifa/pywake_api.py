@@ -106,6 +106,77 @@ def load_and_validate_config(yaml_input, default_output_dir="output"):
     return system_dat, output_dir
 
 
+def _cut_speed(performance, key):
+    """A declared windIO cut-in/cut-out speed, or None (absent, NaN or <= 0)."""
+    value = performance.get(key)
+    if value is None or not np.isfinite(value) or value <= 0:
+        return None
+    return float(value)
+
+
+def _power_ct_function(performance, rotor_diameter, additional_models, rho_ref=1.225):
+    """Build a py_wake power/Ct function from windIO curves without resampling.
+
+    The table holds the union of the power (or Cp) and Ct wind speeds, so
+    linear interpolation reproduces each curve exactly.  A Cp curve is
+    interpolated as Cp and turned into power at lookup (as foxes does), so
+    power stays cubic between Cp nodes.  Outside the table py_wake holds the
+    end values, unless windIO declares a cut-in or cut-out, outside which the
+    turbine idles.
+    """
+    from py_wake.wind_turbines.power_ct_functions import (
+        PowerCtFunction,
+        PowerCtTabular,
+    )
+
+    is_cp = "Cp_curve" in performance
+    if is_cp:
+        p_ws = performance["Cp_curve"]["Cp_wind_speeds"]
+        p_vals = performance["Cp_curve"]["Cp_values"]
+    elif "power_curve" in performance:
+        p_ws = performance["power_curve"]["power_wind_speeds"]
+        p_vals = performance["power_curve"]["power_values"]
+    else:
+        raise ValueError("Missing Cp_curve or power_curve in turbine performance data")
+    ct_ws = performance["Ct_curve"]["Ct_wind_speeds"]
+    ct_vals = performance["Ct_curve"]["Ct_values"]
+
+    ws = np.union1d(p_ws, ct_ws)
+    cutin = _cut_speed(performance, "cutin_wind_speed")
+    cutout = _cut_speed(performance, "cutout_wind_speed")
+    if cutin is not None:
+        ws = np.union1d(ws[ws > cutin], [cutin])
+    if cutout is not None:
+        ws = np.union1d(ws[ws < cutout], [cutout])
+
+    # PowerCtTabular is where py_wake applies cut-in/cut-out; WindTurbine
+    # only stores those kwargs.
+    table = PowerCtTabular(
+        ws,
+        np.interp(ws, p_ws, p_vals),
+        power_unit="W",
+        ct=np.interp(ws, ct_ws, ct_vals),
+        ws_cutin=cutin,
+        ws_cutout=cutout,
+        additional_models=[] if is_cp else additional_models,
+    )
+    if not is_cp:
+        return table
+
+    # The table carries Cp in its power slot.  Clamping U holds the end power
+    # outside the table, as a power table would.
+    power_per_cp = 0.5 * rho_ref * np.pi * (rotor_diameter / 2) ** 2
+
+    def cp_to_power(ws, run_only):
+        value = table.np_interp(ws, run_only)
+        if run_only == 1:
+            return value
+        u = np.clip(ws, table.ws_tab[0], table.ws_tab[-1])
+        return value * power_per_cp * u**3
+
+    return PowerCtFunction(["ws"], cp_to_power, "W", [], additional_models)
+
+
 def create_turbines(farm_dat):
     """Create turbine objects from farm configuration.
 
@@ -142,34 +213,6 @@ def create_turbines(farm_dat):
         rd = turbine_dat["rotor_diameter"]
         hub_heights[key] = hh
 
-        # Parse power/Cp curves
-        if "Cp_curve" in turbine_dat["performance"]:
-            cp = turbine_dat["performance"]["Cp_curve"]["Cp_values"]
-            cp_ws = turbine_dat["performance"]["Cp_curve"]["Cp_wind_speeds"]
-            power_curve_type = "cp"
-        elif "power_curve" in turbine_dat["performance"]:
-            cp_ws = turbine_dat["performance"]["power_curve"]["power_wind_speeds"]
-            pows = turbine_dat["performance"]["power_curve"]["power_values"]
-            power_curve_type = "power"
-        else:
-            raise ValueError(
-                "Missing Cp_curve or power_curve in turbine performance data"
-            )
-
-        ct = turbine_dat["performance"]["Ct_curve"]["Ct_values"]
-        ct_ws = turbine_dat["performance"]["Ct_curve"]["Ct_wind_speeds"]
-        speeds = np.arange(np.min([cp_ws, ct_ws]), np.max([cp_ws, ct_ws]) + 1, 1)
-        cts_int = np.interp(speeds, ct_ws, ct)
-
-        if power_curve_type == "power":
-            powers = np.interp(speeds, cp_ws, pows)
-        else:
-            cps_int = np.interp(speeds, cp_ws, cp)
-            powers = 0.5 * cps_int * speeds**3 * 1.225 * (rd / 2) ** 2 * np.pi
-
-        cutin = turbine_dat["performance"].get("cutin_wind_speed", 0)
-        cutout = turbine_dat["performance"].get("cutout_wind_speed")
-
         # Use DensityCompensation (wind speed correction before lookup) to
         # match foxes' air density handling: ws *= (rho/rho_ref)^(1/3)
         try:
@@ -182,15 +225,9 @@ def create_turbines(farm_dat):
             name=turbine_dat["name"],
             diameter=rd,
             hub_height=hh,
-            powerCtFunction=PowerCtTabular(
-                speeds,
-                powers,
-                power_unit="W",
-                ct=cts_int,
-                additional_models=density_models,
+            powerCtFunction=_power_ct_function(
+                turbine_dat["performance"], rd, density_models
             ),
-            ws_cutin=cutin,
-            ws_cutout=cutout,
         )
         this_turbine.powerCtFunction = PowerCtFunctionList(
             key="operating",

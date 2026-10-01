@@ -24,7 +24,7 @@ from scipy.special import gamma
 from windIO import __path__ as wiop
 from windIO import validate as validate_yaml
 
-from wifa.pywake_api import run_pywake
+from wifa.pywake_api import create_turbines, run_pywake
 
 test_path = Path(os.path.dirname(__file__))
 windIO_path = Path(wiop[0])
@@ -71,8 +71,35 @@ def test_pywake_KUL():
     # print(pywake_aep)
 
     # Check result
-    pywake_aep_expected = 7515.2
+    # Constant-Cp turbine, so power is cubic in ws (7515.2 was the 1 m/s regrid)
+    pywake_aep_expected = 7452.5
     npt.assert_array_almost_equal(pywake_aep, pywake_aep_expected, 1)
+
+
+def test_create_turbines_keeps_windio_curves():
+    """Power and Ct follow the windIO curves between their nodes (no regrid),
+    and the turbine idles outside a declared cut-in/cut-out."""
+    ws = [3.5, 4.0, 4.5, 5.0, 10.0, 20.0]
+    power = [10e3, 50e3, 100e3, 200e3, 1e6, 2e6]
+    ct = [0.9, 0.85, 0.8, 0.75, 0.6, 0.2]
+    turbine_dat = {
+        "name": "t",
+        "hub_height": 80.0,
+        "rotor_diameter": 80.0,
+        "performance": {
+            "power_curve": {"power_wind_speeds": ws, "power_values": power},
+            "Ct_curve": {"Ct_wind_speeds": ws, "Ct_values": ct},
+            "cutin_wind_speed": 3.7,
+            "cutout_wind_speed": 15.0,
+        },
+    }
+    wt, _, _ = create_turbines({"turbines": turbine_dat})
+
+    u = np.array([3.7, 4.25, 4.75, 7.5, 15.0])
+    npt.assert_allclose(wt.power(u), np.interp(u, ws, power))
+    npt.assert_allclose(wt.ct(u), np.interp(u, ws, ct))
+    npt.assert_array_equal(wt.power(np.array([3.6, 15.01, 25.0])), 0)
+    npt.assert_array_equal(wt.ct(np.array([3.6, 15.01, 25.0])), 0)
 
 
 @pytest.fixture(
