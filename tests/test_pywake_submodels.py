@@ -57,6 +57,7 @@ from py_wake.turbulence_models import (
 )
 from py_wake.turbulence_models.gcl_turb import GCLTurbulence
 
+from wifa._pywake_gcl import GCL_CT_LIMIT, CtLimitedGCLDeficit, CtLimitedGCLTurbulence
 from wifa.pywake_api import (
     DEFAULTS,
     _configure_blockage_model,
@@ -124,8 +125,8 @@ def _call_deficit_full(name, analysis_extra=None, analysis_top=None):
         ("carbajofuertes2018", CarbajofuertesGaussianDeficit),
         ("TurboNOJ", TurboNOJDeficit),
         ("turbonoj", TurboNOJDeficit),
-        ("GCL", GCLDeficit),
-        ("gcl", GCLDeficit),
+        ("GCL", CtLimitedGCLDeficit),
+        ("gcl", CtLimitedGCLDeficit),
         ("NOJLocalDeficit", NOJLocalDeficit),
         ("nojlocaldeficit", NOJLocalDeficit),
         ("NOJLOCALDEFICIT", NOJLocalDeficit),
@@ -483,6 +484,30 @@ def test_configure_turbulence_model(name, expected_class):
 @pytest.mark.parametrize("name", [None, "None", "none", "NONE"])
 def test_configure_turbulence_model_none(name):
     assert _configure_turbulence_model({"name": name, "c1": 1.0, "c2": 1.0}) is None
+
+
+def test_gcl_caps_thrust_coefficient():
+    """GCL is undefined at Ct >= 1: WIFA's GCL deficit and added turbulence see
+    Ct capped at GCL_CT_LIMIT instead of returning NaN."""
+    D_il = np.array([[80.0]])
+    dw_ijlk = np.full((1, 1, 1, 1), 400.0)
+    cw_ijlk = np.zeros((1, 1, 1, 1))
+    ilk = np.ones((1, 1, 1))
+    kwargs = {"WS_ilk": 5.0 * ilk, "TI_ilk": 0.08 * ilk}
+
+    deficit = CtLimitedGCLDeficit()
+    dU = [
+        deficit.calc_deficit(D_il, dw_ijlk, cw_ijlk, ct * ilk, **kwargs)
+        for ct in (1.11, GCL_CT_LIMIT)
+    ]
+    assert np.isfinite(dU[0]).all()
+    np.testing.assert_allclose(dU[0], dU[1])
+
+    radius = deficit.wake_radius(dw_ijlk, D_il, 1.11 * ilk, **kwargs)
+    added = CtLimitedGCLTurbulence().calc_added_turbulence(
+        dw_ijlk, D_il, 1.11 * ilk, radius, D_il[:, :, None], cw_ijlk
+    )
+    assert np.isfinite(radius).all() and np.isfinite(added).all()
 
 
 def test_configure_turbulence_model_unknown():

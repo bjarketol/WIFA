@@ -124,10 +124,7 @@ def _power_ct_function(performance, rotor_diameter, additional_models, rho_ref=1
     end values, unless windIO declares a cut-in or cut-out, outside which the
     turbine idles.
     """
-    from py_wake.wind_turbines.power_ct_functions import (
-        PowerCtFunction,
-        PowerCtTabular,
-    )
+    from py_wake.wind_turbines.power_ct_functions import PowerCtFunction, PowerCtTabular
 
     is_cp = "Cp_curve" in performance
     if is_cp:
@@ -1277,7 +1274,6 @@ def _configure_deficit_model(
         TurboGaussianDeficit,
         ZongGaussianDeficit,
     )
-    from py_wake.deficit_models.gcl import GCLDeficit
     from py_wake.deficit_models.noj import NOJDeficit, NOJLocalDeficit, TurboNOJDeficit
 
     model_name = wind_deficit_data["name"]
@@ -1404,7 +1400,10 @@ def _configure_deficit_model(
             deficit_args["A"] = wind_deficit_cfg["A"]
 
     elif normalized == "gcl":
-        wake_model_class = GCLDeficit
+        # Ct capped at 0.96: GCL is undefined at Ct >= 1 (see wifa._pywake_gcl).
+        from wifa._pywake_gcl import CtLimitedGCLDeficit
+
+        wake_model_class = CtLimitedGCLDeficit
 
     elif normalized == "eddyviscosity":
         # Only on pyWake's unmerged EV branch (cj_add_eddy_viscosity_model);
@@ -1543,7 +1542,6 @@ def _configure_turbulence_model(turbulence_data):
         STF2005TurbulenceModel,
         STF2017TurbulenceModel,
     )
-    from py_wake.turbulence_models.gcl_turb import GCLTurbulence
 
     name = turbulence_data.get("name")
     if name is None:
@@ -1578,7 +1576,9 @@ def _configure_turbulence_model(turbulence_data):
             )
         return CrespoHernandez()
     if normalized == "gcl":
-        return GCLTurbulence()
+        from wifa._pywake_gcl import CtLimitedGCLTurbulence
+
+        return CtLimitedGCLTurbulence()
     if normalized in ("quartonandainslie", "modifiedquartonandainslie"):
         # Only on pyWake's unmerged EV branch; the Hassan (1992) modified
         # variant is the one the EV bundle uses. It carries its own added-TI
