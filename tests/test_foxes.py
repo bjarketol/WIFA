@@ -12,7 +12,7 @@ pytest.importorskip(
 from windIO import __path__ as wiop
 from windIO import validate as validate_yaml
 
-from wifa.foxes_api import run_foxes
+from wifa.foxes_api import _map_rotor_averaging, run_foxes
 
 test_path = Path(os.path.dirname(__file__))
 windIO_path = Path(wiop[0])
@@ -127,3 +127,29 @@ if __name__ == "__main__":
     test_foxes_heterogeneous_wind_rose_map()
     test_foxes_simple_wind_rose()
     test_timeseries_per_turbine_with_density()
+
+
+def test_map_rotor_averaging_from_name():
+    """foxes' partial wakes follow windIO's rotor_averaging.name (which pyWake
+    reads) unless wake_averaging is given explicitly."""
+
+    def system(**rotor_averaging):
+        return {"attributes": {"analysis": {"rotor_averaging": rotor_averaging}}}
+
+    def wake_averaging(wio):
+        return _map_rotor_averaging(wio)["attributes"]["analysis"]["rotor_averaging"][
+            "wake_averaging"
+        ]
+
+    assert wake_averaging(system(name="area_overlap")) == "top_hat"
+    assert wake_averaging(system(name="gaussian_overlap")) == "axiwake6"
+    assert wake_averaging(system(name="center")) == "centre"
+    assert wake_averaging(system(name="eq_grid")) == "auto"
+    assert wake_averaging(system(name="area_overlap", wake_averaging="grid")) == "grid"
+
+    wio = system(name="area_overlap")
+    _map_rotor_averaging(wio)
+    assert "wake_averaging" not in wio["attributes"]["analysis"]["rotor_averaging"]
+    assert _map_rotor_averaging({"attributes": {"analysis": {}}}) == {
+        "attributes": {"analysis": {}}
+    }

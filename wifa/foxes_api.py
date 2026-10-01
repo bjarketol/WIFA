@@ -5,6 +5,33 @@ from windIO import load_yaml
 
 from wifa._optional import require
 
+# windIO names the rotor averaging in rotor_averaging.name, which the pyWake
+# adapter reads.  foxes' reader ignores it and takes its partial-wake model from
+# wake_averaging alone, so the same file averaged wakes over the rotor area on
+# pyWake and at the rotor centre on foxes.  Map the name to the foxes partial
+# wakes that average the same way; anything else gets foxes' model default.
+_FOXES_PARTIAL_WAKES = {
+    "none": "centre",
+    "center": "centre",
+    "areaoverlap": "top_hat",
+    "gaussianoverlap": "axiwake6",
+}
+
+
+def _map_rotor_averaging(wio):
+    """Return *wio* with foxes' wake_averaging set from rotor_averaging.name.
+
+    An explicit wake_averaging is left alone.  The input dict is not modified.
+    """
+    analysis = wio.get("attributes", {}).get("analysis", {})
+    rotor_avg = analysis.get("rotor_averaging")
+    if rotor_avg is None or "wake_averaging" in rotor_avg:
+        return wio
+    name = str(rotor_avg.get("name", "")).lower().replace("_", "").replace("-", "")
+    rotor_avg = {**rotor_avg, "wake_averaging": _FOXES_PARTIAL_WAKES.get(name, "auto")}
+    analysis = {**analysis, "rotor_averaging": rotor_avg}
+    return {**wio, "attributes": {**wio["attributes"], "analysis": analysis}}
+
 
 def run_foxes(
     input_yaml,
@@ -71,7 +98,7 @@ def run_foxes(
         wio = load_yaml(input_yaml, nc_data="array")
         idir = input_yaml.parent
 
-    idict, algo, odir = read_windio_dict(wio, verbosity=verbosity)
+    idict, algo, odir = read_windio_dict(_map_rotor_averaging(wio), verbosity=verbosity)
 
     if output_dir is not None:
         odir = output_dir
