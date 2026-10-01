@@ -18,19 +18,31 @@ _FOXES_PARTIAL_WAKES = {
 }
 
 
-def _map_rotor_averaging(wio):
-    """Return *wio* with foxes' wake_averaging set from rotor_averaging.name.
+def _foxes_analysis(analysis):
+    """Return windIO *analysis* with foxes' wake_averaging set from
+    rotor_averaging.name.
 
     An explicit wake_averaging is left alone.  The input dict is not modified.
+    Used by every adapter that hands windIO attributes to foxes' reader.
     """
-    analysis = wio.get("attributes", {}).get("analysis", {})
     rotor_avg = analysis.get("rotor_averaging")
     if rotor_avg is None or "wake_averaging" in rotor_avg:
-        return wio
+        return analysis
     name = str(rotor_avg.get("name", "")).lower().replace("_", "").replace("-", "")
     rotor_avg = {**rotor_avg, "wake_averaging": _FOXES_PARTIAL_WAKES.get(name, "auto")}
-    analysis = {**analysis, "rotor_averaging": rotor_avg}
-    return {**wio, "attributes": {**wio["attributes"], "analysis": analysis}}
+    return {**analysis, "rotor_averaging": rotor_avg}
+
+
+def _map_rotor_averaging(wio):
+    """Return windIO system *wio* with its analysis passed through
+    :func:`_foxes_analysis`."""
+    attrs = wio.get("attributes", {})
+    if "analysis" not in attrs:
+        return wio
+    return {
+        **wio,
+        "attributes": {**attrs, "analysis": _foxes_analysis(attrs["analysis"])},
+    }
 
 
 def run_foxes(

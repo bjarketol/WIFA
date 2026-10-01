@@ -1017,7 +1017,10 @@ def wake_model_setup(analysis_dat, debug_mode=False):
             _name="wayve.algorithm",
         )
 
-        ana_dict = Dict(analysis_dat, _name="analysis")
+        from wifa.foxes_api import _foxes_analysis
+
+        # Same rotor averaging as the plain foxes path (see _foxes_analysis).
+        ana_dict = Dict(_foxes_analysis(analysis_dat), _name="analysis")
         idict = Dict(algorithm=algo_dict, _name="wayve")
         mbook = ModelBook()
 
