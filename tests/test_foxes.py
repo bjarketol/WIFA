@@ -153,3 +153,63 @@ def test_map_rotor_averaging_from_name():
     assert _map_rotor_averaging({"attributes": {"analysis": {}}}) == {
         "attributes": {"analysis": {}}
     }
+
+
+def _two_turbine_blockage_system(listing, turbine_types, operating=None):
+    """Two turbines in a row with Rathmann blockage, wind from 12 directions.
+
+    A blockage model makes foxes' windIO reader pick its Iterative algorithm.
+    ``listing`` orders the physical turbines (x = 0 m, x = 1000 m) in the
+    layout; ``turbine_types`` and ``operating`` are per physical turbine.
+    """
+    from conftest import make_mixed_type_timeseries_system_dict
+
+    system = make_mixed_type_timeseries_system_dict("foxes")
+    wd = np.arange(0.0, 360.0, 30.0)
+    resource = {
+        "time": list(range(len(wd))),
+        "wind_speed": {"data": [9.0] * len(wd), "dims": ["time"]},
+        "wind_direction": {"data": wd.tolist(), "dims": ["time"]},
+        "turbulence_intensity": {"data": [0.06] * len(wd), "dims": ["time"]},
+    }
+    if operating is not None:
+        resource["wind_turbine"] = [0, 1]
+        resource["operating"] = {
+            "data": [[operating[i] for i in listing]] * len(wd),
+            "dims": ["time", "wind_turbine"],
+        }
+    system["site"]["energy_resource"]["wind_resource"] = resource
+    system["wind_farm"]["layouts"] = [
+        {
+            "coordinates": {"x": [[0.0, 1000.0][i] for i in listing], "y": [0.0, 0.0]},
+            "turbine_types": [turbine_types[i] for i in listing],
+        }
+    ]
+    system["attributes"]["analysis"]["blockage_model"] = {"name": "Rathmann"}
+    return system
+
+
+def _power_per_physical_turbine(listing, turbine_types, tmp_path, operating=None):
+    import foxes.variables as FV
+
+    system = _two_turbine_blockage_system(listing, turbine_types, operating)
+    out = tmp_path / ("output_" + "".join(map(str, listing)))
+    P = run_foxes(system, verbosity=0, output_dir=str(out))[0][FV.P].values
+    return P[:, np.argsort(listing)]
+
+
+def test_foxes_iterative_turbine_types_follow_turbines(tmp_path):
+    """Listing the turbines in a different order must not change any
+    turbine's power under blockage (foxes issue #65: Iterative swapped the
+    power/Ct curves of turbines whose downwind and farm order differ)."""
+    P_fwd = _power_per_physical_turbine([0, 1], [0, 1], tmp_path)
+    P_rev = _power_per_physical_turbine([1, 0], [0, 1], tmp_path)
+    np.testing.assert_allclose(P_rev, P_fwd, rtol=1e-10)
+
+
+def test_foxes_iterative_operating_flags_follow_turbines(tmp_path):
+    """Under blockage the switched-off turbine stays off in every wind
+    direction, also when it is not first in the downwind order (foxes #65)."""
+    P = _power_per_physical_turbine([0, 1], [0, 0], tmp_path, operating=[0, 1])
+    assert np.all(P[:, 0] == 0.0)
+    assert np.all(P[:, 1] > 0.0)
