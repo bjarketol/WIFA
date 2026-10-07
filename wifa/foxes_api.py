@@ -36,54 +36,24 @@ def _foxes_analysis(analysis):
 
 # foxes' Iterative algorithm, which its windIO reader picks whenever a blockage
 # model is set, applies turbine types and operating flags to the wrong turbines
-# after the first iteration: FarmWakesCalculation gets the per-turbine model
-# data in farm order but the farm data in downwind order
-# (https://github.com/FraunhoferIWES/foxes/issues/65).  Until a foxes release
-# fixes it, apply the downwind order to the model data ourselves.  Releases
-# from this version on are left alone so an upstream fix is not applied twice;
-# tests/test_foxes.py checks the result either way.
+# after the first iteration (https://github.com/FraunhoferIWES/foxes/issues/65).
+# Until a foxes release fixes it, use the fixed FarmWakesCalculation in
+# wifa._foxes_iterative_fix.  Releases from this version on are left alone so
+# an upstream fix is not applied twice; tests/test_foxes.py checks the result
+# either way.
 _FOXES_ITERATIVE_ORDER_FIXED_IN = (1, 9, 7)
 
 
 def _fix_foxes_iterative_order():
-    """Patch foxes' iterative FarmWakesCalculation for foxes issue #65.
-
-    Idempotent, and a no-op on foxes releases from
-    ``_FOXES_ITERATIVE_ORDER_FIXED_IN`` on.
-    """
+    """Work around foxes issue #65, unless foxes is new enough to have a fix."""
     import re
     from importlib.metadata import version
 
-    import numpy as np
-
     release = tuple(int(n) for n in re.findall(r"\d+", version("foxes"))[:3])
-    if release >= _FOXES_ITERATIVE_ORDER_FIXED_IN:
-        return
+    if release < _FOXES_ITERATIVE_ORDER_FIXED_IN:
+        from wifa._foxes_iterative_fix import install
 
-    import foxes.constants as FC
-    import foxes.variables as FV
-    from foxes.algorithms.iterative.models.farm_wakes_calc import FarmWakesCalculation
-
-    calculate = FarmWakesCalculation.calculate
-    if getattr(calculate, "_wifa_fixes_turbine_order", False):
-        return
-
-    def calculate_in_downwind_order(self, algo, mdata, fdata):
-        # Iteration 0, and any iteration that re-runs the full model list,
-        # went through InitFarmData, which already put this chunk's mdata in
-        # downwind order; later iterations get a fresh chunk in farm order.
-        if algo.iterations and not algo._reamb:
-            order = fdata[FV.ORDER].astype(int)
-            ssel = np.broadcast_to(np.arange(order.shape[0])[:, None], order.shape)
-            for k in mdata.keys():
-                if tuple(mdata.dims[k][:2]) == (FC.STATE, FC.TURBINE) and np.any(
-                    mdata[k] != mdata[k][0, 0, None, None]
-                ):
-                    mdata[k][:] = mdata[k][ssel, order]
-        return calculate(self, algo, mdata, fdata)
-
-    calculate_in_downwind_order._wifa_fixes_turbine_order = True
-    FarmWakesCalculation.calculate = calculate_in_downwind_order
+        install()
 
 
 def _map_rotor_averaging(wio):

@@ -189,13 +189,15 @@ def _two_turbine_blockage_system(listing, turbine_types, operating=None):
     return system
 
 
-def _power_per_physical_turbine(listing, turbine_types, tmp_path, operating=None):
+def _power_per_physical_turbine(
+    listing, turbine_types, tmp_path, operating=None, **run_kwargs
+):
     import foxes.variables as FV
 
     system = _two_turbine_blockage_system(listing, turbine_types, operating)
     out = tmp_path / ("output_" + "".join(map(str, listing)))
-    P = run_foxes(system, verbosity=0, output_dir=str(out))[0][FV.P].values
-    return P[:, np.argsort(listing)]
+    P = run_foxes(system, verbosity=0, output_dir=str(out), **run_kwargs)[0]
+    return P[FV.P].values[:, np.argsort(listing)]
 
 
 def test_foxes_iterative_turbine_types_follow_turbines(tmp_path):
@@ -213,3 +215,20 @@ def test_foxes_iterative_operating_flags_follow_turbines(tmp_path):
     P = _power_per_physical_turbine([0, 1], [0, 0], tmp_path, operating=[0, 1])
     assert np.all(P[:, 0] == 0.0)
     assert np.all(P[:, 1] > 0.0)
+
+
+def test_foxes_iterative_fix_reaches_spawned_workers(tmp_path):
+    """The foxes #65 workaround also holds in worker processes that are
+    spawned rather than forked (the default on Windows and macOS), which
+    start without anything the parent process changed in memory."""
+    import multiprocessing as mp
+
+    previous = mp.get_start_method(allow_none=True)
+    mp.set_start_method("spawn", force=True)
+    try:
+        kw = dict(engine="process", n_procs=2, chunksize_states=4)
+        P_fwd = _power_per_physical_turbine([0, 1], [0, 1], tmp_path, **kw)
+        P_rev = _power_per_physical_turbine([1, 0], [0, 1], tmp_path, **kw)
+    finally:
+        mp.set_start_method(previous, force=True)
+    np.testing.assert_allclose(P_rev, P_fwd, rtol=1e-10)
